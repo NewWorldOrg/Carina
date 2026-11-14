@@ -1,0 +1,40 @@
+using Carina.Infrastructure.Persistence;
+
+namespace Carina.Infrastructure.Tests.Unit.Infra.Persistence;
+
+[Trait("Category", "Unit")]
+public sealed class UtcDateTimeConverterTests
+{
+    private static readonly UtcDateTimeConverter Converter = new();
+
+    [Fact]
+    public void WritesUtcValuesUnchanged()
+    {
+        var value = new DateTime(2026, 8, 13, 1, 2, 3, DateTimeKind.Utc);
+
+        Assert.Equal(value, Converter.ConvertToProvider(value));
+    }
+
+    [Theory]
+    [InlineData(DateTimeKind.Local)]
+    [InlineData(DateTimeKind.Unspecified)]
+    public void RefusesToWriteNonUtcValues(DateTimeKind kind)
+    {
+        var value = new DateTime(2026, 8, 13, 1, 2, 3, kind);
+
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => Converter.ConvertToProvider(value));
+
+        Assert.Contains(kind.ToString(), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReadsStoredValuesBackAsUtc()
+    {
+        var stored = new DateTime(2026, 8, 13, 1, 2, 3, DateTimeKind.Unspecified);
+
+        DateTime read = Assert.IsType<DateTime>(Converter.ConvertFromProvider(stored));
+
+        Assert.Equal(DateTimeKind.Utc, read.Kind);
+        Assert.Equal(stored.Ticks, read.Ticks);
+    }
+}

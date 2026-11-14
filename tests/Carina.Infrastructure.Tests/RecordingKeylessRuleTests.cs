@@ -3,6 +3,8 @@ using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
+using static Carina.Infrastructure.Tests.Fixtures.Persistence.CarinaModel;
+
 namespace Carina.Infrastructure.Tests;
 
 public sealed class RecordingKeylessRuleTests
@@ -16,21 +18,13 @@ public sealed class RecordingKeylessRuleTests
         "programme",
     ];
 
-    private static CarinaDbContext Carina()
-    {
-        var builder = new DbContextOptionsBuilder<CarinaDbContext>();
-        builder.UseCarinaDatabase("Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder");
-
-        return new CarinaDbContext(builder.Options);
-    }
-
     private static IEntityType TableOf(CarinaDbContext context, string table)
         => context.Model.GetEntityTypes().Single(entityType => entityType.GetTableName() == table);
 
     [Fact(DisplayName = "the ledger declares no foreign key at all")]
     public void TheLedgerDeclaresNoForeignKeyAtAll()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Empty(TableOf(context, Ledger)
             .GetForeignKeys()
@@ -41,7 +35,7 @@ public sealed class RecordingKeylessRuleTests
     [Fact(DisplayName = "rebuilding the guide or dropping a channel definition drags no recording away")]
     public void RebuildingTheGuideOrDroppingAChannelDefinitionDragsNoRecordingAway()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Empty(context.Model
             .GetEntityTypes()
@@ -55,7 +49,7 @@ public sealed class RecordingKeylessRuleTests
     [Fact(DisplayName = "the three tables it must not point at are in the model, for the rule to have weighed them")]
     public void TheThreeTablesItMustNotPointAtAreInTheModel()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         IReadOnlyList<string> tables = [.. context.Model
             .GetEntityTypes()
@@ -72,7 +66,7 @@ public sealed class RecordingKeylessRuleTests
     [Fact(DisplayName = "what the ledger keeps of the guide is a copy it took, not a key it holds")]
     public void WhatTheLedgerKeepsOfTheGuideIsACopyItTook()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         IReadOnlyList<string> columns = [.. TableOf(context, Ledger)
             .GetProperties()

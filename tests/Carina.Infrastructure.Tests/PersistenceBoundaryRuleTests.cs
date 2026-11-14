@@ -4,22 +4,16 @@ using Carina.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
+using static Carina.Infrastructure.Tests.Fixtures.Persistence.CarinaModel;
+
 namespace Carina.Infrastructure.Tests;
 
 public sealed class PersistenceBoundaryRuleTests
 {
-    private static CarinaDbContext Carina()
-    {
-        var builder = new DbContextOptionsBuilder<CarinaDbContext>();
-        builder.UseCarinaDatabase("Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder");
-
-        return new CarinaDbContext(builder.Options);
-    }
-
     [Fact]
     public void TheCarinaModelDeclaresNoBoundaryBreakingForeignKeys()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Empty(PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
@@ -27,7 +21,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact]
     public void EveryEntityInTheCarinaModelDeclaresWhichFamilyItBelongsTo()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Empty(PersistenceBoundaryRules.UnclassifiedEntityTypes(context.Model));
     }
@@ -35,7 +29,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact]
     public void BothSidesOfTheReservationBoundaryAreInTheModelForTheRuleToWeigh()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Equal(
             ["reservation", "reservation_outcome", "rule"],
@@ -48,7 +42,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact]
     public void TheLedgerIsInTheModelForThoseRulesToWeigh()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Equal(
             ["recording"],
@@ -58,7 +52,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact]
     public void WhatTheLedgerCheckWritesIsItsOwnFamilyAndHoldsNoKeyIntoTheLedger()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Equal(
             ["integrity_check", "integrity_finding"],
@@ -76,7 +70,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact(DisplayName = "the encode ledger is six tables, and its foreign keys never leave it")]
     public void TheEncodeLedgerIsSixTablesAndItsForeignKeysNeverLeaveIt()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Equal(
             ["encode_auto_run", "encode_chapter", "encode_destination", "encode_job", "encode_profile", "encode_scratch_file"],
@@ -103,7 +97,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact(DisplayName = "an encode job reaches the recording it encodes by value, not by key")]
     public void AnEncodeJobReachesTheRecordingItEncodesByValue()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         IEntityType job = context.Model.GetEntityTypes().Single(entityType => entityType.GetTableName() == "encode_job");
 
@@ -114,7 +108,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact]
     public void ARecordingStillReachesTheServiceAndTheProgrammeItRecordedByValue()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         IReadOnlyList<string> columns = [.. context.Model
             .GetEntityTypes()
@@ -132,7 +126,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact]
     public void AReservationStillReachesTheServiceItRecordsByValue()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         IReadOnlyList<string> columns = [.. context.Model
             .GetEntityTypes()
@@ -149,7 +143,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact(DisplayName = "the quality tables are six, and none of them holds a key into another domain")]
     public void TheQualityTablesAreSixAndNoneOfThemHoldsAKeyIntoAnotherDomain()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Equal(
             [
@@ -171,7 +165,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact(DisplayName = "BR-ND-009: the notification tables are six and the only keys they hold run from a delivery to its event and its destination")]
     public void TheNotificationTablesAreSixAndNoneOfThemHoldsAKeyIntoAnotherDomain()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Equal(
             [
@@ -200,7 +194,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact(DisplayName = "what quality watches it reaches by value, so dropping its tables drags nothing away")]
     public void WhatQualityWatchesItReachesByValue()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         IReadOnlyList<string> columns = [.. context.Model
             .GetEntityTypes()
@@ -218,7 +212,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact]
     public void WhatTheMigrationRecordsIsSevenTablesAndItsForeignKeysNeverLeaveIt()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Equal(
             [
@@ -255,7 +249,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact(DisplayName = "where the watching got to reaches the recording by value, holding no key into the ledger")]
     public void WhereTheWatchingGotToReachesTheRecordingByValue()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Equal(
             ["playback_position"],
@@ -275,7 +269,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact(DisplayName = "BR-CD-002: the segment tables are the learning data, the settings, the catalog, the versions of the model, the detections, the skip events, the seeks and the rounds of learning taken, and the only keys among them are a stretch's into its entry and a detection's and a skip event's into their version")]
     public void TheSegmentTablesHoldNoKeyIntoAnotherDomain()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Equal(
             [
@@ -309,7 +303,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact(DisplayName = "BR-BD-016: the data broadcast keeps one table, its settings, which holds no key and is held by none")]
     public void TheDataBroadcastKeepsOneTableWithNoKey()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Equal(
             ["data_broadcast_settings"],
@@ -329,7 +323,7 @@ public sealed class PersistenceBoundaryRuleTests
     [InlineData("segment_seek_event")]
     public void TheLearningDataReachesTheRecordingByValue(string table)
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         IEntityType learning = context.Model.GetEntityTypes().Single(entityType => entityType.GetTableName() == table);
 
@@ -343,7 +337,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact(DisplayName = "the room the learning data takes is measured over every segment table, and over no other")]
     public void TheRoomTheLearningDataTakesIsMeasuredOverEverySegmentTable()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.Equal(
             PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Segments),
@@ -353,7 +347,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact]
     public void WhatCouldNotBeMigratedIsNeverCountedByAnotherDomain()
     {
-        using CarinaDbContext context = Carina();
+        using CarinaDbContext context = Context();
 
         Assert.DoesNotContain(
             context.Model.GetEntityTypes().SelectMany(entityType => entityType.GetForeignKeys()),

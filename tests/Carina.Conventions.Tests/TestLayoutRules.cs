@@ -19,15 +19,7 @@ public static class TestLayoutRules
 
     public static readonly IReadOnlyList<string> AreasNotYetMoved =
     [
-        "Base",
-        "Configuration",
-        "DependencyInjection",
-        "Events",
         "Health",
-        "Net",
-        "Persistence",
-        "Services",
-        "Version",
     ];
 
     /// <summary>
@@ -56,6 +48,7 @@ public static class TestLayoutRules
         new("Encodings", "src/Carina.Infrastructure/Configuration/EncodingOptions.cs"),
         new("Epg", "src/Carina.Api/Events/ProgrammeFeedReaders.cs"),
         new("Epg", "src/Carina.Api/Events/ProgrammeFeedStream.cs"),
+        new("Events", "src/Carina.Api/Events/AppEventStream.cs"),
         new("Integrity", "src/Carina.Api/Services/IntegrityService.cs"),
         new("Integrity", "src/Carina.Db/Migrations/20260914005111_AFindingNamedForTheFactItIsAbout.cs"),
         new("Integrity", "src/Carina.Infrastructure/Configuration/IntegrityOptions.cs"),
@@ -70,6 +63,9 @@ public static class TestLayoutRules
         new("Notifications", "src/Carina.Api/Services/NotificationRuleService.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261110182416_AProgrammeCanBeWatchedWithoutBeingRecorded.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261112182442_ANoticeCanBeSentToABrowser.cs"),
+        new("Persistence", "src/Carina.Db/CarinaDbContextFactory.cs"),
+        new("Persistence", "src/Carina.Db/DbEntryPoint.cs"),
+        new("Persistence", "src/Carina.Db/MigrationLock.cs"),
         new("Playback", "src/Carina.Api/Playback/AskedDecoding.cs"),
         new("Playback", "src/Carina.Api/Playback/AskedFormat.cs"),
         new("Playback", "src/Carina.Api/Playback/ByteRange.cs"),
@@ -113,6 +109,7 @@ public static class TestLayoutRules
         new("Streaming", "src/Carina.Api/Live/LiveWireSocket.cs"),
         new("Thumbnails", "src/Carina.Api/Playback/ScrubDelivery.cs"),
         new("Thumbnails", "src/Carina.Api/Playback/ThumbnailDelivery.cs"),
+        new("Version", "src/Carina.Api/Common/DeclaredVersion.cs"),
     ];
 
     /// <summary>

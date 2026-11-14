@@ -1,4 +1,5 @@
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Tests.Fixtures.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -9,7 +10,7 @@ public sealed class RecordingOwnedColumnRuleTests
     [Fact]
     public void TheReservationCannotWriteTheClaimOrTheOutcomeThroughTheChangeTracker()
     {
-        using CarinaDbContext context = ReservationModel.Carina();
+        using CarinaDbContext context = CarinaModel.Context();
 
         Assert.Empty(RecordingOwnedColumnRules.WritableThroughTheChangeTracker(context.Model));
     }
@@ -17,7 +18,7 @@ public sealed class RecordingOwnedColumnRuleTests
     [Fact]
     public void ThoseColumnsAreOnTheReservationForTheRuleToFind()
     {
-        using CarinaDbContext context = ReservationModel.Carina();
+        using CarinaDbContext context = CarinaModel.Context();
 
         Assert.Equal(
             ["reservation.recording_outcome", "reservation.started_at"],
@@ -27,7 +28,7 @@ public sealed class RecordingOwnedColumnRuleTests
     [Fact]
     public void TheLedgerKeepsItsOwnOutcomeColumnRatherThanBorrowingTheReservationsOne()
     {
-        using CarinaDbContext context = ReservationModel.Carina();
+        using CarinaDbContext context = CarinaModel.Context();
 
         Assert.DoesNotContain(
             "reservation_outcome.recording_outcome",

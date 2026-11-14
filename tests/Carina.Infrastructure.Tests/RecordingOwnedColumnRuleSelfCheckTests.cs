@@ -1,5 +1,6 @@
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Tests.Fixtures.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -35,7 +36,7 @@ public sealed class RecordingOwnedColumnRuleSelfCheckTests
     [Fact]
     public void DetectsAReservationThatCanWriteTheClaimOnInsert()
     {
-        using var context = new ClaimWritingDbContext(ReservationModel.Options());
+        using var context = new ClaimWritingDbContext(CarinaModel.Options());
 
         Assert.Equal(
             ["reservation.started_at"],
@@ -45,7 +46,7 @@ public sealed class RecordingOwnedColumnRuleSelfCheckTests
     [Fact]
     public void DetectsAReservationThatCanWriteTheOutcomeOnUpdate()
     {
-        using var context = new OutcomeWritingDbContext(ReservationModel.Options());
+        using var context = new OutcomeWritingDbContext(CarinaModel.Options());
 
         Assert.Equal(
             ["reservation.recording_outcome"],
@@ -55,7 +56,7 @@ public sealed class RecordingOwnedColumnRuleSelfCheckTests
     [Fact]
     public void FindsBothColumnsInEitherModelSoAnEmptyAnswerIsNeverAnEmptySearch()
     {
-        using var context = new ClaimWritingDbContext(ReservationModel.Options());
+        using var context = new ClaimWritingDbContext(CarinaModel.Options());
 
         Assert.Equal(
             ["reservation.recording_outcome", "reservation.started_at"],

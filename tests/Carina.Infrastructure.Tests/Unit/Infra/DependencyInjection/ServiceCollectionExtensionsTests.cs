@@ -1,0 +1,978 @@
+using Carina.Domain.Auth;
+using Carina.Domain.Base;
+using Carina.Domain.Captions;
+using Carina.Domain.Channels;
+using Carina.Domain.DataBroadcast;
+using Carina.Domain.Driver;
+using Carina.Domain.DriverStatus;
+using Carina.Domain.Encodings;
+using Carina.Domain.Events;
+using Carina.Domain.Integrity;
+using Carina.Domain.Machines;
+using Carina.Domain.Migration;
+using Carina.Domain.Notifications;
+using Carina.Domain.Playback;
+using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
+using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
+using Carina.Domain.Rules;
+using Carina.Domain.Scans;
+using Carina.Domain.Segments;
+using Carina.Domain.Thumbnails;
+using Carina.Infrastructure.Auth;
+using Carina.Infrastructure.Collection;
+using Carina.Infrastructure.Configuration;
+using Carina.Infrastructure.DataBroadcast;
+using Carina.Infrastructure.DependencyInjection;
+using Carina.Infrastructure.Driver;
+using Carina.Infrastructure.Encodings;
+using Carina.Infrastructure.Events;
+using Carina.Infrastructure.Integrity;
+using Carina.Infrastructure.Migration;
+using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Reservations;
+using Carina.Infrastructure.Rules;
+using Carina.Infrastructure.Scanning;
+using Carina.Infrastructure.Segments;
+using Carina.Infrastructure.Thumbnails;
+using Carina.TestSupport;
+
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+
+namespace Carina.Infrastructure.Tests.Unit.Infra.DependencyInjection;
+
+[Trait("Category", "Unit")]
+public sealed class ServiceCollectionExtensionsTests
+{
+    private const string ConnectionString = "Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder";
+
+    private static ServiceProvider Build(Dictionary<string, string?> settings)
+        => new ServiceCollection()
+            .AddLogging()
+            .AddCarinaInfrastructure(new ConfigurationBuilder().AddInMemoryCollection(settings).Build())
+            .BuildServiceProvider();
+
+    private static Dictionary<string, string?> ValidSettings() => new()
+    {
+        ["ConnectionStrings:Carina"] = ConnectionString,
+        ["CARINA_DRIVER_SOCKET"] = "/run/carina/driver.sock",
+        ["CARINA_DATA_PROTECTION_KEYS"] = "/var/lib/carina/keys",
+    };
+
+    [Fact]
+    public void EverythingARuleApplicationReachesForIsRegistered()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<RuleRepository>(scope.ServiceProvider.GetRequiredService<IRuleRepository>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleApplicationService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleMatcher>());
+        Assert.NotNull(provider.GetRequiredService<RuleApplicationSettings>());
+        Assert.NotNull(provider.GetRequiredService<RuleApplyNow>());
+        Assert.NotNull(provider.GetRequiredService<RuleApplySettings>());
+        Assert.Same(
+            provider.GetRequiredService<ReservationRecalculationHostedService>(),
+            provider.GetRequiredService<IRecalculationPass>());
+    }
+
+    [Fact]
+    public void RegistersThePersistenceContext()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<CarinaDbContext>());
+    }
+
+    [Fact]
+    public void RegistersTheScanOrchestratorAlongsideTheRepositoriesItWalksWith()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<ChannelScanOrchestrator>(
+            scope.ServiceProvider.GetRequiredService<IChannelScanOrchestrator>());
+    }
+
+    [Fact]
+    public void RegistersEverythingARecordingTickReachesFor()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<RecordingRepository>(
+            scope.ServiceProvider.GetRequiredService<IRecordingRepository>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingRound>());
+        Assert.NotNull(provider.GetRequiredService<RecordingSettings>());
+    }
+
+    [Fact]
+    public void TheReservationLedgerIsReachableThroughItsRepository()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<ReservationRepository>(
+            scope.ServiceProvider.GetRequiredService<IReservationRepository>());
+    }
+
+    [Fact]
+    public void RegistersEverythingTheOneAllocationEntryPointReachesFor()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReservationSchedulingService>());
+        Assert.Same(RollingHorizon.Default, provider.GetRequiredService<RollingHorizon>());
+    }
+
+    [Fact]
+    public void TheRecalculationPassIsOneOfTheJobsTheHostStartsAndIsTheOneThingTriggersReach()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Single(provider.GetServices<IHostedService>().OfType<ReservationRecalculationHostedService>());
+        Assert.Same(
+            provider.GetRequiredService<ReservationRecalculationHostedService>(),
+            provider.GetRequiredService<IRecalculationNotice>());
+        Assert.NotNull(provider.GetRequiredService<RecalculationSettings>());
+    }
+
+    [Fact]
+    public void TheRecordingTickIsOneOfTheJobsTheHostStarts()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Single(provider.GetServices<IHostedService>().OfType<RecordingTickJob>());
+    }
+
+    [Fact]
+    public void RegistersEverythingARecordingWatchReachesFor()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.NotNull(provider.GetRequiredService<RecordingStreamSupervisor>());
+        Assert.NotNull(provider.GetRequiredService<RecordingWatchSettings>());
+        Assert.IsType<LocalRecordingFileWeigher>(provider.GetRequiredService<IRecordingFileWeigher>());
+    }
+
+    [Fact]
+    public void TheRecordingWatchIsOneOfTheJobsTheHostStarts()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Single(provider.GetServices<IHostedService>().OfType<RecordingStreamJob>());
+    }
+
+    [Fact]
+    public void TheHeadTheRecorderRunsWithIsReadFromConfiguration()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Recording:TuningLead"] = "00:00:40";
+
+        using ServiceProvider provider = Build(settings);
+
+        Assert.Equal(TimeSpan.FromSeconds(40), provider.GetRequiredService<RecordingSettings>().TuningLead);
+    }
+
+    [Fact]
+    public void ThePaceCountsAreToldToTheScreensAtIsReadFromConfiguration()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["RecordingProgress:AtMostEvery"] = "00:01:00";
+
+        using ServiceProvider provider = Build(settings);
+
+        Assert.Equal(
+            TimeSpan.FromMinutes(1),
+            provider.GetRequiredService<RecordingProgressSettings>().AtMostEvery);
+    }
+
+    [Fact]
+    public void RegistersEverythingACollectionSweepReachesFor()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<BroadcastStreamDomainService>(
+            scope.ServiceProvider.GetRequiredService<IBroadcastStreamDirectory>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<CollectionRound>());
+    }
+
+    [Fact]
+    public void TheCollectorRunsAlongsideTheOtherHostedServices()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Single(provider.GetServices<IHostedService>().OfType<EpgCollector>());
+    }
+
+    [Fact]
+    public void RegistersTheHubItselfAsTheAppEventPublisherSoNoSignalIsDropped()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Same(
+            provider.GetRequiredService<AppEventHub>(),
+            provider.GetRequiredService<IAppEventPublisher>());
+    }
+
+    [Fact]
+    public void RegistersSomethingToCloseTheHubWhenTheAppStops()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => service is AppEventHubLifetime);
+    }
+
+    [Fact]
+    public void RegistersTheScanRunnerAsTheSameThingThatIsStoppedWithTheApp()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<ScanRunner>()));
+    }
+
+    [Fact]
+    public void RegistersTheTimeProvider()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Same(TimeProvider.System, provider.GetRequiredService<TimeProvider>());
+    }
+
+    [Fact]
+    public void RegistersTheMonitorBackedDriverStatusReader()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.IsType<MonitoredDriverStatusReader>(provider.GetRequiredService<IDriverStatusReader>());
+    }
+
+    [Fact]
+    public void RegistersTheWriteThatLandsWholeOrNotAtAll()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<DatabaseAtomicWrite>(scope.ServiceProvider.GetRequiredService<IAtomicWrite>());
+    }
+
+    [Fact]
+    public void RegistersTheReadTheStoreIsOnlyGivenSoLongToAnswer()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<DatabaseBoundedRead>(scope.ServiceProvider.GetRequiredService<IBoundedRead>());
+    }
+
+    [Fact]
+    public void RegistersWhatTheBulkFeedIsHeldToAsOneSettingForTheWholeApplication()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        ProgrammeFeedSettings held = provider.GetRequiredService<ProgrammeFeedSettings>();
+
+        Assert.Equal(new ProgrammeFeedSettings(), held);
+        Assert.Same(held, provider.GetRequiredService<ProgrammeFeedSettings>());
+    }
+
+    [Fact]
+    public void RegistersTheDriverClientAndItsSupervision()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.IsType<DriverIpcClient>(provider.GetRequiredService<IDriverClient>());
+        Assert.Same(
+            provider.GetRequiredService<IDriverClient>(),
+            provider.GetRequiredService<IConditionalAccessCardReader>());
+        Assert.NotNull(provider.GetRequiredService<DriverConnectionMonitor>());
+        Assert.Same(
+            provider.GetRequiredService<DriverSignalRelay>(),
+            provider.GetRequiredService<IDriverSignals>());
+        Assert.IsType<OrphanRecoveryService>(
+            provider.GetRequiredService<IDriverSessionResyncHook>());
+        Assert.Same(
+            DriverSupervisionSettings.Default,
+            provider.GetRequiredService<DriverSupervisionSettings>());
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => service is DriverConnectionSupervisor);
+    }
+
+    [Fact]
+    public void RejectsAMissingConnectionString()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["ConnectionStrings:Carina"] = "";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<DatabaseOptions>>().Value);
+
+        Assert.Contains("ConnectionStrings:Carina", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RegistersTheLedgerCheckAlongsideTheOtherHostedServices()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<IntegrityCheckJob>()));
+    }
+
+    [Fact]
+    public void RegistersEverythingTheLedgerCheckReachesFor()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<LocalRecordingFileSurvey>(provider.GetRequiredService<IRecordingFileSurvey>());
+        Assert.IsType<IntegrityCheckRepository>(
+            scope.ServiceProvider.GetRequiredService<IIntegrityCheckRepository>());
+        Assert.IsType<RecordingLedger>(scope.ServiceProvider.GetRequiredService<IRecordingLedger>());
+        Assert.IsType<EncodeWorkLedger>(scope.ServiceProvider.GetRequiredService<IEncodeWorkLedger>());
+    }
+
+    [Fact]
+    public void RegistersWhereWhatAMigrationCarriedAndDidNotIsWrittenDown()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<MigrationRecordRepository>(
+            scope.ServiceProvider.GetRequiredService<IMigrationRecordRepository>());
+    }
+
+    [Fact]
+    public void RegistersWhereTheLearningDataAndHowFarItWasTakenAreKept()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<LearningExtractionRepository>(
+            scope.ServiceProvider.GetRequiredService<ILearningExtractionRepository>());
+        Assert.IsType<LearningDataRepository>(
+            scope.ServiceProvider.GetRequiredService<ILearningDataRepository>());
+    }
+
+    [Fact(DisplayName = "registers what reads how much learning data is kept")]
+    public void RegistersWhatReadsHowMuchLearningDataIsKept()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<LearningDataAmountReader>(
+            scope.ServiceProvider.GetRequiredService<ILearningDataAmountReader>());
+    }
+
+    [Fact(DisplayName = "registers where the catalog is kept, what counts it, and what matching reads")]
+    public void RegistersTheCatalog()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<CatalogRepository>(scope.ServiceProvider.GetRequiredService<ICatalogRepository>());
+        Assert.IsType<CatalogCountsReader>(scope.ServiceProvider.GetRequiredService<ICatalogCountsReader>());
+        Assert.IsType<CatalogWorklist>(scope.ServiceProvider.GetRequiredService<ICatalogWorklist>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<CatalogMatching>());
+    }
+
+    [Fact(DisplayName = "registers the matching against the catalog as the same job that is stopped with the app")]
+    public void RegistersTheCatalogMatchingJob()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Same(CatalogMatchingSettings.Default, provider.GetRequiredService<CatalogMatchingSettings>());
+        Assert.Same(provider.GetRequiredService<FollowedToTheEnd>(), provider.GetRequiredService<FollowedToTheEnd>());
+        Assert.Same(provider.GetRequiredService<LowestPriorityScheduler>(), provider.GetRequiredService<LowestPriorityScheduler>());
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<CatalogMatchingJob>()));
+    }
+
+    [Fact(DisplayName = "registers where the versions of the model and the detections are kept, what detection reads, and the detecting")]
+    public void RegistersTheDetection()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<SegmentModelVersionRepository>(scope.ServiceProvider.GetRequiredService<ISegmentModelVersionRepository>());
+        Assert.IsType<RecordingDetectionRepository>(scope.ServiceProvider.GetRequiredService<IRecordingDetectionRepository>());
+        Assert.IsType<DetectionWorklist>(scope.ServiceProvider.GetRequiredService<IDetectionWorklist>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentDetecting>());
+    }
+
+    [Fact(DisplayName = "registers where the skip events and the seeks are kept and what the catalog would give an evaluation to stand on")]
+    public void RegistersTheSkipEventsAndTheCatalogEvidence()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<SkipEventRepository>(scope.ServiceProvider.GetRequiredService<ISkipEventRepository>());
+        Assert.IsType<SeekEventRepository>(scope.ServiceProvider.GetRequiredService<ISeekEventRepository>());
+        Assert.IsType<CatalogEvidenceReader>(scope.ServiceProvider.GetRequiredService<ICatalogEvidenceReader>());
+    }
+
+    [Fact(DisplayName = "registers the detection of segments as the same job that is stopped with the app, told by the matching what it matched at once")]
+    public void RegistersTheSegmentDetectionJob()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Same(SegmentDetectionSettings.Default, provider.GetRequiredService<SegmentDetectionSettings>());
+        Assert.Same(provider.GetRequiredService<MatchedAtOnce>(), provider.GetRequiredService<MatchedAtOnce>());
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<SegmentDetectionJob>()));
+    }
+
+    [Fact(DisplayName = "registers the day's round of learning as the same job that is stopped with the app, where the rounds taken are kept, and the learning it runs")]
+    public void RegistersTheSegmentTrainingJob()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.Same(SegmentTrainingSettings.Default, provider.GetRequiredService<SegmentTrainingSettings>());
+        Assert.IsType<SegmentLearningRoundRepository>(scope.ServiceProvider.GetRequiredService<ISegmentLearningRoundRepository>());
+        Assert.IsType<SegmentTrainer>(scope.ServiceProvider.GetRequiredService<ISegmentTrainer>());
+        Assert.IsType<LearningMaterialChanges>(scope.ServiceProvider.GetRequiredService<ILearningMaterialChanges>());
+        Assert.IsType<TrainingWorklist>(scope.ServiceProvider.GetRequiredService<ITrainingWorklist>());
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<SegmentTrainingJob>()));
+    }
+
+    [Fact(DisplayName = "BR-CS-003: the built-in version is kept at startup before detection, learning or the chapters of an encode can ask for the version in use")]
+    public void KeepsTheBuiltInVersionBeforeTheJobsThatReadTheVersionInUse()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        IHostedService[] started = [.. provider.GetServices<IHostedService>()];
+        int kept = Array.FindIndex(started, service => service is BuiltInSegmentVersion);
+
+        Assert.Single(started.OfType<BuiltInSegmentVersion>());
+        Assert.True(kept < Array.FindIndex(started, service => ReferenceEquals(service, provider.GetRequiredService<SegmentDetectionJob>())));
+        Assert.True(kept < Array.FindIndex(started, service => ReferenceEquals(service, provider.GetRequiredService<SegmentTrainingJob>())));
+        Assert.True(kept < Array.FindIndex(started, service => ReferenceEquals(service, provider.GetRequiredService<ChapterRewriteJob>())));
+        Assert.True(kept < Array.FindIndex(started, service => service is EncodeDispatch));
+    }
+
+    [Fact(DisplayName = "registers where the segment settings are kept")]
+    public void RegistersTheSegmentSettings()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<SegmentSettingsRepository>(
+            scope.ServiceProvider.GetRequiredService<ISegmentSettingsRepository>());
+    }
+
+    [Fact(DisplayName = "BR-BD-016: registers where the data broadcast settings are kept")]
+    public void RegistersTheDataBroadcastSettings()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<DataBroadcastSettingsRepository>(
+            scope.ServiceProvider.GetRequiredService<IDataBroadcastSettingsRepository>());
+    }
+
+    [Fact(DisplayName = "BR-BD-011: registers one relay to broadcasters' servers over the system's own network, knowing no host of its own by name until one is given")]
+    public void RegistersTheRelay()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.IsType<BroadcasterRelay>(provider.GetRequiredService<IBroadcasterRelay>());
+        Assert.Same(provider.GetRequiredService<IBroadcasterRelay>(), provider.GetRequiredService<IBroadcasterRelay>());
+        Assert.IsType<SystemRelayNetwork>(provider.GetRequiredService<IRelayNetwork>());
+        Assert.Same(OwnHost.Unnamed, provider.GetRequiredService<OwnHost>());
+        Assert.Equal(BroadcasterRelaySettings.Default, provider.GetRequiredService<BroadcasterRelaySettings>());
+    }
+
+    [Fact(DisplayName = "BR-BA-004: registers one relay for Hybridcast applications, introducing itself as the data broadcast relay does, and one shelf of the applications started")]
+    public void RegistersTheHybridcastRelay()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.IsType<HybridcastRelay>(provider.GetRequiredService<IHybridcastRelay>());
+        Assert.Same(provider.GetRequiredService<IHybridcastRelay>(), provider.GetRequiredService<IHybridcastRelay>());
+        Assert.IsType<HybridcastLaunchShelf>(provider.GetRequiredService<IHybridcastLaunches>());
+        Assert.Same(provider.GetRequiredService<IHybridcastLaunches>(), provider.GetRequiredService<IHybridcastLaunches>());
+        Assert.Equal(BroadcasterRelaySettings.Default.UserAgent, provider.GetRequiredService<HybridcastRelaySettings>().UserAgent);
+    }
+
+    [Fact(DisplayName = "registers the domain services of recordings, their captions and their data broadcasts, each for one scope")]
+    public void RegistersTheDomainServicesOfRecordings()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ProgrammeEndDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingSettlementDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingDisposalDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<CaptionRequeueDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<DataBroadcastRequeueDomainService>());
+    }
+
+    [Fact(DisplayName = "registers the domain service of the integrity check for one scope")]
+    public void RegistersTheDomainServiceOfTheIntegrityCheck()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IntegrityClaimDomainService>());
+    }
+
+    [Fact(DisplayName = "registers the domain services of playback, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfPlayback()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<PlaybackArtefactDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SourcePlacementDomainService>());
+    }
+
+    [Fact(DisplayName = "registers the domain services of quality, each for one scope")]
+    public void RegistersTheDomainServicesOfQuality()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<QualitySessionMeasuringDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SupplyWatchDomainService>());
+    }
+
+    [Fact(DisplayName = "registers the follow of recordings being written for their learning data alongside the other hosted services, with what it reaches for")]
+    public void RegistersTheLearningFollowAlongsideTheOtherHostedServices()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<LearningFollowJob>()));
+        Assert.IsType<FfmpegLearningFollower>(provider.GetRequiredService<ILearningFollower>());
+        Assert.IsType<LearningWorklist>(scope.ServiceProvider.GetRequiredService<ILearningWorklist>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ProgrammeEndDomainService>());
+        Assert.Same(LearningFollowSettings.Default, provider.GetRequiredService<LearningFollowSettings>());
+    }
+
+    [Fact(DisplayName = "registers the domain services of the local account, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfTheLocalAccount()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<LocalAccountProvisioningDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<LocalLoginDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<PasswordChangeDomainService>());
+    }
+
+    [Fact(DisplayName = "registers the domain services of the notifications, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfTheNotifications()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ProgrammeWatchDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<NotificationRuleDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<NotificationDestinationDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<NotificationDeliveryDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<NotificationIntakeDomainService>());
+    }
+
+    [Fact(DisplayName = "registers the domain services of the encodes, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfTheEncodes()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<EncodeDefinitionDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<EncodeQueueDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingEncodeDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ArtefactRewriteDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<EncodeCaptionTrackDomainService>());
+    }
+
+    [Fact(DisplayName = "registers the domain services of the channels and scans, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfTheChannelsAndScans()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<LiveChannelDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<CandidateChannelDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ScanPlanningDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ChannelRotationDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ChannelLineupDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<StationLogoDomainService>());
+        Assert.IsType<ServiceTuningDomainService>(scope.ServiceProvider.GetRequiredService<IServiceTuningDirectory>());
+    }
+
+    [Fact(DisplayName = "registers the domain services of the reservations and rules, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfTheReservationsAndRules()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReservationOutcomeDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReservationPlanningDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<BroadcastGroupDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleWithdrawalDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleTakingDomainService>());
+    }
+
+    [Fact(DisplayName = "registers the domain services of CM, OP and ED detection, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfTheSegments()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ViewerActionIntakeDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<LearningExtractionRecoveryDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentVersionDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentLearningRoundDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentFiguresDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<CatalogMatchingDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentContextDomainService>());
+    }
+
+    [Fact(DisplayName = "registers the reading of recordings that have ended for their learning data alongside the other hosted services, with what it reaches for")]
+    public void RegistersTheLearningBacklogAlongsideTheOtherHostedServices()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<LearningBacklogJob>()));
+        Assert.IsType<LearningBacklogReader>(scope.ServiceProvider.GetRequiredService<ILearningBacklog>());
+        Assert.IsType<OccupancyReader>(scope.ServiceProvider.GetRequiredService<IOccupancyReader>());
+        Assert.IsType<BusynessReader>(scope.ServiceProvider.GetRequiredService<IBusynessReader>());
+        Assert.Same(LearningBacklogSettings.Default, provider.GetRequiredService<LearningBacklogSettings>());
+    }
+
+    [Fact(DisplayName = "registers the import of reduced copies beside the reading of recordings that have ended, from the directory configured")]
+    public void RegistersTheImportOfReducedCopies()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Learning:ImportFrom"] = "/srv/reduced";
+        using ServiceProvider provider = Build(settings);
+        using ServiceProvider unset = Build(ValidSettings());
+
+        Assert.IsType<FfmpegReducedCopyImporter>(provider.GetRequiredService<IReducedCopyImporter>());
+        Assert.NotNull(provider.GetRequiredService<ReducedCopyImports>());
+        Assert.Equal("/srv/reduced", provider.GetRequiredService<LearningImportSettings>().ImportFrom);
+        Assert.Null(unset.GetRequiredService<LearningImportSettings>().ImportFrom);
+    }
+
+    [Fact(DisplayName = "a directory to import reduced copies from that is not absolute stops the process naming the setting")]
+    public void RejectsAnImportDirectoryThatIsNotAbsolute()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Learning:ImportFrom"] = "reduced";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<LearningOptions>>().Value);
+
+        Assert.Contains("Learning:ImportFrom", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReadsWhereTheOutputRootsAreMountedIntoThisProcess()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Integrity:OutputRoots"] = "primary=/srv/recordings";
+        using ServiceProvider provider = Build(settings);
+
+        IntegritySettings read = provider.GetRequiredService<IntegritySettings>();
+
+        Assert.Equal("primary", Assert.Single(read.OutputRoots).Root.Value);
+        Assert.Equal("/srv/recordings", read.OutputRoots[0].Path);
+    }
+
+    [Fact]
+    public void RejectsAnOutputRootMountedNowhere()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Integrity:OutputRoots"] = "primary";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<IntegrityOptions>>().Value);
+
+        Assert.Contains("Integrity:OutputRoots", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RegistersTheThumbnailPassAlongsideTheOtherHostedServices()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<ThumbnailJob>()));
+    }
+
+    [Fact]
+    public void RegistersEverythingAThumbnailPassReachesFor()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<FfmpegThumbnailRenderer>(provider.GetRequiredService<IThumbnailRenderer>());
+        Assert.IsType<ThumbnailWorklist>(scope.ServiceProvider.GetRequiredService<IThumbnailWorklist>());
+        Assert.NotNull(provider.GetRequiredService<ThumbnailSettings>());
+    }
+
+    [Fact]
+    public void ReadsWhereThePicturesGo()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Thumbnails:WrittenTo"] = "/srv/thumbnails";
+        settings["Thumbnails:Width"] = "1280";
+        using ServiceProvider provider = Build(settings);
+
+        ThumbnailSettings read = provider.GetRequiredService<ThumbnailSettings>();
+
+        Assert.Equal("/srv/thumbnails", read.WrittenTo);
+        Assert.Equal(1280, read.Width);
+        Assert.True(read.DrawsAnything);
+    }
+
+    [Fact]
+    public void ReadsWhichRenderNodeTheCardIsOpenedThrough()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Machine:RenderNode"] = "/dev/dri/renderD129";
+        using ServiceProvider provider = Build(settings);
+
+        Assert.Equal("/dev/dri/renderD129", provider.GetRequiredService<MachineSettings>().RenderNode);
+    }
+
+    [Fact]
+    public void AMachineToldNoRenderNodeOpensTheFirstOne()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Equal("/dev/dri/renderD128", provider.GetRequiredService<MachineSettings>().RenderNode);
+    }
+
+    [Fact]
+    public void RejectsARenderNodeThatIsNotAnAbsolutePath()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Machine:RenderNode"] = "renderD129";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MachineOptions>>().Value);
+
+        Assert.Contains("Machine:RenderNode", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsAPictureDirectoryThisProcessCouldNotReach()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Thumbnails:WrittenTo"] = "srv/thumbnails";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<ThumbnailOptions>>().Value);
+
+        Assert.Contains("Thumbnails:WrittenTo", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RegistersHowLongASessionLastsAsOneSettingForTheWholeApplication()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        SessionPolicy held = provider.GetRequiredService<SessionPolicy>();
+
+        Assert.Equal(SessionPolicy.Default, held);
+        Assert.Same(held, provider.GetRequiredService<SessionPolicy>());
+    }
+
+    [Fact]
+    public void RegistersHowOftenALoginMayBeWrongAsOneSettingForTheWholeApplication()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        LoginRatePolicy held = provider.GetRequiredService<LoginRatePolicy>();
+
+        Assert.Equal(LoginRatePolicy.Default, held);
+        Assert.Same(held, provider.GetRequiredService<LoginRatePolicy>());
+    }
+
+    [Fact]
+    public void ReadsHowLongASessionLastsFromConfiguration()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Auth:SessionAbsoluteLifetime"] = "10.00:00:00";
+        settings["Auth:SessionIdleTimeout"] = "1.00:00:00";
+        settings["Auth:SessionBetweenLastUsedWrites"] = "00:10:00";
+        using ServiceProvider provider = Build(settings);
+
+        SessionPolicy read = provider.GetRequiredService<SessionPolicy>();
+
+        Assert.Equal(TimeSpan.FromDays(10), read.AbsoluteLifetime);
+        Assert.Equal(TimeSpan.FromDays(1), read.IdleTimeout);
+        Assert.Equal(TimeSpan.FromMinutes(10), read.BetweenLastUsedWrites);
+    }
+
+    [Fact]
+    public void ReadsHowOftenALoginMayBeWrongFromConfiguration()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Auth:LoginFailuresBeforeRefusing"] = "3";
+        settings["Auth:LoginWindow"] = "00:02:00";
+        using ServiceProvider provider = Build(settings);
+
+        LoginRatePolicy read = provider.GetRequiredService<LoginRatePolicy>();
+
+        Assert.Equal(3, read.FailuresBeforeRefusing);
+        Assert.Equal(TimeSpan.FromMinutes(2), read.Window);
+    }
+
+    [Fact]
+    public void RejectsASessionLeftIdleForLongerThanItLives()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Auth:SessionIdleTimeout"] = "60.00:00:00";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<AuthOptions>>().Value);
+
+        Assert.Contains("Auth:SessionIdleTimeout", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheUpkeepForgetsSessionsByTheSameIdleTimeoutEverythingElseIsHeldTo()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Auth:SessionIdleTimeout"] = "01:00:00";
+        using ServiceProvider provider = Build(settings);
+
+        AuthUpkeepJob job = Assert.Single(provider.GetServices<IHostedService>().OfType<AuthUpkeepJob>());
+        var held = new HeldAuthSessions();
+
+        held.Sessions.Add(AuthSession.Start(
+            SessionId.Issue(),
+            new Subject("carina"),
+            "carina",
+            AuthMethod.Local,
+            "a device that stopped asking",
+            DateTime.UtcNow - TimeSpan.FromHours(2)));
+
+        Assert.Equal(1, await job.ForgetEndedSessionsAsync(held, CancellationToken.None));
+        Assert.Empty(held.Sessions);
+    }
+
+    [Fact]
+    public void AMissingDriverSocketPathTakesTheDefault()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings.Remove("CARINA_DRIVER_SOCKET");
+        using ServiceProvider provider = Build(settings);
+
+        DriverOptions options = provider.GetRequiredService<IOptions<DriverOptions>>().Value;
+
+        Assert.Equal("/run/carina/driver.sock", options.SocketPath);
+    }
+
+    [Fact]
+    public void AWrittenDriverSocketPathIsKept()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["CARINA_DRIVER_SOCKET"] = "/run/elsewhere/driver.sock";
+        using ServiceProvider provider = Build(settings);
+
+        DriverOptions options = provider.GetRequiredService<IOptions<DriverOptions>>().Value;
+
+        Assert.Equal("/run/elsewhere/driver.sock", options.SocketPath);
+    }
+
+    [Fact]
+    public void RejectsAnEmptyDriverSocketPath()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["CARINA_DRIVER_SOCKET"] = string.Empty;
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<DriverOptions>>().Value);
+
+        Assert.Contains("CARINA_DRIVER_SOCKET", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsARelativeDriverSocketPath()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["CARINA_DRIVER_SOCKET"] = "driver.sock";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<DriverOptions>>().Value);
+
+        Assert.Contains("absolute path", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsAMissingPlaceForTheSealingKeys()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings.Remove("CARINA_DATA_PROTECTION_KEYS");
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<SealingKeyOptions>>().Value);
+
+        Assert.Contains("CARINA_DATA_PROTECTION_KEYS", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsARelativePlaceForTheSealingKeys()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["CARINA_DATA_PROTECTION_KEYS"] = "keys";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<SealingKeyOptions>>().Value);
+
+        Assert.Contains("absolute path", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheSealingKeysAreKeptWhereTheSettingSays()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        KeyManagementOptions management = provider.GetRequiredService<IOptions<KeyManagementOptions>>().Value;
+
+        FileSystemXmlRepository kept = Assert.IsType<FileSystemXmlRepository>(management.XmlRepository);
+        Assert.Equal("/var/lib/carina/keys", kept.Directory.FullName);
+    }
+}
