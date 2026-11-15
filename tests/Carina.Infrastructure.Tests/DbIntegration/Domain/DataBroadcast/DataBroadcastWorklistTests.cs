@@ -6,15 +6,19 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Tests.Fixtures.Integrity;
+using Carina.Infrastructure.Tests.Fixtures.Recordings;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+
+using Npgsql;
 
 namespace Carina.Infrastructure.Tests.DbIntegration.Domain.DataBroadcast;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class DataBroadcastWorklistTests(RepositoryDatabase database)
+public sealed class DataBroadcastWorklistTests(RepositoryDatabase database, MigratedRepositoryDatabase migrated)
+    : IClassFixture<MigratedRepositoryDatabase>
 {
     private static readonly DateTime Now = new(2026, 10, 10, 6, 0, 0, DateTimeKind.Utc);
 
@@ -152,6 +156,56 @@ public sealed class DataBroadcastWorklistTests(RepositoryDatabase database)
         Assert.False(await AskAsync(worklist => worklist.TakenAsync(gone, 1, Cancel)));
         Assert.False(await AskAsync(worklist => worklist.FailedAsync(gone, Cancel)));
         Assert.False(await AskAsync(worklist => worklist.LostAsync(gone, Cancel)));
+    }
+
+    [Fact(DisplayName = "BR-BS-001: the recordings the data broadcast pass reads as waiting, puts to coming once ended and tries again are the ones each recording says so of, on the last try and the one before it")]
+    public async Task TheRecordingsTheDataBroadcastPassMovesAreTheOnesEachSaysSoOf()
+    {
+        await using ServiceProvider container = migrated.Infrastructure();
+
+        IReadOnlyList<Recording> laid = await RecordingMatrix.LaidAsync(container, RecordingMatrix.DataBroadcastShapes());
+
+        await using (NpgsqlConnection connection = await migrated.OpenAsync())
+        {
+            Guid[] behind = [.. laid.Where(recording => recording.AwaitsItsDataBroadcast && recording.DataBroadcastAttempts == 0)
+                .Where((_, index) => index % 3 == 0)
+                .Select(recording => recording.Id.Value)];
+            await using var forgetting = new NpgsqlCommand(
+                "UPDATE recording SET data_broadcast_state = 'None' WHERE id = ANY(@ids)",
+                connection);
+            forgetting.Parameters.AddWithValue("ids", behind);
+            await forgetting.ExecuteNonQueryAsync();
+        }
+
+        IReadOnlyList<Recording> matrix = await RecordingMatrix.ReadAsync(container);
+
+        Assert.Contains(matrix, recording => recording.AwaitsItsDataBroadcast);
+        Assert.Contains(matrix, recording => recording.DataBroadcastNeverCameDue);
+        Assert.Contains(matrix, recording => recording.DataBroadcastIsDueAgain);
+        Assert.Contains(matrix, recording => recording.DataBroadcastAttempts == DataBroadcastProgress.TriesAtMost);
+        Assert.Contains(matrix, recording => recording is { IsInFlight: true, DataBroadcastState: DataBroadcastState.None });
+
+        await using (AsyncServiceScope context = container.CreateAsyncScope())
+        {
+            IDataBroadcastWorklist worklist = context.ServiceProvider.GetRequiredService<IDataBroadcastWorklist>();
+
+            IReadOnlyList<DataBroadcastSubject> within = await worklist.AwaitingAsync([RecordingMatrix.Bulk], 1_000, CancellationToken.None);
+            int beyond = await worklist.WaitingOutOfReachAsync([RecordingMatrix.Bulk], CancellationToken.None);
+
+            Assert.Equal(
+                RecordingMatrix.Ids(matrix.Where(recording => recording.AwaitsItsDataBroadcast && recording.OutputRoot.Equals(RecordingMatrix.Bulk))),
+                RecordingMatrix.Ids(within.Select(subject => subject.Id)));
+            Assert.Equal(matrix.Count(recording => recording.AwaitsItsDataBroadcast && recording.OutputRoot.Equals(RecordingMatrix.Spare)), beyond);
+            Assert.Equal(matrix.Count(recording => recording.DataBroadcastNeverCameDue), await worklist.CatchUpEndedAsync(CancellationToken.None));
+            Assert.Equal(matrix.Count(recording => recording.DataBroadcastIsDueAgain), await worklist.RetryFailedAsync(CancellationToken.None));
+        }
+
+        Guid[] moved = RecordingMatrix.Ids(matrix.Where(recording => recording.DataBroadcastNeverCameDue || recording.DataBroadcastIsDueAgain));
+        IReadOnlyList<Recording> after = await RecordingMatrix.ReadAsync(container);
+
+        Assert.Equal(
+            RecordingMatrix.Ids(matrix.Where(recording => recording.AwaitsItsDataBroadcast).Select(recording => recording.Id)).Concat(moved).Order().ToArray(),
+            RecordingMatrix.Ids(after.Where(recording => recording.AwaitsItsDataBroadcast)));
     }
 
     private static OutputRoot Alone() => new("databroadcast" + Guid.NewGuid().ToString("N")[..12]);

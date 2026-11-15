@@ -14,8 +14,9 @@ using Carina.Infrastructure.Tests.Fixtures.Segments;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.Support;
 
+[Trait("Category", "Unit")]
 public sealed class PersistenceBoundaryRuleSelfCheckTests
 {
     private static readonly string[] FamilyPrefixes = ["reservation", "channel", "programme", "epg", "recording", "encode"];

@@ -1,27 +1,27 @@
-using System.Globalization;
-
 using Carina.Domain.Base;
+using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
-using Carina.Domain.Programmes;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
+using Carina.Domain.Rules;
 using Carina.Infrastructure.Migration;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Tests.Fixtures.Migration;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
 
 using static Carina.TestSupport.CarriedMigrationFixtures;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Migration;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
+public sealed class MigrationPassageTests : IDisposable
 {
     private const int Shelf = 53;
 
@@ -40,26 +40,83 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
 
     private readonly HandTurnedClock clock = new(new DateTimeOffset(Now));
 
-    private readonly string from = Directory.CreateTempSubdirectory("carina-shelf-source").FullName;
+    private readonly string from = Directory.CreateTempSubdirectory("carina-migration-ledger-source").FullName;
 
-    private readonly string into = Directory.CreateTempSubdirectory("carina-shelf-root").FullName;
+    private readonly string into = Directory.CreateTempSubdirectory("carina-migration-ledger-root").FullName;
 
-    public AShelfCarriedOverStaysUnmeasuredTests(RepositoryDatabase database)
+    public MigrationPassageTests(RepositoryDatabase database) => this.database = database;
+
+    public void Dispose() => MigrationOnRealFiles.RemoveAll(from, into);
+
+    [Fact]
+    public async Task WhatARunForRealCarriesIsTakenByEveryLedgerTheNewSystemKeeps()
     {
-        this.database = database;
-        AShelfOnDisk.LayDown(from, Shelf, NotARecording);
+        MigrationRunId id = await CarryRealFilesAsync();
+
+        await using ServiceProvider container = database.Infrastructure();
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        CarinaDbContext context = reading.ServiceProvider.GetRequiredService<CarinaDbContext>();
+
+        IReadOnlyList<Recording> held = await context.Set<Recording>().ToListAsync(Cancel);
+        IReadOnlyList<Rule> made = await reading.ServiceProvider.GetRequiredService<IRuleRepository>().ListAsync(Cancel);
+        IReadOnlyList<EncodeJob> queued = await context.Set<EncodeJob>().ToListAsync(Cancel);
+        MigrationReport? written = await reading.ServiceProvider.GetRequiredService<IMigrationRecordRepository>().ReadAsync(id, Cancel);
+
+        Assert.Equal(2, held.Count);
+        Assert.All(held, recording => Assert.Equal(RecordingOutcome.Complete, recording.Outcome));
+        Assert.All(held, recording => Assert.Equal(Root, recording.OutputRoot));
+        Assert.Equal(
+            held.Select(recording => recording.FileName.Value).Order(StringComparer.Ordinal),
+            Directory.GetFiles(into).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+
+        Assert.Equal(
+            held.Select(recording => recording.Id.Wire).Order(StringComparer.Ordinal),
+            queued.Select(job => job.RecordingId.Wire).Order(StringComparer.Ordinal));
+
+        Assert.False(Assert.Single(made).Enabled);
+
+        Assert.NotNull(written);
+        Assert.Equal(MigrationPass.ForReal, written.Run.Pass);
+
+        MigrationTally recordings = written.Tallies.Single(
+            tally => tally.Population is MigrationPopulation.Recordings);
+
+        Assert.Equal(3, recordings.Offered);
+        Assert.Equal(2, recordings.Carried);
+        Assert.Equal(1, recordings.NotCarried);
+        Assert.Equal(0, recordings.Unclassified);
     }
 
-    public void Dispose()
+    [Fact]
+    public async Task NothingThatWasNotARecordingBecomesOneInTheLedger()
     {
-        Directory.Delete(from, recursive: true);
-        Directory.Delete(into, recursive: true);
+        await CarryRealFilesAsync();
+
+        await using ServiceProvider container = database.Infrastructure();
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        CarinaDbContext context = reading.ServiceProvider.GetRequiredService<CarinaDbContext>();
+
+        IReadOnlyList<Recording> held = await context.Set<Recording>().ToListAsync(Cancel);
+        IReadOnlyList<string> arrived = [.. Directory.GetFiles(into).Select(Path.GetFileName)!];
+
+        Assert.Equal(2, held.Count);
+        Assert.Equal(2, arrived.Count);
+        Assert.DoesNotContain(
+            arrived,
+            name => name is MigrationOnRealFiles.NotARecording or MigrationOnRealFiles.NothingLandedIn);
+        Assert.All(
+            held,
+            recording => Assert.EndsWith(
+                Puppis.Contracts.RecordingFile.Extension,
+                recording.FileName.Value,
+                StringComparison.Ordinal));
+        Assert.All(held, recording => Assert.True(recording.FileSizeObserved > 0));
     }
 
     [Fact(DisplayName = "every recording a migration carried reads unmeasured on the library's list, never good")]
     public async Task EveryRecordingAMigrationCarriedReadsUnmeasuredOnTheLibrarysListNeverGood()
     {
-        await RunAsync();
+        await CarryTheShelfAsync();
 
         PaginatedList<Recording> shelf = await ListAsync();
         QualityBands bands = ShippedBands();
@@ -90,7 +147,7 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
     [Fact(DisplayName = "the drop reading finds the whole carried shelf unmeasured and none of it clean or dropped")]
     public async Task TheDropReadingFindsTheWholeCarriedShelfUnmeasuredAndNoneOfItCleanOrDropped()
     {
-        await RunAsync();
+        await CarryTheShelfAsync();
 
         Assert.Equal(Shelf, (await ListAsync(DropReading.Unmeasured)).Total);
         Assert.Equal(0, (await ListAsync(DropReading.Clean)).Total);
@@ -100,7 +157,7 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
     [Fact(DisplayName = "a period holding only what a migration carried reads unmeasured on every measure, with no share at all")]
     public async Task APeriodHoldingOnlyWhatAMigrationCarriedReadsUnmeasuredOnEveryMeasure()
     {
-        await RunAsync();
+        await CarryTheShelfAsync();
 
         IReadOnlyList<QualityLedgerRow> rows = await ReadLedgerAsync();
         IReadOnlyList<QualityMeasure> whole = QualityBoard.Whole(rows, QualityMetrics.All, ShippedBands());
@@ -123,7 +180,7 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
     [Fact(DisplayName = "nothing a migration carried is listed as beyond a level or given a place when channels are put worst first")]
     public async Task NothingAMigrationCarriedIsListedAsBeyondALevelOrGivenAPlaceWhenChannelsArePutWorstFirst()
     {
-        await RunAsync();
+        await CarryTheShelfAsync();
 
         IReadOnlyList<QualityLedgerRow> rows = await ReadLedgerAsync();
         QualityBands bands = ShippedBands();
@@ -152,9 +209,10 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
 
     private async Task<PaginatedList<Recording>> ListAsync(DropReading? drops = null)
     {
-        await using CarinaDbContext reading = database.Open();
+        await using ServiceProvider container = database.Infrastructure();
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
 
-        return (await new RecordingDirectory(reading).ListAsync(
+        return (await reading.ServiceProvider.GetRequiredService<IRecordingDirectory>().ListAsync(
             RecordingQuery.For(
                 null,
                 null,
@@ -166,47 +224,68 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
 
     private async Task<IReadOnlyList<QualityLedgerRow>> ReadLedgerAsync()
     {
-        await using CarinaDbContext reading = database.Open();
+        await using ServiceProvider container = database.Infrastructure(
+            replace => replace.AddScoped<IBroadcastStreamDirectory>(_ => new HeldStreams([])));
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
 
-        return await new QualityLedgerReader(reading, new HeldStreams([]))
+        return await reading.ServiceProvider.GetRequiredService<IQualityLedgerReader>()
             .ReadAsync(QualityPeriod.Of(FirstAired.AddDays(-1), Now, Now)!, Cancel);
     }
 
-    private async Task RunAsync()
+    private Task<MigrationRunId> CarryRealFilesAsync()
     {
-        await ClearAsync();
-        await OfferOneDestinationAsync();
+        MigrationOnRealFiles.LayDown(from);
 
-        await using CarinaDbContext context = database.Open();
-        AShelfOnDisk source = new(from, Shelf, Stations, FirstAired);
+        return CarryAsync(new ASourceOfRealFiles(from), Rescanned());
+    }
 
-        MigrationRunId id = await new MigrationPassage(
-            source,
-            source,
-            new MigrationCarriageDomainService(
-                new HardLinkMigrationCarrier(from, into, Root),
-                new RecordingRepository(context),
-                new RuleRepository(context),
-                new EncodeJobRepository(context),
-                new EncodeDestinationRepository(context),
-                new EncodeProfileRepository(context),
-                clock),
-            new MigrationRecordRepository(context),
-            new MigrationLease(context),
-            clock).RunAsync(
-                MigrationPass.ForReal,
-                [.. Stations.Select((station, at) => new RescannedService(station, $"station {at + 1}"))],
-                Cancel);
+    private async Task CarryTheShelfAsync()
+    {
+        AShelfOnDisk.LayDown(from, Shelf, NotARecording);
 
-        MigrationReport? written = await new MigrationRecordRepository(context).ReadAsync(id, Cancel);
+        MigrationRunId id = await CarryAsync(
+            new AShelfOnDisk(from, Shelf, Stations, FirstAired),
+            [.. Stations.Select((station, at) => new RescannedService(station, $"station {at + 1}"))]);
+
+        await using ServiceProvider container = database.Infrastructure();
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+
+        MigrationReport? written = await reading.ServiceProvider.GetRequiredService<IMigrationRecordRepository>().ReadAsync(id, Cancel);
         MigrationTally recordings = written!.Tallies.Single(tally => tally.Population is MigrationPopulation.Recordings);
 
         Assert.Equal(Shelf, recordings.Carried);
     }
 
+    /// <summary>
+    /// A run for real over <paramref name="source"/>, put together over the container the infrastructure builds as
+    /// the migration command puts it together: the carrier links from the source folder into the new root, and the
+    /// ledgers are the real ones.
+    /// </summary>
+    private async Task<MigrationRunId> CarryAsync<TSource>(TSource source, IReadOnlyList<RescannedService> rescanned)
+        where TSource : class, IMigrationSourceLedger, IMigrationSourceDirectory
+    {
+        await ClearAsync();
+        await OfferOneDestinationAsync();
+
+        await using ServiceProvider container = database.Infrastructure(replace =>
+        {
+            replace.AddSingleton<IMigrationSourceLedger>(source);
+            replace.AddSingleton<IMigrationSourceDirectory>(source);
+            replace.AddSingleton<IMigrationCarrier>(new HardLinkMigrationCarrier(from, into, Root));
+            replace.AddScoped<MigrationCarriageDomainService>();
+            replace.AddScoped<IMigrationLease, MigrationLease>();
+            replace.AddSingleton<TimeProvider>(clock);
+        });
+        await using AsyncServiceScope carrying = container.CreateAsyncScope();
+
+        return await ActivatorUtilities.CreateInstance<MigrationPassage>(carrying.ServiceProvider)
+            .RunAsync(MigrationPass.ForReal, rescanned, Cancel);
+    }
+
     private async Task OfferOneDestinationAsync()
     {
-        await using CarinaDbContext context = database.Open();
+        await using ServiceProvider container = database.Infrastructure();
+        await using AsyncServiceScope offering = container.CreateAsyncScope();
 
         EncodeProfile profile = EncodeProfile.Define(
             EncodeProfileId.New(),
@@ -218,8 +297,8 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
             new ConstantQuantiser(24),
             Began);
 
-        await new EncodeProfileRepository(context).AddAsync(profile, Cancel);
-        await new EncodeDestinationRepository(context).AddAsync(
+        await offering.ServiceProvider.GetRequiredService<IEncodeProfileRepository>().AddAsync(profile, Cancel);
+        await offering.ServiceProvider.GetRequiredService<IEncodeDestinationRepository>().AddAsync(
             EncodeDestination.Define(
                 EncodeDestinationId.New(),
                 new EncodeLabel("Encodes"),
@@ -251,43 +330,4 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
             await clearing.ExecuteNonQueryAsync(Cancel);
         }
     }
-}
-
-internal sealed class AShelfOnDisk(
-    string directory,
-    int count,
-    IReadOnlyList<ServiceKey> stations,
-    DateTime firstAired) : IMigrationSourceLedger, IMigrationSourceDirectory
-{
-    public static void LayDown(string directory, int count, string notARecording)
-    {
-        foreach (int at in Enumerable.Range(1, count))
-        {
-            File.WriteAllBytes(Path.Combine(directory, FileOf(at)), new byte[188 * at]);
-        }
-
-        File.WriteAllBytes(Path.Combine(directory, notARecording), new byte[64]);
-    }
-
-    public Task<SourceLedger> ReadAsync(CancellationToken cancellationToken)
-        => Task.FromResult(Ledger(
-            [
-                .. Enumerable.Range(1, count).Select(at => new SourceRecording(
-                    at,
-                    string.Create(CultureInfo.InvariantCulture, $"a carried programme {at}"),
-                    firstAired.AddHours(60 * (at - 1)),
-                    firstAired.AddHours(60 * (at - 1)).AddMinutes(30),
-                    stations[(at - 1) % stations.Count],
-                    new EventId(5_000 + at))),
-            ],
-            [.. Enumerable.Range(1, count).Select(at => AsBroadcast(at, FileOf(at), 188 * at))]));
-
-    public Task<IReadOnlyList<SourceFile>> ListAsync(CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<SourceFile>>(
-            [.. Directory
-                .GetFiles(directory)
-                .Order(StringComparer.Ordinal)
-                .Select(file => OnDisk(Path.GetFileName(file), new FileInfo(file).Length))]);
-
-    private static string FileOf(int at) => string.Create(CultureInfo.InvariantCulture, $"carried-{at:D2}.m2ts");
 }

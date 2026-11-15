@@ -5,9 +5,10 @@ using Microsoft.EntityFrameworkCore.Metadata;
 
 using static Carina.Infrastructure.Tests.Fixtures.Persistence.CarinaModel;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Persistence;
 
-public sealed class RecordingKeylessRuleTests
+[Trait("Category", "Unit")]
+public sealed class RecordingConfigurationTests
 {
     private const string Ledger = "recording";
 

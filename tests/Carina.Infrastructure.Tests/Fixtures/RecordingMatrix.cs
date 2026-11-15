@@ -1,10 +1,10 @@
 using Carina.Domain.Base;
 using Carina.Domain.Captions;
 using Carina.Domain.Channels;
+using Carina.Domain.DataBroadcast;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
-using Carina.Infrastructure.Captions;
 using Carina.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -13,8 +13,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Carina.Infrastructure.Tests.Fixtures.Recordings;
 
 /// <summary>
-/// A matrix of recordings in every standing of their picture and their captions, with captions taken on the very
-/// instant the file was descrambled and one microsecond either side of it, for the tests that hold a query of the store
+/// A matrix of recordings in every standing of their picture, their captions and the record of their data broadcast, with captions taken on the very
+/// instant the file was descrambled and one microsecond either side of it and a record that failed on its last try and
+/// on the one before it, for the tests that hold a query of the store
 /// to the recording's own answer for the same rows.
 /// </summary>
 internal static class RecordingMatrix
@@ -61,6 +62,11 @@ internal static class RecordingMatrix
             await context.SaveChangesAsync();
         }
 
+        return await ReadAsync(container);
+    }
+
+    public static async Task<IReadOnlyList<Recording>> ReadAsync(ServiceProvider container)
+    {
         await using AsyncServiceScope reading = container.CreateAsyncScope();
 
         return await reading.ServiceProvider.GetRequiredService<CarinaDbContext>().Set<Recording>().AsNoTracking().ToListAsync();
@@ -99,6 +105,73 @@ internal static class RecordingMatrix
             Microsecond,
             CaptionState.Failed);
         yield return recording => Settled(recording, RecordingOutcome.Truncated, scrambled: true);
+    }
+
+    public static IEnumerable<Func<Recording, Recording>> DataBroadcastShapes()
+    {
+        yield return recording => recording;
+
+        foreach (RecordingOutcome outcome in new[] { RecordingOutcome.Truncated, RecordingOutcome.Failed })
+        {
+            yield return recording => Settled(recording, outcome);
+            yield return recording => Settled(recording, outcome);
+            yield return recording => Settled(recording, outcome);
+        }
+
+        yield return recording => TakenData(Settled(recording, RecordingOutcome.Truncated), 0);
+        yield return recording => TakenData(Settled(recording, RecordingOutcome.Truncated), 36);
+        yield return recording => Again(TakenData(Settled(recording, RecordingOutcome.Truncated), 36));
+
+        for (int failed = 1; failed <= DataBroadcastProgress.TriesAtMost; failed++)
+        {
+            int times = failed;
+
+            yield return recording => FailedData(Settled(recording, RecordingOutcome.Truncated), times);
+        }
+
+        for (int failed = 1; failed < DataBroadcastProgress.TriesAtMost; failed++)
+        {
+            int times = failed;
+
+            yield return recording => Again(FailedData(Settled(recording, RecordingOutcome.Truncated), times));
+        }
+
+        yield return recording =>
+        {
+            Recording taken = TakenData(Settled(recording, RecordingOutcome.Truncated, scrambled: true), 36);
+            taken.Descrambled(Taken.AddHours(1));
+
+            return taken;
+        };
+    }
+
+    public static Recording TakenData(Recording recording, int modules)
+    {
+        recording.DataBroadcastTaken(modules, Taken);
+
+        return recording;
+    }
+
+    public static Recording FailedData(Recording recording, int times)
+    {
+        for (int failed = 1; failed <= times; failed++)
+        {
+            if (failed > 1)
+            {
+                recording.DataBroadcastAgain();
+            }
+
+            recording.DataBroadcastFailed(Taken.AddMinutes(failed));
+        }
+
+        return recording;
+    }
+
+    public static Recording Again(Recording recording)
+    {
+        recording.DataBroadcastAgain();
+
+        return recording;
     }
 
     /// <summary>

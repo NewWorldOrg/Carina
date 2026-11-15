@@ -5,8 +5,9 @@ using Carina.Infrastructure.Tests.Fixtures.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.Support;
 
+[Trait("Category", "Unit")]
 public sealed class RecordingOwnedColumnRuleSelfCheckTests
 {
     private sealed class ClaimWritingDbContext(DbContextOptions<CarinaDbContext> options) : CarinaDbContext(options)

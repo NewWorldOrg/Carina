@@ -1,7 +1,8 @@
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.Support;
 
+[Trait("Category", "Unit")]
 public sealed class EventuallyTests
 {
     private static readonly TimeSpan Short = TimeSpan.FromMilliseconds(50);

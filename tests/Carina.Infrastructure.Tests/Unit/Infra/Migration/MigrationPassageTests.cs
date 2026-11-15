@@ -1,3 +1,4 @@
+using Carina.Domain.Integrity;
 using Carina.Domain.Migration;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Migration;
@@ -372,6 +373,28 @@ public sealed class MigrationPassageTests : IDisposable
         Assert.Equal(before.Select(file => file.Links), after.Select(file => file.Links));
     }
 
+    [Fact]
+    public async Task NothingAMigrationRefusedTurnsUpAsAnAnomalyTheNewSystemFound()
+    {
+        await PassageOverFiles().RunAsync(MigrationPass.ForReal, Rescanned(), Cancel);
+
+        MigrationReport told = records.Saved.Single();
+
+        Assert.NotEmpty(told.Details);
+
+        IntegrityReport swept = IntegrityScan.Compare(
+            IntegrityCheckId.New(),
+            [.. recordings.Written.Select(Weighed)],
+            [],
+            [RootListing.Of(Root, [.. Directory.GetFiles(into).Select(Listed)])],
+            Began,
+            Ended);
+
+        Assert.Empty(swept.Findings);
+        Assert.Equal(recordings.Written.Count, swept.Check.LedgerRowsJudged);
+        Assert.Equal(Directory.GetFiles(into).Length, swept.Check.FilesRead);
+    }
+
     private static IReadOnlyList<string> Walked(string directory)
         => [.. Directory
             .GetFiles(directory)
@@ -380,6 +403,16 @@ public sealed class MigrationPassageTests : IDisposable
 
     private static MigrationFinding Found(MigrationReport written, MigrationStandingSubject subject)
         => written.Standings.Single(standing => standing.Subject == subject).Finding;
+
+    private static LedgerFile Weighed(Recording recording)
+        => LedgerFile.Ended(
+            recording.Id,
+            recording.OutputRoot,
+            recording.FileName,
+            LedgerClaim.SomethingLanded,
+            recording.FileSizeObserved ?? 0);
+
+    private static StoredFile Listed(string path) => new(Path.GetFileName(path), new FileInfo(path).Length);
 
     private MigrationPassage Passage()
         => new(

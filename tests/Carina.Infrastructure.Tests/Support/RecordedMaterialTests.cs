@@ -2,8 +2,9 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.Support;
 
+[Trait("Category", "Unit")]
 public sealed class RecordedMaterialTests : IDisposable
 {
     private static readonly string[] TheStreamsOwnWords =

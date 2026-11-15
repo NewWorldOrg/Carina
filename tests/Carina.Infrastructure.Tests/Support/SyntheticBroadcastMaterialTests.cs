@@ -15,7 +15,7 @@ using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.Support;
 
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]

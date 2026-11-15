@@ -3,9 +3,10 @@ using Carina.Infrastructure.Tests.Fixtures.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Persistence;
 
-public sealed class RecordingOwnedColumnRuleTests
+[Trait("Category", "Unit")]
+public sealed class ReservationConfigurationTests
 {
     [Fact]
     public void TheReservationCannotWriteTheClaimOrTheOutcomeThroughTheChangeTracker()
