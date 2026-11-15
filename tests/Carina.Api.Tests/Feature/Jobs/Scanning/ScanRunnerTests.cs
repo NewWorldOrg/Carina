@@ -9,10 +9,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Puppis.Contracts;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Jobs.Scanning;
 
 [SupportedOSPlatform("linux")]
-public sealed class ScanSessionLeftByTheAppTests
+[Trait("Category", "Feature")]
+public sealed class ScanRunnerTests
 {
     [Fact]
     public async Task AScanSessionTheAppWalkedAwayFromEndsItselfAtTheDriversWalkingLimit()

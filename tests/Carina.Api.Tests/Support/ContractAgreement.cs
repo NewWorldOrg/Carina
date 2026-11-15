@@ -1,9 +1,7 @@
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 
-using Carina.Api.Authentication;
 using Carina.Domain.Auth;
 
 using Microsoft.AspNetCore.Http;

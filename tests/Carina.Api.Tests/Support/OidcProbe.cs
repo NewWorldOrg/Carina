@@ -1,5 +1,3 @@
-using System.Net.Http.Json;
-
 using Carina.Api.Authentication;
 using Carina.Domain.Auth;
 using Carina.Infrastructure.Auth;

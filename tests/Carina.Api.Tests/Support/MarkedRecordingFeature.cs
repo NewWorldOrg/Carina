@@ -3,7 +3,6 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 
 using Carina.Api.Playback;
-using Carina.Api.Tests.Support;
 using Carina.Domain.Encodings;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
@@ -19,7 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Support;
 
 internal sealed class MarkedRecordingFeature : IAsyncDisposable
 {
@@ -155,50 +154,4 @@ internal sealed class MarkedRecordingFeature : IAsyncDisposable
             shelved.Delete(recursive: true);
         }
     }
-}
-
-public sealed class DropPositionsArePlayablePositionsTests
-{
-    [Fact]
-    public async Task TheSecondTheDetailMarksADropAtIsTheSecondThePlayerIsAskedToStartAt()
-    {
-        await using var feature = new MarkedRecordingFeature();
-        Recording recording = feature.EndedWithDropsAt(12);
-
-        int marked = Assert.Single(await feature.SecondsTheDetailMarksAsync(recording));
-
-        using HttpResponseMessage played = await feature.PlayedFromAsync(recording, marked);
-
-        Assert.Equal(12, marked);
-        Assert.Equal(HttpStatusCode.OK, played.StatusCode);
-        Assert.Equal("12", Header(played, PlaybackHeaders.StartsAt));
-        Assert.Equal(TimeSpan.FromSeconds(12), Assert.Single(feature.Player.AskedFrom));
-    }
-
-    [Fact]
-    public async Task EverySecondTheDetailMarksIsOneThePlayerStartsAtRatherThanOnlyTheFirst()
-    {
-        await using var feature = new MarkedRecordingFeature();
-        Recording recording = feature.EndedWithDropsAt(12, 40, 903);
-
-        IReadOnlyList<int> marked = await feature.SecondsTheDetailMarksAsync(recording);
-
-        foreach (int second in marked)
-        {
-            using HttpResponseMessage played = await feature.PlayedFromAsync(recording, second);
-
-            Assert.Equal(HttpStatusCode.OK, played.StatusCode);
-            Assert.Equal(
-                second.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                Header(played, PlaybackHeaders.StartsAt));
-        }
-
-        Assert.Equal([12, 40, 903], marked);
-        Assert.Equal(
-            [TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(903)],
-            feature.Player.AskedFrom);
-    }
-
-    private static string? Header(HttpResponseMessage answer, string named)
-        => answer.Headers.TryGetValues(named, out IEnumerable<string>? values) ? values.Single() : null;
 }

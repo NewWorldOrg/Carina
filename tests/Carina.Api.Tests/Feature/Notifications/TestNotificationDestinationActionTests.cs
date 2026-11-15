@@ -1,6 +1,5 @@
 using System.Buffers.Text;
 using System.Net;
-using System.Text;
 using System.Text.Json;
 
 using Carina.Api.Tests.Support;
@@ -8,7 +7,6 @@ using Carina.Domain.Notifications;
 using Carina.Infrastructure.Notifications;
 using Carina.TestSupport;
 
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Carina.Api.Tests.Feature.Notifications;
