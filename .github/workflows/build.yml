@@ -13,8 +13,8 @@ concurrency:
 env:
   DOTNET_NOLOGO: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
-  UNIT_FILTER: '(FullyQualifiedName~Unit&Category!=Scale&Category!=Material)|(FullyQualifiedName!~FeatureTest&FullyQualifiedName!~DbIntegration&Category!=Feature&Category!=DbIntegration&Category!=Scale&Category!=Material)'
-  FEATURE_FILTER: 'FullyQualifiedName~FeatureTest|Category=Feature'
+  UNIT_FILTER: '(FullyQualifiedName~Unit&Category!=Scale&Category!=Material)|(FullyQualifiedName!~DbIntegration&Category!=Feature&Category!=DbIntegration&Category!=Scale&Category!=Material)'
+  FEATURE_FILTER: 'Category=Feature'
   FEATURE_PROJECT: tests/Carina.Api.Tests/Carina.Api.Tests.csproj
   FEATURE_SHARDS: 6
   DB_INTEGRATION_FILTER: '(FullyQualifiedName~DbIntegration&Category!=Scale&Category!=Material)|Category=DbIntegration'
@@ -67,7 +67,7 @@ jobs:
         with:
           dotnet-version: '11.0.x'
       - run: dotnet restore
-      - name: Unit tests, taken from the Unit folders and from everything not yet moved into one
+      - name: Unit tests, taken from the Unit folders and from the test projects outside the layout
         run: |
           set -o pipefail
           dotnet test --no-restore --filter "${UNIT_FILTER}" --logger trx --results-directory results | tee unit.log

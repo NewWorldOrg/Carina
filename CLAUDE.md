@@ -466,18 +466,23 @@ test named after anything else is refused under that area.
 
 | Folder | What is tested there | Class |
 | --- | --- | --- |
+| `Carina.Api.Tests/Feature/Jobs/<Area>/` | the work of one background job, driven from outside: the whole application over the synthetic driver, the job's work called the way the job calls it, then the driver stopped, the application swapped or the disk filled, and the files, the driver's sessions and the rows read | `<Job>Tests` after a class of the area's folder in the infrastructure that is built on `BackgroundService` or `IHostedService` |
+| `Carina.Api.Tests/Feature/Program/` | what `Program.cs` assembles as a whole: every route, the authentication over all of them, the OpenAPI document, the warnings at start-up, the configuration the running application reads | a name that says what it checks |
 | `Carina.Api.Tests/Feature/<Area>/` | one HTTP action per class; an endpoint or a part of the request pipeline that the start-up code wires in directly gets a class of its own | `<Action>Tests` after a class under `Controllers/<Area>/` whose name ends in `Action`, or `<Class>Tests` after a class of the area that `Program.cs` or `Extensions/` puts in the request pipeline or maps an endpoint to: a type argument or the class of an argument of a `Use…` call or of a filter added to `Filters` or with `AddEndpointFilter`, the handler of an `AddScheme` call, and for a `Map…` call a type argument or the class whose method the handler calls. A class the start-up code only registers as a service is not one |
 | `Carina.Api.Tests/Unit/App/<Area>/` | an application service, or another type of the API, with stand-in repositories | `<Type>Tests` after a type the API declares for the area |
+| `Carina.Api.Tests/Unit/App/<Folder>/` | a type of the plumbing of the whole API, under `src/Carina.Api/Common`, `Responder`, `Extensions` and the other folders that are no area | `<Type>Tests` after a type declared in the folder of `src/Carina.Api` that the folders below `App` name, folder for folder |
 | `Carina.Api.Tests/DbIntegration/App/<Area>/` | an application service over a real database; business behaviour that passes through no domain service is tested here | `<Name>ServiceTests` after a service the API declares for the area |
 | `Carina.Domain.Tests/Unit/<Area>/` | aggregates, value objects, static functions of the domain, and domain services with stand-in repositories | `<Type>Tests` after a type of the area's folder in the domain |
 | `Carina.Infrastructure.Tests/DbIntegration/Domain/<Area>/` | a domain service, or a repository or another type behind a domain interface, over a real database; a test that holds SQL equal to an aggregate sits with the domain service or repository whose SQL it is | `<Name>DomainServiceTests` after a domain service of the area, or `<Name>Tests` after an interface `I<Name>` of the area's folder in the domain, where `<Name>` ends in `Repository` or a class of the infrastructure implements `I<Name>`, under the name `<Name>` or another |
 | `Carina.Infrastructure.Tests/Unit/Infra/<Area>/`, `DbIntegration/Infra/<Area>/` | what exists in the infrastructure alone: ffmpeg invocations, the driver client, EF configurations, file system adapters | `<Type>Tests` after a type the infrastructure declares for the area |
 | `Carina.Db.Tests/DbIntegration/Infra/<Area>/`, `Unit/Infra/<Area>/` | the shape of the tables, and the migrations | `<Migration>MigrationTests` after a migration listed for the area, `<Type>Tests` after a type listed for the area, `<Area>SchemaTests`, or a `…SchemaTests` name listed for the area |
+| `<Project>/Support/` | the tools of the tests themselves: the test host, the synthetic broadcast, the waiting helper, and the self-checks of the rules a test helper holds | a name that says what it checks |
 
 - A test class is named after what it tests, sits alone in a file of its own name
   and is in the namespace of its folder.
 - The class carries `[Trait("Category", "Feature")]`, `"Unit"` or `"DbIntegration"`
-  to match its kind. A class of the scale or the material job carries `"Scale"` or
+  to match its kind; under `Support/`, where every kind may sit, it carries the one
+  of its own. A class of the scale or the material job carries `"Scale"` or
   `"Material"` instead, and is named `<Type>ScaleTests` or `<Type>MaterialTests`
   after what it tests, so that it can sit beside the unit class of the same type.
 - A test over a real database takes its subject from the container the application
@@ -493,38 +498,31 @@ test named after anything else is refused under that area.
   around the implementation the product registers, keeping its lifetime; a test
   over a real database calls `ActivatorUtilities.CreateInstance` neither for such
   a type nor for a type it does not name.
-- A feature class is named after one action, or one class the start-up code puts
-  in the request pipeline or maps an endpoint to, and every action of an area that
-  has feature classes has its class. No two feature classes share a name.
+- A feature class under `Feature/<Area>/` is named after one action, or one class
+  the start-up code puts in the request pipeline or maps an endpoint to, and every
+  action of an area that has such classes has its class. One test class holds the
+  tests of one job under `Feature/Jobs/`. No two feature classes share a name,
+  wherever they sit.
 - A file that holds no test, such as a fixture or a stand-in, may sit beside the
-  tests that use it.
+  tests that use it. One that the tests of several areas use sits in `Support/`
+  of the API tests, or in `Fixtures/` or at the root of the infrastructure and
+  database tests.
 - `Carina.Architecture.Tests`, `Carina.Conventions.Tests` and
   `Carina.Broadcast.Tests` are outside this layout.
 
-The suite is moving into this layout one area at a time. Until an area moves its
-tests stay where they were: under `FeatureTest/` and `Unit/` of the API tests,
-under a folder named for the area, or at the root of a test project.
-`TestLayoutRules.AreasNotYetMoved` in `Carina.Conventions.Tests` lists the areas
-still to move. Moving an area means moving every test of it in the four projects
-and taking its name off the list in the same change. `TestLayoutRuleTests` holds
-the Folder and Class columns of the table and the bullets above for every class
-inside the layout. It cannot read the rest, which is left to the writer and the
-reviewer: the middle column of the table, that a test is of the kind its folder
-says, which tables a `SchemaTests` class reads, and that test methods are named as
-sentences. For an area off the list it refuses a test left behind: one under the
-area's old folder, one named after a type, a migration or a schema of the area,
-an old feature test that speaks only to routes of areas that have moved or holds a
-test whose requests all go to such routes, or one with a namesake in the layout. A
-class at the root of a project is tied to its area by those marks alone, so what
-they miss is caught when the list is empty; from then on every test class outside
-the layout is refused.
+Every test class of the four projects sits in a folder of the table, and
+`TestLayoutRuleTests` in `Carina.Conventions.Tests` refuses one anywhere else. It
+holds the Folder and Class columns of the table and the bullets above for every
+class. It cannot read the rest, which is left to the writer and the reviewer: the
+middle column of the table, that a test is of the kind its folder says, which
+tables a `SchemaTests` class reads, and that test methods are named as sentences.
 
 Five filters divide the suite, and CI runs one job per filter:
 
 | Filter | What it selects |
 | --- | --- |
 | under a `Unit` folder and of neither the scale nor the material job, or nothing more specific | everything that needs neither a database, the HTTP surface nor ffmpeg |
-| `Category=Feature` or a `FeatureTest` name | the tests that drive the application through its HTTP surface, split by class into shards |
+| `Category=Feature` | the tests that drive the application through its HTTP surface, split by class into shards |
 | `Category=DbIntegration`, or a `DbIntegration` name and of neither the scale nor the material job | the tests that need a real PostgreSQL |
 | `Category=Material` | the tests that write a synthetic broadcast with ffmpeg and read it back |
 | `Category=Scale` | the measurements at archive and schedule scale |
@@ -533,8 +531,8 @@ Each job counts the tests it ran and fails on zero, because `dotnet test` exits 
 when a filter matches nothing. A separate job checks that every test is selected
 by exactly one of the filters, and that every feature test falls in exactly one
 shard. The filters read names as well as categories, so a test of another kind
-whose name contains `FeatureTest` or `DbIntegration` is selected by no job, and
-that check is what says so.
+whose name contains `DbIntegration` is selected by no job, and that check is what
+says so.
 
 The material job runs inside the `develop` image, because the ffmpeg the
 application runs is built from source there with libaribcaption.

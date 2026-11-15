@@ -6,8 +6,8 @@ namespace Carina.Conventions.Tests;
 
 /// <summary>
 /// Holds the layout CLAUDE.md gives under "Tests": the folder a test class sits in, the subject it is named
-/// after and the category it carries. <see cref="AreasNotYetMoved"/> names the areas whose tests may still
-/// be in an old place. The rules read the syntax tree and no build output.
+/// after and the category it carries. Every test class of the four layered test projects sits in a folder of the
+/// layout. The rules read the syntax tree and no build output.
 /// </summary>
 public static class TestLayoutRules
 {
@@ -16,11 +16,6 @@ public static class TestLayoutRules
     public const string Unit = "Unit";
 
     public const string DbIntegration = "DbIntegration";
-
-    public static readonly IReadOnlyList<string> AreasNotYetMoved =
-    [
-        "Health",
-    ];
 
     /// <summary>
     /// What an area keeps outside the folder of its own name: a folder, written with a closing slash, or one file.
@@ -83,6 +78,7 @@ public static class TestLayoutRules
         new("Quality", "src/Carina.Db/Migrations/20261005131056_ASignalLevelCanStandOnAMeasurement.cs"),
         new("Quality", "src/Carina.Infrastructure/Configuration/QualitySignalOptions.cs"),
         new("Recordings", "src/Carina.Api/Common/RecordingIdText.cs"),
+        new("Recordings", "src/Carina.Api/Responder/Recordings/RecordingDetailResponder.cs"),
         new("Recordings", "src/Carina.Api/Services/RecordingService.cs"),
         new("Recordings", "src/Carina.Db/Migrations/20260915011204_TheEndARecordingWasPromised.cs"),
         new("Recordings", "src/Carina.Infrastructure/Configuration/RecordingRetryOptions.cs"),
@@ -159,7 +155,11 @@ public static class TestLayoutRules
 
     private const string Controllers = ApiSource + "Controllers/";
 
-    private const string OldFeatureFolder = "FeatureTest";
+    private const string Jobs = "Jobs";
+
+    private const string Whole = "Program";
+
+    private const string Support = "Support";
 
     private const string Suffix = "Tests";
 
@@ -173,8 +173,6 @@ public static class TestLayoutRules
 
     private const string Schema = "Schema";
 
-    private const string Hole = "*";
-
     private const string MiddlewareCall = "Use";
 
     private const string EndpointCall = "Map";
@@ -187,23 +185,7 @@ public static class TestLayoutRules
 
     private const string Filters = "Filters";
 
-    private static readonly string[] RequestCalls =
-    [
-        "GetAsync",
-        "PostAsync",
-        "PutAsync",
-        "PatchAsync",
-        "DeleteAsync",
-        "SendAsync",
-        "GetStringAsync",
-        "GetStreamAsync",
-        "GetByteArrayAsync",
-        "GetFromJsonAsync",
-        "PostAsJsonAsync",
-        "PutAsJsonAsync",
-        "PatchAsJsonAsync",
-        "DeleteFromJsonAsync",
-    ];
+    private static readonly string[] Hosted = ["BackgroundService", "IHostedService"];
 
     private static readonly Layer ApiLayer = new(ApiSource, Controllers);
 
@@ -213,14 +195,20 @@ public static class TestLayoutRules
 
     private static readonly string[] Projects = [ApiTests, DomainTests, InfrastructureTests, DbTests];
 
-    private static readonly string[] KindFolders = [Feature, Unit, DbIntegration];
-
     private static readonly string[] CategoriesOfAnyKind = ["Scale", "Material"];
+
+    private static readonly string[] KindsOfTheLayout = [Unit, Feature, DbIntegration];
 
     private static readonly string[] AreaRoots = ["src/Carina.Domain", "src/Carina.Infrastructure", "src/Carina.Api/Controllers"];
 
     private static readonly IReadOnlyList<Place> Places =
     [
+        new(ApiTests, [Feature, Jobs], Feature, Subject.Job),
+        new(ApiTests, [Feature, Whole], Feature, Subject.Whole),
+        new(ApiTests, [Support], null, Subject.Whole),
+        new(DomainTests, [Support], null, Subject.Whole),
+        new(InfrastructureTests, [Support], null, Subject.Whole),
+        new(DbTests, [Support], null, Subject.Whole),
         new(ApiTests, [Feature], Feature, Subject.Endpoint),
         new(ApiTests, [Unit, "App"], Unit, Subject.ApiType),
         new(ApiTests, [DbIntegration, "App"], DbIntegration, Subject.AppService),
@@ -235,13 +223,13 @@ public static class TestLayoutRules
     internal enum Standing
     {
         InTheLayout,
-        InNoFolderOfTheLayout,
-        InAnOldFolder,
-        InAFlatOldPlace,
+        OutsideTheLayout,
     }
 
     internal enum Subject
     {
+        Whole,
+        Job,
         Endpoint,
         ApiType,
         AppService,
@@ -254,12 +242,6 @@ public static class TestLayoutRules
     public static Reading Read(string root)
     {
         ParsedFile[] product = Scanned(root, "src").Select(Parsed).ToArray();
-        ILookup<string, string> constants = product
-            .SelectMany(file => file.Root.DescendantNodes().OfType<FieldDeclarationSyntax>())
-            .Where(field => field.Modifiers.Any(SyntaxKind.ConstKeyword))
-            .SelectMany(Constants)
-            .ToLookup(constant => constant.Key, constant => constant.Value, StringComparer.Ordinal);
-
         ILookup<string, string> migrations = Migrations(root);
 
         HashSet<string> domainInterfaces = product
@@ -277,10 +259,12 @@ public static class TestLayoutRules
             migrations,
             product.Where(file => IsStartUp(file.Relative)).SelectMany(file => ServingRequests(file.Root)).ToHashSet(StringComparer.Ordinal),
             product
-                .Where(file => file.Relative.StartsWith(Controllers, StringComparison.Ordinal))
-                .SelectMany(file => Routes(file, constants))
-                .ToArray(),
+                .SelectMany(file => file.Root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+                .Where(declaration => (declaration.BaseList?.Types ?? []).Any(implemented => Hosted.Contains(Simple(implemented.Type), StringComparer.Ordinal)))
+                .Select(declaration => declaration.Identifier.ValueText)
+                .ToHashSet(StringComparer.Ordinal),
             AreaRoots.SelectMany(areas => Folders(Path.Combine(root, areas))).ToHashSet(StringComparer.Ordinal),
+            Folders(Path.Combine(root, ApiSource.Trim('/'))).ToHashSet(StringComparer.Ordinal),
             product
                 .SelectMany(file => file.Root.DescendantNodes().OfType<ClassDeclarationSyntax>())
                 .SelectMany(declaration => (declaration.BaseList?.Types ?? [])
@@ -309,10 +293,15 @@ public static class TestLayoutRules
     public static IReadOnlyList<string> ClassesUnderAnotherCategory(Reading reading)
         => Offences(InTheLayout(reading), (file, type) => IsUnderItsCategory(file, type)
             ? []
-            : [$"is a {file.Seat.Place!.Kind} test but carries {Carried(type)}"]);
+            : [file.Seat.Place!.Kind is { } kind
+                ? $"is a {kind} test but carries {Carried(type)}"
+                : $"is a test of the support but carries {Carried(type)}, which is no kind of the layout"]);
 
     public static IReadOnlyList<string> ClassesServingRequests(Reading reading)
         => reading.ServingRequests.Order(StringComparer.Ordinal).ToArray();
+
+    public static IReadOnlyList<string> ClassesRunningInTheBackground(Reading reading)
+        => reading.Jobs.Order(StringComparer.Ordinal).ToArray();
 
     public static IReadOnlyList<string> ClassesNamedAfterNothing(
         Reading reading,
@@ -320,11 +309,11 @@ public static class TestLayoutRules
         IReadOnlyList<AreaSchema> schemas)
         => Offences(InTheLayout(reading), (file, type) => IsNamedAfterItsSubject(reading, file, type, new Listed(elsewhere, schemas))
             ? []
-            : [$"is named after {Missing(file.Seat.Place!.Subject, file.Seat.Area)}"]);
+            : [$"is named after {Missing(reading, file.Seat.Place!.Subject, file.Seat.Area, file.Folders)}"]);
 
     public static IReadOnlyList<string> ActionsWithoutAFeatureClass(Reading reading)
     {
-        TestFile[] features = InTheLayout(reading).Where(file => file.Seat.Place!.Kind == Feature).ToArray();
+        TestFile[] features = InTheLayout(reading).Where(file => file.Seat.Place!.Subject == Subject.Endpoint).ToArray();
         HashSet<string> areas = features.Select(file => file.Seat.Area).ToHashSet(StringComparer.Ordinal);
 
         return reading.Types
@@ -355,54 +344,6 @@ public static class TestLayoutRules
                 Subject: Subject.DomainPort or Subject.AppService or Subject.InfrastructureType,
             }),
             (file, type) => HandBuilding(reading, file, type));
-
-    public static IReadOnlyList<string> ClassesLeftInTheOldPlace(
-        Reading reading,
-        IReadOnlyCollection<string> notYetMoved,
-        IReadOnlyList<AreaSource> elsewhere,
-        IReadOnlyList<AreaSchema> schemas)
-        => Offences(
-            reading.Tests.Where(file => file.Seat.Standing is Standing.InAnOldFolder or Standing.InAFlatOldPlace),
-            (file, type) => Ties(reading, file, type, notYetMoved, new Listed(elsewhere, schemas)).Take(1));
-
-    public static IReadOnlyList<string> AreasWronglyListed(
-        Reading reading,
-        IReadOnlyCollection<string> notYetMoved,
-        IReadOnlyList<AreaSource> elsewhere,
-        IReadOnlyList<AreaSchema> schemas)
-    {
-        HashSet<string> inTheLayout = InTheLayout(reading).Select(file => file.Seat.Area).ToHashSet(StringComparer.Ordinal);
-        HashSet<string> inTheOldPlace = AreasWithSomethingLeft(reading, new Listed(elsewhere, schemas)).ToHashSet(StringComparer.Ordinal);
-
-        return notYetMoved
-            .SelectMany(area => WrongListings(area, reading.Areas, inTheLayout, inTheOldPlace))
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-    }
-
-    private static IEnumerable<string> WrongListings(
-        string area,
-        IReadOnlySet<string> areas,
-        IReadOnlySet<string> inTheLayout,
-        IReadOnlySet<string> inTheOldPlace)
-    {
-        if (!areas.Contains(area))
-        {
-            yield return $"{area} is no area of the product code";
-
-            yield break;
-        }
-
-        if (inTheLayout.Contains(area))
-        {
-            yield return $"{area} already has tests in the layout";
-        }
-
-        if (!inTheOldPlace.Contains(area))
-        {
-            yield return $"{area} has no test left in an old place";
-        }
-    }
 
     public static IReadOnlyList<string> SourcesWronglyListed(Reading reading, IReadOnlyList<AreaSource> elsewhere)
         => elsewhere
@@ -462,35 +403,20 @@ public static class TestLayoutRules
         => string.Equals(file.Project, DbTests, StringComparison.Ordinal)
            && file.Classes.Any(type => string.Equals(type.Name, schema.Name + Suffix, StringComparison.Ordinal));
 
-    private static IEnumerable<string> AreasWithSomethingLeft(Reading reading, Listed listed)
-    {
-        TestFile[] flat = reading.Tests.Where(file => file.Seat.Standing == Standing.InAFlatOldPlace).ToArray();
-
-        return reading.Tests
-            .Where(file => file.Seat.Standing == Standing.InAnOldFolder)
-            .Select(file => file.Seat.Area)
-            .Concat(flat.SelectMany(file => file.Classes.SelectMany(type => AreasOf(reading, SubjectOf(type), listed))))
-            .Concat(flat.SelectMany(ImportedAreas))
-            .Concat(reading.Routes
-                .Where(route => flat.Any(file => IsAnOldFeatureTest(file) && file.ApiPaths.Any(path => Reaches(path, route.Template))))
-                .Select(route => route.Area));
-    }
-
     private static IEnumerable<string> Misplacements(Reading reading, TestFile file, TestClass type)
     {
-        if (file.Seat.Standing == Standing.InNoFolderOfTheLayout)
-        {
-            yield return "sits in no folder of the layout";
-        }
-
         if (file.Seat.Standing != Standing.InTheLayout)
         {
+            yield return "sits in no folder of the layout";
+
             yield break;
         }
 
-        if (!reading.Areas.Contains(file.Seat.Area))
+        if (file.Seat.Place!.Subject != Subject.Whole && !IsAnAreaOf(reading, file.Seat))
         {
-            yield return $"is under {file.Seat.Area}, which is no area of the product code";
+            yield return file.Seat.Place.Subject == Subject.ApiType
+                ? $"is under {file.Seat.Area}, which is no area of the product code and no folder of the API"
+                : $"is under {file.Seat.Area}, which is no area of the product code";
         }
 
         string space = $"{file.Project}.{string.Join('.', file.Folders)}";
@@ -506,10 +432,15 @@ public static class TestLayoutRules
         }
     }
 
+    private static bool IsAnAreaOf(Reading reading, Seat seat)
+        => reading.Areas.Contains(seat.Area) || (seat.Place!.Subject == Subject.ApiType && reading.ApiFolders.Contains(seat.Area));
+
     private static bool IsUnderItsCategory(TestFile file, TestClass type)
-        => type.Categories.Count == 1
-           && (string.Equals(type.Categories[0], file.Seat.Place!.Kind, StringComparison.Ordinal)
-               || CategoriesOfAnyKind.Contains(type.Categories[0], StringComparer.Ordinal));
+        => type.Categories is [string carried]
+           && (CategoriesOfAnyKind.Contains(carried, StringComparer.Ordinal)
+               || (file.Seat.Place!.Kind is { } kind
+                   ? string.Equals(carried, kind, StringComparison.Ordinal)
+                   : KindsOfTheLayout.Contains(carried, StringComparer.Ordinal)));
 
     private static string Carried(TestClass type)
         => type.Categories.Count == 0 ? "no category" : string.Join(", ", type.Categories);
@@ -520,6 +451,11 @@ public static class TestLayoutRules
         string subject = SubjectOf(type);
         string area = file.Seat.Area;
 
+        if (file.Seat.Place!.Subject == Subject.Whole)
+        {
+            return true;
+        }
+
         if (subject.Length == 0)
         {
             return false;
@@ -527,8 +463,9 @@ public static class TestLayoutRules
 
         return file.Seat.Place!.Subject switch
         {
+            Subject.Job => reading.Jobs.Contains(subject) && IsDeclaredFor(reading, subject, area, InfrastructureLayer, elsewhere),
             Subject.Endpoint => IsAnActionOf(reading, subject, area) || ServesRequests(reading, subject, area, elsewhere),
-            Subject.ApiType => IsDeclaredFor(reading, subject, area, ApiLayer, elsewhere),
+            Subject.ApiType => IsDeclaredFor(reading, subject, area, ApiLayer, elsewhere) || IsDeclaredInTheFolderItMirrors(reading, subject, file.Folders),
             Subject.AppService => subject.EndsWith(Service, StringComparison.Ordinal) && IsDeclaredFor(reading, subject, area, ApiLayer, elsewhere),
             Subject.DomainType => IsDeclaredFor(reading, subject, area, DomainLayer, elsewhere),
             Subject.DomainPort => IsBehindTheDomain(reading, subject) && IsDeclaredFor(reading, PortOf(subject), area, DomainLayer, elsewhere),
@@ -537,10 +474,12 @@ public static class TestLayoutRules
         };
     }
 
-    private static string Missing(Subject subject, string area)
+    private static string Missing(Reading reading, Subject subject, string area, IReadOnlyList<string> folders)
         => subject switch
         {
+            Subject.Job => $"no job of {area}: no class of the area that runs in the background",
             Subject.Endpoint => $"nothing the API maps for {area}: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
+            Subject.ApiType when reading.ApiFolders.Contains(area) => $"nothing the API declares for {area} or in {ApiSource.Trim('/')}/{string.Join('/', Mirrored(folders))}",
             Subject.ApiType => $"nothing the API declares for {area}",
             Subject.AppService => $"no service the API declares for {area}",
             Subject.DomainType => $"nothing the domain declares for {area}",
@@ -548,6 +487,16 @@ public static class TestLayoutRules
             Subject.InfrastructureType => $"nothing the infrastructure declares for {area}",
             _ => $"nothing the database project declares for {area}: no type, no migration, no schema of the area",
         };
+
+    /// <summary>The folders under <c>src/Carina.Api</c> that a test under <c>Unit/App</c> mirrors: those after <c>App</c>.</summary>
+    private static IReadOnlyList<string> Mirrored(IReadOnlyList<string> folders) => [.. folders.Skip(2)];
+
+    private static bool IsDeclaredInTheFolderItMirrors(Reading reading, string subject, IReadOnlyList<string> folders)
+        => reading.ApiFolders.Contains(folders[2])
+           && reading.Types[subject].Any(relative => string.Equals(
+               Path.GetDirectoryName(relative)!.Replace('\\', '/'),
+               ApiSource + string.Join('/', Mirrored(folders)),
+               StringComparison.Ordinal));
 
     private static bool IsAnActionOf(Reading reading, string subject, string area)
         => subject.EndsWith(Action, StringComparison.Ordinal)
@@ -647,58 +596,6 @@ public static class TestLayoutRules
         }
     }
 
-    private static IEnumerable<string> Ties(
-        Reading reading,
-        TestFile file,
-        TestClass type,
-        IReadOnlyCollection<string> notYetMoved,
-        Listed listed)
-    {
-        if (file.Seat.Standing == Standing.InAnOldFolder)
-        {
-            return notYetMoved.Contains(file.Seat.Area)
-                ? []
-                : [$"is under the old folder {file.Seat.Area}, which is not listed as yet to move"];
-        }
-
-        if (notYetMoved.Count == 0)
-        {
-            return ["is outside the layout, and no area is left to move"];
-        }
-
-        return AreasOf(reading, SubjectOf(type), listed)
-            .Where(area => !notYetMoved.Contains(area))
-            .Order(StringComparer.Ordinal)
-            .Select(area => $"is named after a type of {area}, which has moved")
-            .Concat(ImportedAreas(file)
-                .Where(area => !notYetMoved.Contains(area))
-                .Order(StringComparer.Ordinal)
-                .Select(area => $"imports the tests of {area}, which has moved"))
-            .Concat(SpeaksOnlyToMovedAreas(reading, file, notYetMoved) ? ["speaks only to routes of areas that have moved"] : [])
-            .Concat(HasATestSpeakingOnlyToMovedAreas(reading, file, notYetMoved) ? ["has a test that speaks only to routes of areas that have moved"] : [])
-            .Concat(HasANamesakeInTheLayout(reading, file, type) ? ["has a namesake in the layout"] : []);
-    }
-
-    private static IEnumerable<string> AreasOf(Reading reading, string subject, Listed listed)
-        => subject.Length == 0
-            ? []
-            : reading.Types[subject]
-                .Concat(reading.Types["I" + subject])
-                .Concat(reading.Migrations[MigrationOf(subject)])
-                .Select(relative => AreaOf(relative, listed.Sources))
-                .Where(area => area.Length > 0)
-                .Concat(reading.Areas.Where(area => string.Equals(subject, area + Schema, StringComparison.Ordinal)))
-                .Concat(listed.Schemas.Where(schema => string.Equals(schema.Name, subject, StringComparison.Ordinal)).Select(schema => schema.Area))
-                .Distinct(StringComparer.Ordinal);
-
-    private static string AreaOf(string relative, IReadOnlyList<AreaSource> elsewhere)
-        => elsewhere.FirstOrDefault(source => source.Holds(relative))?.Area ?? relative.Split('/') switch
-        {
-            ["", "src", "Carina.Domain" or "Carina.Infrastructure", string area, _, ..] => area,
-            ["", "src", "Carina.Api", "Controllers", string area, _, ..] => area,
-            _ => string.Empty,
-        };
-
     private static bool IsAHostedServiceFromTheContainer(GenericNameSyntax name)
         => name.Identifier.ValueText == "OfType"
            && name.Parent is MemberAccessExpressionSyntax { Expression: InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name: GenericNameSyntax hosted } } }
@@ -709,94 +606,6 @@ public static class TestLayoutRules
     private static bool IsCalledWithTheProviderAlone(GenericNameSyntax name)
         => (name.Parent is MemberAccessExpressionSyntax access && access.Name == name ? access.Parent : name.Parent)
             is InvocationExpressionSyntax { ArgumentList.Arguments.Count: 1 };
-
-    private static IEnumerable<string> ImportedAreas(TestFile file)
-        => file.Imports
-            .Select(space => space.Split('.'))
-            .Where(segments => segments.Length > 3)
-            .Select(segments => SeatOf(string.Join('.', segments[..3]), segments[3..]))
-            .Where(seat => seat.Standing == Standing.InTheLayout)
-            .Select(seat => seat.Area)
-            .Distinct(StringComparer.Ordinal);
-
-    private static bool SpeaksOnlyToMovedAreas(Reading reading, TestFile file, IReadOnlyCollection<string> notYetMoved)
-        => IsAnOldFeatureTest(file)
-           && file.ApiPaths.Count > 0
-           && file.ApiPaths.All(path => reading.Routes.Any(route => !notYetMoved.Contains(route.Area) && Reaches(path, route.Template)));
-
-    private static bool HasATestSpeakingOnlyToMovedAreas(Reading reading, TestFile file, IReadOnlyCollection<string> notYetMoved)
-        => IsAnOldFeatureTest(file)
-           && file.PathsOfEachTest.Any(paths => paths.Count > 0
-                                                && paths.All(path => RequestedAreas(reading, path) is { Count: > 0 } areas
-                                                                     && areas.All(area => !notYetMoved.Contains(area))));
-
-    /// <summary>
-    /// The areas whose routes a path a test requests is mapped to: of the templates that take the path, those that
-    /// name the most of its segments word for word. A segment the test only partly fills in, such as a name with a
-    /// query run onto it, stands for itself rather than for anything.
-    /// </summary>
-    private static IReadOnlyList<string> RequestedAreas(Reading reading, string path)
-    {
-        string[] spoken = path.Split('?')[0].Trim('/').Split('/');
-        (string Area, int Named)[] taking = reading.Routes
-            .Select(route => (route.Area, Named: Named(spoken, Segments(route.Template))))
-            .Where(taken => taken.Named >= 0)
-            .ToArray();
-
-        return taking.Length == 0
-            ? []
-            : taking.Where(taken => taken.Named == taking.Max(other => other.Named)).Select(taken => taken.Area).Distinct().ToArray();
-    }
-
-    private static int Named(string[] spoken, string[] mapped)
-    {
-        if (spoken.Length != mapped.Length)
-        {
-            return -1;
-        }
-
-        int named = 0;
-
-        foreach ((string asked, string template) in spoken.Zip(mapped))
-        {
-            if (string.Equals(asked, template, StringComparison.OrdinalIgnoreCase))
-            {
-                named++;
-            }
-            else if (asked != "{}" && template != Hole)
-            {
-                return -1;
-            }
-        }
-
-        return named;
-    }
-
-    private static bool IsAnOldFeatureTest(TestFile file)
-        => string.Equals(file.Project, ApiTests, StringComparison.Ordinal)
-           && file.Folders is [OldFeatureFolder, ..];
-
-    private static bool HasANamesakeInTheLayout(Reading reading, TestFile file, TestClass type)
-        => InTheLayout(reading).Any(other => string.Equals(other.Project, file.Project, StringComparison.Ordinal)
-                                             && other.Classes.Any(named => string.Equals(named.Name, type.Name, StringComparison.Ordinal)));
-
-    private static bool Reaches(string path, string template)
-    {
-        string[] spoken = Segments(path);
-        string[] mapped = Segments(template);
-
-        return spoken.Length == mapped.Length
-               && spoken.Zip(mapped).All(pair => pair.First == Hole
-                                                 || pair.Second == Hole
-                                                 || string.Equals(pair.First, pair.Second, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static string[] Segments(string path)
-        => path.Split('?')[0]
-            .Trim('/')
-            .Split('/')
-            .Select(segment => segment.Contains('{', StringComparison.Ordinal) ? Hole : segment)
-            .ToArray();
 
     private static IEnumerable<TestFile> InTheLayout(Reading reading)
         => reading.Tests.Where(file => file.Seat.Standing == Standing.InTheLayout);
@@ -810,34 +619,11 @@ public static class TestLayoutRules
 
     private static Seat SeatOf(string project, IReadOnlyList<string> folders)
     {
-        Place? place = Places.FirstOrDefault(place => place.Holds(project, folders));
+        Place? place = Places.FirstOrDefault(place => place.Covers(project, folders));
 
-        if (place is not null)
-        {
-            return new Seat(Standing.InTheLayout, place, folders[place.Folders.Count]);
-        }
-
-        string top = folders.Count == 0 ? string.Empty : folders[0];
-
-        if (IsAFlatOldPlace(project, folders, top))
-        {
-            return new Seat(Standing.InAFlatOldPlace, null, string.Empty);
-        }
-
-        return KindFolders.Contains(top, StringComparer.Ordinal)
-            ? new Seat(Standing.InNoFolderOfTheLayout, null, string.Empty)
-            : new Seat(Standing.InAnOldFolder, null, top);
-    }
-
-    private static bool IsAFlatOldPlace(string project, IReadOnlyList<string> folders, string top)
-    {
-        if (top.Length == 0)
-        {
-            return true;
-        }
-
-        return string.Equals(project, ApiTests, StringComparison.Ordinal)
-               && (string.Equals(top, OldFeatureFolder, StringComparison.Ordinal) || folders is [Unit]);
+        return place is null || !place.Holds(folders)
+            ? new Seat(Standing.OutsideTheLayout, null, string.Empty)
+            : new Seat(Standing.InTheLayout, place, place.Subject == Subject.Whole ? string.Empty : folders[place.Folders.Count]);
     }
 
     private static TestFile Test(ParsedFile file)
@@ -853,10 +639,6 @@ public static class TestLayoutRules
             file.Root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? string.Empty,
             file.Root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(HoldsATest).Select(TestClassOf).ToArray(),
             Identifiers(file.Root).ToHashSet(StringComparer.Ordinal),
-            file.Root.DescendantNodes().OfType<UsingDirectiveSyntax>()
-                .Where(directive => directive.Alias is null && directive.StaticKeyword.IsKind(SyntaxKind.None) && directive.Name is not null)
-                .Select(directive => directive.Name!.ToString())
-                .ToHashSet(StringComparer.Ordinal),
             file.Root.DescendantNodes().OfType<GenericNameSyntax>()
                 .Where(name => name.TypeArgumentList.Arguments.Count == 1
                                && (name.Identifier.ValueText == "GetRequiredService" || IsAHostedServiceFromTheContainer(name)))
@@ -871,34 +653,8 @@ public static class TestLayoutRules
             Generic(file.Root, "CreateInstance"),
             Generic(file.Root, "IsType"),
             file.Root.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(IsAnUnnamedCreateInstance),
-            file.Root.DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>().Select(Created).ToHashSet(StringComparer.Ordinal),
-            ApiPaths(file.Root),
-            file.Root.DescendantNodes()
-                .OfType<MethodDeclarationSyntax>()
-                .Where(method => Attributes(method.AttributeLists).Any(attribute => Simple(attribute.Name) is "Fact" or "Theory"))
-                .Select(method => (IReadOnlyList<string>)RequestedPaths(method))
-                .ToArray());
+            file.Root.DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>().Select(Created).ToHashSet(StringComparer.Ordinal));
     }
-
-    /// <summary>
-    /// The paths a test hands to a request of its own: an argument of a call that sends one, or of a <c>Uri</c> it
-    /// builds, so that a path read out of a served document or a table of routes is not taken for a request.
-    /// </summary>
-    private static string[] RequestedPaths(SyntaxNode method)
-        => method.DescendantNodes()
-            .OfType<ArgumentSyntax>()
-            .Where(argument => argument.Parent?.Parent switch
-            {
-                InvocationExpressionSyntax call => RequestCalls.Contains(Simple(call.Expression is MemberAccessExpressionSyntax access ? access.Name : call.Expression)),
-                ObjectCreationExpressionSyntax created => Simple(created.Type) == "Uri",
-                _ => false,
-            })
-            .Select(argument => Spoken(argument.Expression))
-            .Where(path => path.StartsWith("/api/", StringComparison.Ordinal))
-            .ToArray();
-
-    private static string[] ApiPaths(SyntaxNode node)
-        => node.DescendantNodes().Select(Spoken).Where(path => path.StartsWith("/api/", StringComparison.Ordinal)).ToArray();
 
     private static bool IsAnUnnamedCreateInstance(InvocationExpressionSyntax call)
         => (call.Expression is MemberAccessExpressionSyntax access ? access.Name : call.Expression)
@@ -951,14 +707,6 @@ public static class TestLayoutRules
             _ => string.Empty,
         };
 
-    private static string Spoken(SyntaxNode node)
-        => node switch
-        {
-            InterpolatedStringExpressionSyntax interpolated => string.Concat(interpolated.Contents.Select(
-                content => content is InterpolatedStringTextSyntax text ? text.TextToken.ValueText : "{}")),
-            _ => Literal(node),
-        };
-
     private static string Literal(SyntaxNode? node)
         => node is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.StringLiteralExpression)
             ? literal.Token.ValueText
@@ -966,24 +714,6 @@ public static class TestLayoutRules
 
     private static IEnumerable<string> Identifiers(SyntaxNode root)
         => root.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken)).Select(token => token.ValueText);
-
-    private static IEnumerable<KeyValuePair<string, string>> Constants(FieldDeclarationSyntax field)
-        => field.Declaration.Variables
-            .Where(variable => Literal(variable.Initializer?.Value).Length > 0)
-            .Select(variable => KeyValuePair.Create(
-                $"{field.Ancestors().OfType<BaseTypeDeclarationSyntax>().First().Identifier.ValueText}.{variable.Identifier.ValueText}",
-                Literal(variable.Initializer!.Value)));
-
-    private static IEnumerable<Route> Routes(ParsedFile file, ILookup<string, string> constants)
-        => file.Root.DescendantNodes()
-            .OfType<AttributeSyntax>()
-            .Where(attribute => Simple(attribute.Name) == "Route" && attribute.ArgumentList?.Arguments.Count == 1)
-            .Select(attribute => attribute.ArgumentList!.Arguments[0].Expression)
-            .Select(template => template is MemberAccessExpressionSyntax constant
-                ? constants[$"{Simple(constant.Expression)}.{constant.Name.Identifier.ValueText}"].FirstOrDefault(string.Empty)
-                : Literal(template))
-            .Where(template => template.Length > 0)
-            .Select(template => new Route(ControllerArea(file.Relative), template));
 
     private static IEnumerable<string> ServingRequests(SyntaxNode root)
         => root.DescendantNodes().OfType<InvocationExpressionSyntax>().SelectMany(ServingRequests).Where(name => name.Length > 0);
@@ -1098,8 +828,9 @@ public static class TestLayoutRules
             ILookup<string, string> types,
             ILookup<string, string> migrations,
             IReadOnlySet<string> servingRequests,
-            IReadOnlyList<Route> routes,
+            IReadOnlySet<string> jobs,
             IReadOnlySet<string> areas,
+            IReadOnlySet<string> apiFolders,
             ILookup<string, string> domainPorts,
             IReadOnlyList<TestFile> tests)
         {
@@ -1107,8 +838,9 @@ public static class TestLayoutRules
             Types = types;
             Migrations = migrations;
             ServingRequests = servingRequests;
-            Routes = routes;
+            Jobs = jobs;
             Areas = areas;
+            ApiFolders = apiFolders;
             DomainPorts = domainPorts;
             Tests = tests;
         }
@@ -1121,9 +853,13 @@ public static class TestLayoutRules
 
         internal IReadOnlySet<string> ServingRequests { get; }
 
-        internal IReadOnlyList<Route> Routes { get; }
+        /// <summary>The classes of the product that run in the background: those built on a hosted service.</summary>
+        internal IReadOnlySet<string> Jobs { get; }
 
         internal IReadOnlySet<string> Areas { get; }
+
+        /// <summary>The folders directly under <c>src/Carina.Api</c>, which the tests under <c>Unit/App</c> may mirror.</summary>
+        internal IReadOnlySet<string> ApiFolders { get; }
 
         /// <summary>For each class of the product, the interfaces declared under the domain that it implements.</summary>
         internal ILookup<string, string> DomainPorts { get; }
@@ -1151,29 +887,33 @@ public static class TestLayoutRules
         string Namespace,
         IReadOnlyList<TestClass> Classes,
         IReadOnlySet<string> Identifiers,
-        IReadOnlySet<string> Imports,
         IReadOnlySet<string> Resolved,
         IReadOnlySet<string> Composed,
         IReadOnlySet<string> Instantiated,
         IReadOnlySet<string> Narrowed,
         bool BuildsAnUnnamedType,
-        IReadOnlySet<string> Created,
-        IReadOnlyList<string> ApiPaths,
-        IReadOnlyList<IReadOnlyList<string>> PathsOfEachTest);
+        IReadOnlySet<string> Created);
 
     internal sealed record TestClass(string Name, int Line, IReadOnlyList<string> Categories);
 
     internal sealed record Seat(Standing Standing, Place? Place, string Area);
 
-    internal sealed record Place(string Project, IReadOnlyList<string> Folders, string Kind, Subject Subject)
+    /// <summary>
+    /// A folder of the layout. <c>Kind</c> is the category its classes carry, or null where any kind of the layout
+    /// may sit. A place whose subject is <see cref="Subject.Whole"/> has no area folder below it and names nothing.
+    /// </summary>
+    internal sealed record Place(string Project, IReadOnlyList<string> Folders, string? Kind, Subject Subject)
     {
-        public bool Holds(string project, IReadOnlyList<string> folders)
+        /// <summary>Whether <paramref name="folders"/> of <paramref name="project"/> are this place's folders or below them.</summary>
+        public bool Covers(string project, IReadOnlyList<string> folders)
             => string.Equals(project, Project, StringComparison.Ordinal)
-               && folders.Count > Folders.Count
+               && folders.Count >= Folders.Count
                && folders.Take(Folders.Count).SequenceEqual(Folders, StringComparer.Ordinal);
-    }
 
-    internal readonly record struct Route(string Area, string Template);
+        /// <summary>Whether a test class may sit in <paramref name="folders"/> that this place covers.</summary>
+        public bool Holds(IReadOnlyList<string> folders)
+            => Subject == Subject.Whole ? folders.Count == Folders.Count : folders.Count > Folders.Count;
+    }
 
     private readonly record struct Listed(IReadOnlyList<AreaSource> Sources, IReadOnlyList<AreaSchema> Schemas);
 
