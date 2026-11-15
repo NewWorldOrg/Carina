@@ -17,10 +17,11 @@ using driver::Puppis.Driver.Transport;
 
 using Puppis.Contracts;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Recordings;
 
 [SupportedOSPlatform("linux")]
-public sealed class InjectedDropsReachTheDetailTests
+[Trait("Category", "Unit")]
+public sealed class RecordingDetailResponderTests
 {
     private const int VideoPid = 0x0100;
 

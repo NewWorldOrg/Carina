@@ -1,7 +1,8 @@
 using Carina.Api.Tests.Support;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Support;
 
+[Trait("Category", "Unit")]
 public sealed class DriverSocketPathLeakSelfCheckTests
 {
     private const string Socket = "/var/run/carina-elsewhere/driver-of-this-host.sock";

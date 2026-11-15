@@ -11,10 +11,11 @@ using Microsoft.Extensions.Options;
 
 using DriverConfiguration = driver::Puppis.Driver.Configuration.DriverConfiguration;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Configuration;
 
 [SupportedOSPlatform("linux")]
-public sealed class DriverSocketDefaultTests
+[Trait("Category", "Unit")]
+public sealed class DriverOptionsTests
 {
     [Fact]
     public void TheAppAndTheDriverDefaultToOneSocket()

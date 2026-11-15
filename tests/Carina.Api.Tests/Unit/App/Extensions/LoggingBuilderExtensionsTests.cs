@@ -3,9 +3,10 @@ using Carina.Api.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Extensions;
 
-public sealed class OutgoingRequestLinesTests
+[Trait("Category", "Unit")]
+public sealed class LoggingBuilderExtensionsTests
 {
     private const string ClientCategory = "System.Net.Http.HttpClient.Default.LogicalHandler";
 

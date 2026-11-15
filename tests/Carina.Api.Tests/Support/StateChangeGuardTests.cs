@@ -1,7 +1,8 @@
 using Carina.Api.Tests.Support;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Support;
 
+[Trait("Category", "Unit")]
 public sealed class StateChangeGuardTests
 {
     [Theory]

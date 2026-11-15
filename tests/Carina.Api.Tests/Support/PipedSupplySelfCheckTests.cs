@@ -2,8 +2,9 @@ using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 using Carina.TestSupport;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Support;
 
+[Trait("Category", "Unit")]
 public sealed class PipedSupplySelfCheckTests
 {
     private static readonly NetworkId Network = new(32736);

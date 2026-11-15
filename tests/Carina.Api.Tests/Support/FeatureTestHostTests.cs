@@ -6,8 +6,9 @@ using Microsoft.Extensions.Hosting;
 
 using Npgsql;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Support;
 
+[Trait("Category", "Feature")]
 public sealed class FeatureTestHostTests
 {
     [Fact]

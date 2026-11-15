@@ -1,7 +1,8 @@
 using Carina.Api.Common;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Common;
 
+[Trait("Category", "Unit")]
 public sealed class ServiceResultTests
 {
     private enum SampleError

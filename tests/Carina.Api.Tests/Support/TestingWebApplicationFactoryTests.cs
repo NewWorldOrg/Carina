@@ -5,8 +5,9 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Support;
 
+[Trait("Category", "Feature")]
 public sealed class TestingWebApplicationFactoryTests
 {
     [Fact(DisplayName = "an application that fails to stop does not keep the others raised from the same host from being stopped")]

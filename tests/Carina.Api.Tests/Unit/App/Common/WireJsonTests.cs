@@ -3,9 +3,10 @@ using System.Text.Json;
 using Carina.Api.Common;
 using Carina.Domain.Auth;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Common;
 
-public sealed class IssuedPlaybackTicketWireTests
+[Trait("Category", "Unit")]
+public sealed class WireJsonTests
 {
     [Fact]
     public void WhatIsHandedBackCarriesTheTicketAndWhenItDiesAndNothingElse()

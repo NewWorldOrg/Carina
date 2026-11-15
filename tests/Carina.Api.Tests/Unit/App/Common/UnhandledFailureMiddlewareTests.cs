@@ -8,8 +8,9 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.Logging;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Common;
 
+[Trait("Category", "Unit")]
 public sealed class UnhandledFailureMiddlewareTests
 {
     private readonly RecordingLogger logger = new();

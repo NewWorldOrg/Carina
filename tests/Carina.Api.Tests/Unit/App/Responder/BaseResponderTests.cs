@@ -1,7 +1,8 @@
 using Carina.Api.Responder;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Responder;
 
+[Trait("Category", "Unit")]
 public sealed class BaseResponderTests
 {
     [Fact]
