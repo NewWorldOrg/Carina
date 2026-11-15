@@ -1,0 +1,31 @@
+using System.Net;
+
+using Carina.Api.Tests.Support;
+using Carina.Domain.Recordings;
+
+namespace Carina.Api.Tests.Feature.Program;
+
+[Trait("Category", "Feature")]
+public sealed class TicketedVideoTests
+{
+    [Theory]
+    [InlineData("")]
+    [InlineData("/play")]
+    [InlineData("/thumbnail")]
+    [InlineData("/scrub")]
+    [InlineData("/captions")]
+    [InlineData("/data-broadcast")]
+    [InlineData("/data-broadcast/modules/64/7/0/1")]
+    public async Task EverySurfaceUnderThisPrefixRefusesAStrangerWithTheSameStatus(string beneath)
+    {
+        await using var feature = new TicketedFeature();
+        Recording recording = feature.Ended();
+
+        using HttpResponseMessage answer = await feature.AsAPlayerAsync(
+            $"/api/videos/{recording.Id.Wire}{beneath}",
+            null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, answer.StatusCode);
+        Assert.Null(answer.Headers.Location);
+    }
+}

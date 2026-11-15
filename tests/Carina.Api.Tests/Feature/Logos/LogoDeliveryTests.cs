@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 
 using Carina.Api.Logos;
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Channels;
 using Carina.TestSupport;
 
@@ -152,7 +152,7 @@ public sealed class LogoDeliveryTests
 
         public LogoFeature()
         {
-            WebApplicationFactory<Program> configured = factory
+            WebApplicationFactory<global::Program> configured = factory
                 .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
                 {
                     services.RemoveAll<IHostedService>();

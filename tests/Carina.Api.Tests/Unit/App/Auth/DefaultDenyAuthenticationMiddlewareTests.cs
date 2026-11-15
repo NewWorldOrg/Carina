@@ -1,6 +1,7 @@
 using System.Security.Claims;
 
 using Carina.Api.Authentication;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 
 using Microsoft.AspNetCore.Http;

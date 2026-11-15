@@ -36,6 +36,10 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Test($"{InfrastructureTests}/Unit/Infra/Auth/PasswordHasherTests.cs", TestLayoutRules.Unit);
         tree.Test($"{DbTests}/DbIntegration/Infra/Auth/AuthSchemaTests.cs", TestLayoutRules.DbIntegration);
         tree.Test($"{DbTests}/Unit/Infra/Auth/AuthenticationMigrationTests.cs", TestLayoutRules.Unit);
+        tree.Test($"{ApiTests}/Feature/Jobs/Recordings/RecordingTickJobTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Program/RoutedSurfaceTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Unit/App/Common/ServiceResultTests.cs", TestLayoutRules.Unit);
+        tree.Test($"{InfrastructureTests}/Support/EventuallyTests.cs", TestLayoutRules.Unit);
         tree.Declare($"{ApiTests}/Feature/Auth/SignedInClient.cs");
         tree.Test($"{ApiTests}/FeatureTest/HealthEndpointTests.cs", TestLayoutRules.Feature);
         tree.Test($"{ApiTests}/Unit/ClockTests.cs", TestLayoutRules.Unit);
@@ -47,12 +51,16 @@ public sealed class TestLayoutRuleSelfCheckTests
             [
                 "/tests/Carina.Api.Tests/DbIntegration/App/Auth/AuthSessionServiceTests.cs",
                 "/tests/Carina.Api.Tests/Feature/Auth/LogInActionTests.cs",
+                "/tests/Carina.Api.Tests/Feature/Jobs/Recordings/RecordingTickJobTests.cs",
+                "/tests/Carina.Api.Tests/Feature/Program/RoutedSurfaceTests.cs",
                 "/tests/Carina.Api.Tests/Unit/App/Auth/AuthSessionServiceTests.cs",
+                "/tests/Carina.Api.Tests/Unit/App/Common/ServiceResultTests.cs",
                 "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/AuthSchemaTests.cs",
                 "/tests/Carina.Db.Tests/Unit/Infra/Auth/AuthenticationMigrationTests.cs",
                 "/tests/Carina.Domain.Tests/Unit/Auth/OidcSettingsTests.cs",
                 "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/AuthSessionRepositoryTests.cs",
                 "/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/LocalAccountBootstrapTests.cs",
+                "/tests/Carina.Infrastructure.Tests/Support/EventuallyTests.cs",
                 "/tests/Carina.Infrastructure.Tests/Unit/Infra/Auth/PasswordHasherTests.cs",
             ],
             TestLayoutRules.FilesInTheLayout(TestLayoutRules.Read(tree.Root)));
@@ -153,21 +161,58 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
-    public void LetsOffATestClassInItsPlaceAndWhateverSitsInAnOldPlace()
+    public void DetectsATestClassOutsideEveryFolderOfTheLayout()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Domain/Recordings/Recording.cs");
+        tree.Write($"{DomainTests}/Recordings/RecordingTests.cs", Source("Carina.Domain.Tests.Recordings", "RecordingTests", TestLayoutRules.Unit));
+        tree.Write($"{DomainTests}/ClockTests.cs", Source("Carina.Domain.Tests", "ClockTests", TestLayoutRules.Unit));
+        tree.Write($"{ApiTests}/FeatureTest/StartUpTests.cs", Source("Carina.Api.Tests.FeatureTest", "StartUpTests", TestLayoutRules.Feature));
+        tree.Write($"{ApiTests}/Unit/ClockTests.cs", Source("Carina.Api.Tests.Unit", "ClockTests", TestLayoutRules.Unit));
+        tree.Write($"{ApiTests}/Support/Probes/ProbeTests.cs", Source("Carina.Api.Tests.Support.Probes", "ProbeTests", TestLayoutRules.Unit));
+        tree.Write($"{ApiTests}/Feature/Program/Routes/RoutedSurfaceTests.cs", Source("Carina.Api.Tests.Feature.Program.Routes", "RoutedSurfaceTests", TestLayoutRules.Feature));
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Api.Tests/Feature/Program/Routes/RoutedSurfaceTests.cs:4 RoutedSurfaceTests sits in no folder of the layout",
+                "/tests/Carina.Api.Tests/FeatureTest/StartUpTests.cs:4 StartUpTests sits in no folder of the layout",
+                "/tests/Carina.Api.Tests/Support/Probes/ProbeTests.cs:4 ProbeTests sits in no folder of the layout",
+                "/tests/Carina.Api.Tests/Unit/ClockTests.cs:4 ClockTests sits in no folder of the layout",
+                "/tests/Carina.Domain.Tests/ClockTests.cs:4 ClockTests sits in no folder of the layout",
+                "/tests/Carina.Domain.Tests/Recordings/RecordingTests.cs:4 RecordingTests sits in no folder of the layout",
+            ],
+            TestLayoutRules.ClassesOutOfPlace(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
+    public void LetsOffATestClassInItsPlace()
     {
         using SourceTree tree = new();
         tree.Declare("src/Carina.Domain/Auth/OidcSettings.cs");
         tree.Declare($"{Controllers}/Epg/GetProgrammesAction.cs");
+        tree.Declare("src/Carina.Api/Common/ServiceResult.cs");
         tree.Test($"{DomainTests}/Unit/Auth/OidcSettingsTests.cs", TestLayoutRules.Unit);
         tree.Test($"{DomainTests}/Unit/Auth/Sessions/SessionTokenTests.cs", TestLayoutRules.Unit);
         tree.Test($"{ApiTests}/Feature/Epg/GetProgrammesActionTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Program/RoutedSurfaceTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Unit/App/Common/ServiceResultTests.cs", TestLayoutRules.Unit);
+        tree.Test($"{ApiTests}/Support/EndpointRuleSelfCheckTests.cs", TestLayoutRules.Unit);
+        tree.Test($"{DbTests}/Support/ScratchDatabaseTests.cs", TestLayoutRules.DbIntegration);
         tree.Declare($"{DomainTests}/Unit/Auth/SampleSettings.cs");
-        tree.Write($"{DomainTests}/Recordings/RecordingTests.cs", Source("Carina.Domain.Tests", "RecordingChecks", TestLayoutRules.Unit));
-        tree.Write($"{DomainTests}/ClockTests.cs", Source("Carina.Domain.Tests.Time", "ClockChecks", TestLayoutRules.Unit));
-        tree.Write($"{ApiTests}/FeatureTest/StartUpTests.cs", Source("Carina.Api.Tests", "StartUpChecks", TestLayoutRules.Feature));
-        tree.Write($"{ApiTests}/Unit/ClockTests.cs", Source("Carina.Api.Tests", "ClockChecks", TestLayoutRules.Unit));
 
         Assert.Empty(TestLayoutRules.ClassesOutOfPlace(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
+    public void DetectsAUnitClassOfTheApiUnderAFolderThatIsNeitherAnAreaNorAFolderOfTheApi()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Api/Common/ServiceResult.cs");
+        tree.Test($"{ApiTests}/Unit/App/Shared/ServiceResultTests.cs", TestLayoutRules.Unit);
+
+        Assert.Equal(
+            ["/tests/Carina.Api.Tests/Unit/App/Shared/ServiceResultTests.cs:4 ServiceResultTests is under Shared, which is no area of the product code and no folder of the API"],
+            TestLayoutRules.ClassesOutOfPlace(TestLayoutRules.Read(tree.Root)));
     }
 
     [Fact]
@@ -210,6 +255,26 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Api.Tests/Feature/Auth/LogInActionTests.cs:4 LogInActionTests is a Feature test but carries Unit",
                 "/tests/Carina.Domain.Tests/Unit/Auth/OidcSettingsTests.cs:3 OidcSettingsTests is a Unit test but carries no category",
                 "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/AuthSessionRepositoryTests.cs:5 AuthSessionRepositoryTests is a DbIntegration test but carries DbIntegration, Scale",
+            ],
+            TestLayoutRules.ClassesUnderAnotherCategory(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
+    public void HoldsAClassUnderProgramToTheFeatureCategoryAndAClassUnderSupportToAnyKindOfTheLayout()
+    {
+        using SourceTree tree = new();
+        tree.Test($"{ApiTests}/Feature/Program/RoutedSurfaceTests.cs", TestLayoutRules.Unit);
+        tree.Test($"{ApiTests}/Feature/Program/OpenApiDocumentTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Support/FeatureTestHostTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{InfrastructureTests}/Support/EventuallyTests.cs", TestLayoutRules.Unit);
+        tree.Test($"{InfrastructureTests}/Support/SyntheticBroadcastMaterialTests.cs", "Material");
+        tree.Test($"{DbTests}/Support/ScratchDatabaseTests.cs", TestLayoutRules.DbIntegration);
+        tree.Test($"{DomainTests}/Support/ClockTests.cs", "Slow");
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Api.Tests/Feature/Program/RoutedSurfaceTests.cs:4 RoutedSurfaceTests is a Feature test but carries Unit",
+                "/tests/Carina.Domain.Tests/Support/ClockTests.cs:4 ClockTests is a test of the support but carries Slow, which is no kind of the layout",
             ],
             TestLayoutRules.ClassesUnderAnotherCategory(TestLayoutRules.Read(tree.Root)));
     }
@@ -309,6 +374,84 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Test($"{ApiTests}/Feature/Auth/SignInTicketFilterTests.cs", TestLayoutRules.Feature);
 
         Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void DetectsAJobClassNamedAfterNoClassOfItsAreaThatRunsInTheBackground()
+    {
+        using SourceTree tree = new();
+        DeclareJobs(tree);
+        tree.Test($"{ApiTests}/Feature/Jobs/Recordings/RecordingRoundTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Jobs/Recordings/ScanRunnerTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Jobs/Encodings/EncodeJobTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Jobs/Recordings/RecordingTests.cs", TestLayoutRules.Feature);
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Api.Tests/Feature/Jobs/Encodings/EncodeJobTests.cs:4 EncodeJobTests is named after no job of Encodings: no class of the area that runs in the background",
+                "/tests/Carina.Api.Tests/Feature/Jobs/Recordings/RecordingRoundTests.cs:4 RecordingRoundTests is named after no job of Recordings: no class of the area that runs in the background",
+                "/tests/Carina.Api.Tests/Feature/Jobs/Recordings/RecordingTests.cs:4 RecordingTests is named after no job of Recordings: no class of the area that runs in the background",
+                "/tests/Carina.Api.Tests/Feature/Jobs/Recordings/ScanRunnerTests.cs:4 ScanRunnerTests is named after no job of Recordings: no class of the area that runs in the background",
+            ],
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void LetsOffAJobClassNamedAfterABackgroundServiceOrAHostedServiceOfItsArea()
+    {
+        using SourceTree tree = new();
+        DeclareJobs(tree);
+        tree.Test($"{ApiTests}/Feature/Jobs/Recordings/RecordingTickJobTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Jobs/Scanning/ScanRunnerTests.cs", TestLayoutRules.Feature);
+
+        TestLayoutRules.Reading reading = TestLayoutRules.Read(tree.Root);
+
+        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(reading, Elsewhere, Schemas));
+        Assert.Equal(["RecordingTickJob", "ScanRunner"], TestLayoutRules.ClassesRunningInTheBackground(reading));
+    }
+
+    [Fact]
+    public void LetsOffAClassUnderProgramOrSupportWhateverItIsNamedAfter()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Domain/Auth/OidcSettings.cs");
+        tree.Test($"{ApiTests}/Feature/Program/RoutedSurfaceTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Support/QueryInputScanSelfCheckTests.cs", TestLayoutRules.Unit);
+        tree.Test($"{InfrastructureTests}/Support/EventuallyTests.cs", TestLayoutRules.Unit);
+
+        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void LetsOffAUnitClassOfTheApiNamedAfterATypeOfTheFolderOfTheApiItMirrors()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Api/Common/ServiceResult.cs");
+        tree.Declare("src/Carina.Api/Responder/BaseResponder.cs");
+        tree.Declare("src/Carina.Api/Responder/Recordings/RecordingDetailResponder.cs");
+        tree.Test($"{ApiTests}/Unit/App/Common/ServiceResultTests.cs", TestLayoutRules.Unit);
+        tree.Test($"{ApiTests}/Unit/App/Responder/BaseResponderTests.cs", TestLayoutRules.Unit);
+        tree.Test($"{ApiTests}/Unit/App/Responder/Recordings/RecordingDetailResponderTests.cs", TestLayoutRules.Unit);
+
+        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void DetectsAUnitClassOfTheApiNamedAfterATypeOfAnotherFolderOfTheApi()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Api/Common/ServiceResult.cs");
+        tree.Declare("src/Carina.Api/Responder/BaseResponder.cs");
+        tree.Declare("src/Carina.Api/Responder/Recordings/RecordingDetailResponder.cs");
+        tree.Test($"{ApiTests}/Unit/App/Common/BaseResponderTests.cs", TestLayoutRules.Unit);
+        tree.Test($"{ApiTests}/Unit/App/Responder/RecordingDetailResponderTests.cs", TestLayoutRules.Unit);
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Api.Tests/Unit/App/Common/BaseResponderTests.cs:4 BaseResponderTests is named after nothing the API declares for Common or in src/Carina.Api/Common",
+                "/tests/Carina.Api.Tests/Unit/App/Responder/RecordingDetailResponderTests.cs:4 RecordingDetailResponderTests is named after nothing the API declares for Responder or in src/Carina.Api/Responder",
+            ],
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
@@ -729,6 +872,7 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Declare($"{Controllers}/Auth/LogOutAction.cs");
         tree.Declare("src/Carina.Domain/Auth/SignInAction.cs");
         tree.Test($"{ApiTests}/FeatureTest/LoginTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Jobs/Auth/AuthUpkeepJobTests.cs", TestLayoutRules.Feature);
         tree.Test($"{ApiTests}/Unit/App/Auth/AuthSessionServiceTests.cs", TestLayoutRules.Unit);
         tree.Test($"{DomainTests}/Unit/Auth/SignInActionTests.cs", TestLayoutRules.Unit);
 
@@ -742,11 +886,14 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Test($"{ApiTests}/Feature/Auth/SessionCookiePolicyTests.cs", TestLayoutRules.Feature);
         tree.Test($"{ApiTests}/Feature/Live/SessionCookiePolicyTests.cs", TestLayoutRules.Feature);
         tree.Test($"{ApiTests}/Feature/Live/GetLiveActionTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Program/GetLiveActionTests.cs", TestLayoutRules.Feature);
 
         Assert.Equal(
             [
                 "/tests/Carina.Api.Tests/Feature/Auth/SessionCookiePolicyTests.cs SessionCookiePolicyTests",
+                "/tests/Carina.Api.Tests/Feature/Live/GetLiveActionTests.cs GetLiveActionTests",
                 "/tests/Carina.Api.Tests/Feature/Live/SessionCookiePolicyTests.cs SessionCookiePolicyTests",
+                "/tests/Carina.Api.Tests/Feature/Program/GetLiveActionTests.cs GetLiveActionTests",
             ],
             TestLayoutRules.FeatureClassesSharingASubject(TestLayoutRules.Read(tree.Root)));
     }
@@ -1013,348 +1160,6 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
-    public void DetectsATestClassUnderAnOldFolderOfAnAreaThatIsNotListed()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Test($"{DomainTests}/Auth/OidcSettingsTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{InfrastructureTests}/Auth/Sessions/SessionStoreTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{DomainTests}/Recordings/RecordingTests.cs", TestLayoutRules.Unit);
-
-        Assert.Equal(
-            [
-                "/tests/Carina.Domain.Tests/Auth/OidcSettingsTests.cs:4 OidcSettingsTests is under the old folder Auth, which is not listed as yet to move",
-                "/tests/Carina.Infrastructure.Tests/Auth/Sessions/SessionStoreTests.cs:4 SessionStoreTests is under the old folder Auth, which is not listed as yet to move",
-            ],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void DetectsATestClassInAFlatOldPlaceNamedAfterATypeOfAnAreaThatHasMoved()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Test($"{ApiTests}/FeatureTest/LogInActionTests.cs", TestLayoutRules.Feature);
-        tree.Test($"{ApiTests}/Unit/SessionCookiePolicyTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{DbTests}/AuthSchemaTests.cs", TestLayoutRules.DbIntegration);
-        tree.Test($"{DbTests}/SessionSchemaTests.cs", TestLayoutRules.DbIntegration);
-        tree.Test($"{DomainTests}/OidcSettingsTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{InfrastructureTests}/AuthSessionRepositoryTests.cs", TestLayoutRules.DbIntegration);
-
-        Assert.Equal(
-            [
-                "/tests/Carina.Api.Tests/FeatureTest/LogInActionTests.cs:4 LogInActionTests is named after a type of Auth, which has moved",
-                "/tests/Carina.Api.Tests/Unit/SessionCookiePolicyTests.cs:4 SessionCookiePolicyTests is named after a type of Auth, which has moved",
-                "/tests/Carina.Db.Tests/AuthSchemaTests.cs:4 AuthSchemaTests is named after a type of Auth, which has moved",
-                "/tests/Carina.Db.Tests/SessionSchemaTests.cs:4 SessionSchemaTests is named after a type of Auth, which has moved",
-                "/tests/Carina.Domain.Tests/OidcSettingsTests.cs:4 OidcSettingsTests is named after a type of Auth, which has moved",
-                "/tests/Carina.Infrastructure.Tests/AuthSessionRepositoryTests.cs:4 AuthSessionRepositoryTests is named after a type of Auth, which has moved",
-            ],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void DetectsAScaleOrMaterialClassInAFlatOldPlaceNamedAfterATypeOfAnAreaThatHasMoved()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Test($"{DomainTests}/OidcSettingsScaleTests.cs", "Scale");
-        tree.Test($"{InfrastructureTests}/AuthSessionRepositoryMaterialTests.cs", "Material");
-        tree.Test($"{InfrastructureTests}/AuthSessionRepositoryScaleTests.cs", "Material");
-
-        Assert.Equal(
-            [
-                "/tests/Carina.Domain.Tests/OidcSettingsScaleTests.cs:4 OidcSettingsScaleTests is named after a type of Auth, which has moved",
-                "/tests/Carina.Infrastructure.Tests/AuthSessionRepositoryMaterialTests.cs:4 AuthSessionRepositoryMaterialTests is named after a type of Auth, which has moved",
-            ],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void DetectsAMigrationTestInAFlatOldPlaceWhoseMigrationBelongsToAnAreaThatHasMoved()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Declare("src/Carina.Db/MigrationLock.cs");
-        tree.Declare("src/Carina.Db/CarryArguments.cs");
-        tree.Declare("src/Carina.Db/Migrations/20260101000000_SessionsAreKeptAsHashes.cs");
-        tree.Declare("src/Carina.Db/Migrations/20260102000000_RecordingsAreNumbered.cs");
-        tree.Test($"{DbTests}/SessionsAreKeptAsHashesMigrationTests.cs", TestLayoutRules.DbIntegration);
-        tree.Test($"{DbTests}/RecordingsAreNumberedMigrationTests.cs", TestLayoutRules.DbIntegration);
-        tree.Test($"{DbTests}/MigrationLockTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{DbTests}/CarryArgumentsTests.cs", TestLayoutRules.Unit);
-
-        Assert.Equal(
-            [
-                "/tests/Carina.Db.Tests/MigrationLockTests.cs:4 MigrationLockTests is named after a type of Auth, which has moved",
-                "/tests/Carina.Db.Tests/SessionsAreKeptAsHashesMigrationTests.cs:4 SessionsAreKeptAsHashesMigrationTests is named after a type of Auth, which has moved",
-            ],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void DetectsAnOldTestOfTheHttpSurfaceThatSpeaksOnlyToRoutesOfAreasThatHaveMoved()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Test(
-            $"{ApiTests}/FeatureTest/SignInJourneyTests.cs",
-            TestLayoutRules.Feature,
-            """await client.PostAsync("/api/auth/login", null); await client.DeleteAsync($"/api/auth/sessions/{id}?all=true");""");
-
-        Assert.Equal(
-            ["/tests/Carina.Api.Tests/FeatureTest/SignInJourneyTests.cs:4 SignInJourneyTests speaks only to routes of areas that have moved"],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void DetectsAnOldTestOfTheHttpSurfaceWhoseClassAlsoSpeaksToAnAreaYetToMove()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Write(
-            $"{ApiTests}/FeatureTest/SessionAndRecordingTests.cs",
-            """
-            namespace Carina.Api.Tests.FeatureTest;
-
-            [Trait("Category", "Feature")]
-            public sealed class SessionAndRecordingTests
-            {
-                [Fact]
-                public async Task SignsIn() => await client.PostAsync("/api/auth/login", null);
-
-                [Fact]
-                public async Task ReadsARecording() => await client.GetAsync($"/api/recordings/{id}");
-            }
-            """);
-        tree.Write(
-            $"{ApiTests}/FeatureTest/ServedDocumentTests.cs",
-            """
-            namespace Carina.Api.Tests.FeatureTest;
-
-            [Trait("Category", "Feature")]
-            public sealed class ServedDocumentTests
-            {
-                [Fact]
-                public async Task DescribesTheSignIn() => Assert.NotNull(document["paths"]!["/api/auth/login"]);
-
-                [Fact]
-                public async Task ReadsARecording() => await client.GetAsync(new Uri($"/api/recordings/{id}", UriKind.Relative));
-            }
-            """);
-
-        Assert.Equal(
-            ["/tests/Carina.Api.Tests/FeatureTest/SessionAndRecordingTests.cs:4 SessionAndRecordingTests has a test that speaks only to routes of areas that have moved"],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void ReadsTheRequestsAnOldTestSendsWithTheJsonAndStringHelpersOfTheClient()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Write(
-            $"{ApiTests}/FeatureTest/SessionByJsonTests.cs",
-            """
-            namespace Carina.Api.Tests.FeatureTest;
-
-            [Trait("Category", "Feature")]
-            public sealed class SessionByJsonTests
-            {
-                [Fact]
-                public async Task SignsIn() => await client.PostAsJsonAsync("/api/auth/login", new { });
-
-                [Fact]
-                public async Task EndsTheSession() => await client.DeleteFromJsonAsync<Ended>($"/api/auth/sessions/{id}");
-
-                [Fact]
-                public async Task ReadsARecording() => await client.GetFromJsonAsync<Read>($"/api/recordings/{id}");
-            }
-            """);
-        tree.Write(
-            $"{ApiTests}/FeatureTest/SessionAsTextTests.cs",
-            """
-            namespace Carina.Api.Tests.FeatureTest;
-
-            [Trait("Category", "Feature")]
-            public sealed class SessionAsTextTests
-            {
-                [Fact]
-                public async Task ReadsTheSession() => await client.GetStringAsync($"/api/auth/sessions/{id}");
-
-                [Fact]
-                public async Task ReadsARecording() => await client.GetByteArrayAsync($"/api/recordings/{id}");
-            }
-            """);
-
-        Assert.Equal(
-            [
-                "/tests/Carina.Api.Tests/FeatureTest/SessionAsTextTests.cs:4 SessionAsTextTests has a test that speaks only to routes of areas that have moved",
-                "/tests/Carina.Api.Tests/FeatureTest/SessionByJsonTests.cs:4 SessionByJsonTests has a test that speaks only to routes of areas that have moved",
-            ],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void DetectsAnOldTestThatImportsTheTestsOfAnAreaThatHasMoved()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Write(
-            $"{ApiTests}/FeatureTest/PushRoundTests.cs",
-            "using Carina.Api.Tests.Feature.Auth;\n\n" + Source("Carina.Api.Tests.FeatureTest", "PushRoundTests", TestLayoutRules.Feature));
-        tree.Write(
-            $"{ApiTests}/FeatureTest/RecordingRoundTests.cs",
-            "using Carina.Api.Tests.Feature.Recordings;\nusing Carina.Infrastructure.Tests.Auth;\n\n"
-            + Source("Carina.Api.Tests.FeatureTest", "RecordingRoundTests", TestLayoutRules.Feature));
-
-        Assert.Equal(
-            ["/tests/Carina.Api.Tests/FeatureTest/PushRoundTests.cs:6 PushRoundTests imports the tests of Auth, which has moved"],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void DetectsATestClassInAFlatOldPlaceWithANamesakeInTheLayout()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Test($"{ApiTests}/Unit/App/Auth/DeviceLabelTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{ApiTests}/Unit/DeviceLabelTests.cs", TestLayoutRules.Unit);
-
-        Assert.Equal(
-            ["/tests/Carina.Api.Tests/Unit/DeviceLabelTests.cs:4 DeviceLabelTests has a namesake in the layout"],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void ReportsATestClassTiedToAMovedAreaInSeveralWaysOnce()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Test($"{ApiTests}/Feature/Auth/LogInActionTests.cs", TestLayoutRules.Feature);
-        tree.Test(
-            $"{ApiTests}/FeatureTest/LogInActionTests.cs",
-            TestLayoutRules.Feature,
-            """await client.PostAsync("/api/auth/login", null);""");
-
-        Assert.Equal(
-            ["/tests/Carina.Api.Tests/FeatureTest/LogInActionTests.cs:4 LogInActionTests is named after a type of Auth, which has moved"],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void LetsOffWhatBelongsToAnAreaStillListedAndWhatIsTiedToNoArea()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Test($"{DomainTests}/Recordings/RecordingTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{DomainTests}/RecordingTests.cs", TestLayoutRules.Unit);
-        tree.Test(
-            $"{ApiTests}/FeatureTest/RecordingJourneyTests.cs",
-            TestLayoutRules.Feature,
-            """await client.PostAsync("/api/auth/login", null); await client.GetAsync($"/api/recordings/{id}");""");
-        tree.Test(
-            $"{ApiTests}/FeatureTest/UnmappedPathTests.cs",
-            TestLayoutRules.Feature,
-            """await client.PostAsync("/api/auth/login", null); await client.GetAsync("/api/nothing/here");""");
-        tree.Test($"{ApiTests}/FeatureTest/StartUpTests.cs", TestLayoutRules.Feature);
-        tree.Test(
-            $"{ApiTests}/Unit/ClockTests.cs",
-            TestLayoutRules.Unit,
-            """string path = "/api/auth/login";""");
-        tree.Test($"{ApiTests}/Unit/App/Auth/DeviceLabelTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{InfrastructureTests}/DeviceLabelTests.cs", TestLayoutRules.Unit);
-
-        Assert.Empty(TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void LetsOffATypeUnderAFolderOfTheApiThatIsListedForNoArea()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Test($"{ApiTests}/Unit/SessionCookiePolicyTests.cs", TestLayoutRules.Unit);
-
-        Assert.Empty(TestLayoutRules.ClassesLeftInTheOldPlace(
-            TestLayoutRules.Read(tree.Root),
-            ["Persistence", "Recordings"],
-            [],
-            []));
-    }
-
-    [Fact]
-    public void ReportsEveryTestClassOutsideTheLayoutOnceNoAreaIsLeftToMove()
-    {
-        using SourceTree tree = new();
-        DeclareAuthAndRecordings(tree);
-        tree.Test($"{DomainTests}/Unit/Auth/OidcSettingsTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{DomainTests}/Recordings/RecordingTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{DomainTests}/ClockTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{ApiTests}/FeatureTest/StartUpTests.cs", TestLayoutRules.Feature);
-
-        Assert.Equal(
-            [
-                "/tests/Carina.Api.Tests/FeatureTest/StartUpTests.cs:4 StartUpTests is outside the layout, and no area is left to move",
-                "/tests/Carina.Domain.Tests/ClockTests.cs:4 ClockTests is outside the layout, and no area is left to move",
-                "/tests/Carina.Domain.Tests/Recordings/RecordingTests.cs:4 RecordingTests is under the old folder Recordings, which is not listed as yet to move",
-            ],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), [], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void DetectsAListedAreaThatIsNoAreaThatHasTestsInTheLayoutOrThatHasNoTestLeftInAnOldPlace()
-    {
-        using SourceTree tree = new();
-        tree.Declare("src/Carina.Domain/Auth/OidcSettings.cs");
-        tree.Declare("src/Carina.Domain/Recordings/Recording.cs");
-        tree.Declare("src/Carina.Domain/Quality/QualityScore.cs");
-        tree.Test($"{DomainTests}/Unit/Auth/OidcSettingsTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{DomainTests}/Recordings/RecordingTests.cs", TestLayoutRules.Unit);
-
-        Assert.Equal(
-            [
-                "Auth already has tests in the layout",
-                "Auth has no test left in an old place",
-                "Nowhere is no area of the product code",
-                "Quality has no test left in an old place",
-            ],
-            TestLayoutRules.AreasWronglyListed(TestLayoutRules.Read(tree.Root), ["Auth", "Nowhere", "Quality", "Recordings"], Elsewhere, Schemas));
-    }
-
-    [Fact]
-    public void LetsOffAListedAreaWithATestLeftInAnOldFolderOrAFlatOldPlace()
-    {
-        using SourceTree tree = new();
-        tree.Declare("src/Carina.Domain/Recordings/Recording.cs");
-        tree.Declare("src/Carina.Domain/Quality/QualityScore.cs");
-        tree.Declare("src/Carina.Domain/Channels/Channel.cs");
-        tree.Declare("src/Carina.Api/Authentication/SessionCookiePolicy.cs");
-        tree.Declare("src/Carina.Domain/Auth/OidcSettings.cs");
-        tree.Write(
-            $"{Controllers}/Live/GetLiveAction.cs",
-            """
-            namespace Carina.Api.Controllers.Live;
-
-            [Route("api/live/{channel}")]
-            public sealed class GetLiveAction;
-            """);
-        tree.Test($"{DomainTests}/Recordings/RecordingTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{DomainTests}/QualityScoreTests.cs", TestLayoutRules.Unit);
-        tree.Test($"{DbTests}/ChannelsSchemaTests.cs", TestLayoutRules.DbIntegration);
-        tree.Test($"{ApiTests}/Unit/SessionCookiePolicyTests.cs", TestLayoutRules.Unit);
-        tree.Test(
-            $"{ApiTests}/FeatureTest/WatchingTests.cs",
-            TestLayoutRules.Feature,
-            """await client.GetAsync($"/api/live/{channel}"); await client.GetAsync("/api/nothing/here");""");
-
-        Assert.Empty(TestLayoutRules.AreasWronglyListed(
-            TestLayoutRules.Read(tree.Root),
-            ["Auth", "Channels", "Live", "Quality", "Recordings"],
-            Elsewhere,
-            Schemas));
-    }
-
-    [Fact]
     public void DetectsASourceListedForNoAreaOfTheProductCodeAndASourceThatDoesNotExist()
     {
         using SourceTree tree = new();
@@ -1450,48 +1255,17 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Declare("src/Carina.Infrastructure/Auth/ClientSecretSeal.cs");
     }
 
-    private static void DeclareAuthAndRecordings(SourceTree tree)
+    private static void DeclareJobs(SourceTree tree)
     {
-        tree.Declare("src/Carina.Domain/Auth/OidcSettings.cs");
-        tree.Write("src/Carina.Domain/Auth/IAuthSessionRepository.cs", "namespace Carina.Domain.Auth;\n\npublic interface IAuthSessionRepository { }\n");
-        tree.Declare("src/Carina.Infrastructure/Persistence/Repositories/AuthSessionRepository.cs");
+        tree.Write(
+            "src/Carina.Infrastructure/Recordings/RecordingTickJob.cs",
+            "namespace Carina.Infrastructure.Recordings;\n\npublic sealed class RecordingTickJob(RecordingRound round) : BackgroundService { }\n");
+        tree.Declare("src/Carina.Infrastructure/Recordings/RecordingRound.cs");
+        tree.Write(
+            "src/Carina.Infrastructure/Scanning/ScanRunner.cs",
+            "namespace Carina.Infrastructure.Scanning;\n\npublic sealed class ScanRunner : IHostedService { }\n");
+        tree.Declare("src/Carina.Domain/Encodings/EncodeJob.cs");
         tree.Declare("src/Carina.Domain/Recordings/Recording.cs");
-        tree.Declare("src/Carina.Api/Authentication/SessionCookiePolicy.cs");
-        tree.Declare("src/Carina.Api/Common/DeviceLabel.cs");
-        tree.Write(
-            "src/Carina.Api/Authentication/AuthRoutes.cs",
-            """
-            namespace Carina.Api.Authentication;
-
-            public static class AuthRoutes
-            {
-                public const string Session = "api/auth/sessions/{id}";
-            }
-            """);
-        tree.Write(
-            $"{Controllers}/Auth/LogInAction.cs",
-            """
-            namespace Carina.Api.Controllers.Auth;
-
-            [Route("api/auth/login")]
-            public sealed class LogInAction;
-            """);
-        tree.Write(
-            $"{Controllers}/Auth/DeleteSessionAction.cs",
-            """
-            namespace Carina.Api.Controllers.Auth;
-
-            [Route(AuthRoutes.Session)]
-            public sealed class DeleteSessionAction;
-            """);
-        tree.Write(
-            $"{Controllers}/Recordings/GetRecordingAction.cs",
-            """
-            namespace Carina.Api.Controllers.Recordings;
-
-            [Route("api/recordings/{id}")]
-            public sealed class GetRecordingAction;
-            """);
     }
 
     private static string Source(string space, string name, string category, string body = "")

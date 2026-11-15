@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.TestSupport;
@@ -21,7 +21,7 @@ internal sealed class DrawnFeature : IAsyncDisposable
 
     public DrawnFeature(bool anywhereToPutThem = true)
     {
-        WebApplicationFactory<Program> configured = factory
+        WebApplicationFactory<global::Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();

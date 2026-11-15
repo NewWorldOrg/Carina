@@ -1,4 +1,3 @@
-
 using Carina.Api.Authentication;
 using Carina.Domain.Auth;
 

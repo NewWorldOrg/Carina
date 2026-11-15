@@ -1,9 +1,8 @@
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
@@ -755,6 +754,28 @@ public sealed class GetRecordingActionTests
             (long)TimeSpan.FromMinutes(30).TotalMilliseconds,
             detail.GetProperty("data").GetProperty("recording").GetProperty("writtenDurationMs").GetInt64());
         Assert.Equal(600, plan.GetProperty("resumeAtSec").GetDouble());
+    }
+
+    [Fact]
+    public async Task TheDetailMarksADropAtTheSecondItWasCountedAt()
+    {
+        await using var feature = new MarkedRecordingFeature();
+        Recording recording = feature.EndedWithDropsAt(12);
+
+        int marked = Assert.Single(await feature.SecondsTheDetailMarksAsync(recording));
+
+        Assert.Equal(12, marked);
+    }
+
+    [Fact]
+    public async Task TheDetailMarksEverySecondADropWasCountedAtRatherThanOnlyTheFirst()
+    {
+        await using var feature = new MarkedRecordingFeature();
+        Recording recording = feature.EndedWithDropsAt(12, 40, 903);
+
+        IReadOnlyList<int> marked = await feature.SecondsTheDetailMarksAsync(recording);
+
+        Assert.Equal([12, 40, 903], marked);
     }
 
     private static async Task<JsonElement> DetailOfAsync(RecordingFeature feature, Recording recording)

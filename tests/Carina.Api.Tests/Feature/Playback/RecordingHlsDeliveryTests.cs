@@ -2,7 +2,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 
 using Carina.Api.Live;
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;

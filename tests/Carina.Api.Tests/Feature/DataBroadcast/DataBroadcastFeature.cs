@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Captions;
 using Carina.Domain.DataBroadcast;
 using Carina.Domain.Encodings;
@@ -53,7 +53,7 @@ internal sealed class DataBroadcastFeature : IAsyncDisposable
     {
         Settings = new CaptionSettings { WrittenTo = anywhereToKeepThem ? shelved.FullName : null };
 
-        WebApplicationFactory<Program> configured = factory
+        WebApplicationFactory<global::Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();

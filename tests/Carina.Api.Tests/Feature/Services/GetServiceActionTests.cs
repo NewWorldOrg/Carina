@@ -2,7 +2,7 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Api.Common;
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Channels;
 
 using Puppis.Contracts;

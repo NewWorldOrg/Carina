@@ -1,7 +1,7 @@
 extern alias db;
 
 using Carina.Api.Authentication;
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;

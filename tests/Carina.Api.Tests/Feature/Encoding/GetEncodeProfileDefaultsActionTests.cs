@@ -53,7 +53,6 @@ public sealed class GetEncodeProfileDefaultsActionTests
         Assert.Empty(feature.Profiles.Profiles);
     }
 
-
     private static IEnumerable<JsonElement> Numbers(JsonElement element) => element.ValueKind switch
     {
         JsonValueKind.Object => element.EnumerateObject().SelectMany(property => Numbers(property.Value)),

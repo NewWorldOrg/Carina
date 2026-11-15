@@ -1,17 +1,12 @@
-using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
 using Carina.Api.Authentication;
 using Carina.Api.Events;
-using Carina.Api.Tests.FeatureTest;
-using Carina.Api.Tests.Unit;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.Domain.Channels;
-using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Scans;
 using Carina.Domain.Segments;
@@ -20,12 +15,10 @@ using Carina.TestSupport;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.Feature.Auth;
@@ -601,7 +594,7 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests(TestingWebApplicati
 
     private async Task<HttpResponseMessage> AskAsync(string method, string path)
     {
-        WebApplicationFactory<Program> guarded = factory.WithTestScheme();
+        WebApplicationFactory<global::Program> guarded = factory.WithTestScheme();
         using HttpClient client = guarded.CreateClient();
         using var asking = new HttpRequestMessage(new HttpMethod(method), new Uri(path, UriKind.Relative));
 
@@ -611,7 +604,7 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests(TestingWebApplicati
     private static string ReturnTargetOf(string sentTo)
         => Uri.UnescapeDataString(sentTo[(sentTo.IndexOf('=', StringComparison.Ordinal) + 1)..]);
 
-    private static HttpClient Browsing(WebApplicationFactory<Program> wired)
+    private static HttpClient Browsing(WebApplicationFactory<global::Program> wired)
     {
         HttpClient client = wired.CreateClient(new WebApplicationFactoryClientOptions
         {

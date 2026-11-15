@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Net.Http.Headers;

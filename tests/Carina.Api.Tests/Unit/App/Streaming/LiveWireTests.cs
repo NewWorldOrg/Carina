@@ -1,7 +1,7 @@
 using System.Net.WebSockets;
 
 using Carina.Api.Live;
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;

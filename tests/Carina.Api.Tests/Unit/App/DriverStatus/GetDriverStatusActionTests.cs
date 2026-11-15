@@ -2,6 +2,7 @@ using Carina.Api.Controllers.DriverStatus;
 using Carina.Api.Responder;
 using Carina.Api.Responder.DriverStatus;
 using Carina.Api.Services;
+using Carina.Api.Tests.Support;
 using Carina.Domain.DriverStatus;
 
 using Microsoft.AspNetCore.Http;

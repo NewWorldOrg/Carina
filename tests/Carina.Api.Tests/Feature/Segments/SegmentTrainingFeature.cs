@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
 using Carina.TestSupport;
@@ -47,7 +47,7 @@ internal sealed class SegmentTrainingFeature : IAsyncDisposable
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthenticationHandler.SchemeName, "anything");
     }
 
-    public WebApplicationFactory<Program> Built { get; }
+    public WebApplicationFactory<global::Program> Built { get; }
 
     public HttpClient Client { get; }
 

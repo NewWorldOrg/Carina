@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 
@@ -20,7 +20,7 @@ internal sealed class ScrubFeature : IAsyncDisposable
     {
         Frames = new HeldFrames(answer);
 
-        WebApplicationFactory<Program> configured = factory
+        WebApplicationFactory<global::Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();

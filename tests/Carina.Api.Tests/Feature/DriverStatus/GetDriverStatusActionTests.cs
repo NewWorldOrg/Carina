@@ -7,8 +7,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-using Carina.Api.Tests.FeatureTest;
-using Carina.Api.Tests.Unit;
+using Carina.Api.Tests.Support;
 using Carina.Domain.DriverStatus;
 using Carina.TestSupport;
 
@@ -431,7 +430,7 @@ public sealed class GetDriverStatusActionTests : IDisposable
 
     private HttpClient ClientReading(IDriverStatusReader? reader)
     {
-        WebApplicationFactory<Program> reading = factory.WithWebHostBuilder(builder =>
+        WebApplicationFactory<global::Program> reading = factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
             {
                 services

@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
@@ -27,7 +27,7 @@ internal sealed class PlaybackFeature : IAsyncDisposable
 
     public PlaybackFeature(IPlaybackFileStore? files = null)
     {
-        WebApplicationFactory<Program> configured = factory
+        WebApplicationFactory<global::Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();

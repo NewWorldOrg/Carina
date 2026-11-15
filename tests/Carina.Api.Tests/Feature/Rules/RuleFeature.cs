@@ -2,8 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
-using Carina.Api.Tests.Unit;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
@@ -154,7 +153,7 @@ internal sealed class RuleFeature : IAsyncDisposable
                 [new ServiceId(Listed), new ServiceId(Alongside)]),
         ]);
 
-        WebApplicationFactory<Program> configured = factory
+        WebApplicationFactory<global::Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();

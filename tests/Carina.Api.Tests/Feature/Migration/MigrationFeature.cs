@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Base;
 using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
@@ -88,7 +88,7 @@ internal sealed class MigrationFeature : IAsyncDisposable
 
     public MigrationFeature()
     {
-        WebApplicationFactory<Program> built = factory
+        WebApplicationFactory<global::Program> built = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();

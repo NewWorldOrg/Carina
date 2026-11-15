@@ -1,20 +1,15 @@
-using System.Net;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
-
-using SameSiteMode = Microsoft.AspNetCore.Http.SameSiteMode;
 
 namespace Carina.Api.Tests.Feature.Auth;
 
@@ -25,7 +20,7 @@ public sealed class SessionCookiePolicyTests(TestingWebApplicationFactory factor
     [Fact]
     public async Task ACookieLeavesWithSameSiteLaxAndOutOfReachOfScripts()
     {
-        WebApplicationFactory<Program> probed = factory.WithWebHostBuilder(builder =>
+        WebApplicationFactory<global::Program> probed = factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services
                     .AddAuthentication(CookieAppendingHandler.SchemeName)

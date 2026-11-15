@@ -1,0 +1,176 @@
+using System.Text;
+
+using Carina.Api.Authentication;
+using Carina.Domain.Auth;
+using Carina.Domain.Base;
+using Carina.Domain.Programmes;
+using Carina.TestSupport;
+
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Net.Http.Headers;
+
+namespace Carina.Api.Tests.Support;
+
+internal sealed class AuthProbe : IAsyncDisposable
+{
+    public const string Password = "a password long enough";
+
+    private readonly TestingWebApplicationFactory factory = new();
+
+    private AuthProbe(bool secure, Action<IServiceCollection>? alsoWired, RecordedStartup? heard = null)
+    {
+        Wired = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.AddSingleton<IAuthSessionRepository>(Sessions);
+            services.AddSingleton<ILocalAccountRepository>(Accounts);
+            services.AddSingleton<IPasswordHasher>(Hasher);
+            services.AddSingleton<IProgrammeRepository>(Programmes);
+            services.AddSingleton<ICollectionEpochRepository>(Epochs);
+            services.AddSingleton<IBoundedRead>(new UnboundedReads());
+
+            if (heard is not null)
+            {
+                services.AddSingleton<ILoggerProvider>(heard);
+            }
+
+            alsoWired?.Invoke(services);
+        }));
+
+        if (heard is not null)
+        {
+            Wired = Wired.WithWebHostBuilder(builder => builder
+                .UseSetting("Logging:LogLevel:Default", nameof(LogLevel.Trace))
+                .UseSetting("Logging:LogLevel:Microsoft", nameof(LogLevel.Trace))
+                .UseSetting("Logging:LogLevel:Microsoft.AspNetCore", nameof(LogLevel.Trace))
+                .UseSetting("Logging:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostics", nameof(LogLevel.Trace))
+                .UseSetting($"Logging:{typeof(RecordedStartup).FullName}:LogLevel:Default", nameof(LogLevel.Trace))
+                .UseSetting(
+                    $"Logging:{typeof(RecordedStartup).FullName}:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostics",
+                    nameof(LogLevel.Trace))
+                .UseSetting(
+                    $"Logging:{typeof(RecordedStartup).FullName}:LogLevel:Microsoft.AspNetCore.Routing.Matching.DfaMatcher",
+                    nameof(LogLevel.Trace)));
+        }
+
+        Client = Wired.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri(secure ? "https://localhost" : "http://localhost"),
+            HandleCookies = true,
+        });
+
+        Client.DefaultRequestHeaders.Remove(HeaderNames.Origin);
+        Client.DefaultRequestHeaders.Add(
+            HeaderNames.Origin,
+            Client.BaseAddress!.GetLeftPart(UriPartial.Authority));
+    }
+
+    public static StringContent Json() => new("{}", Encoding.UTF8, "application/json");
+
+    public WebApplicationFactory<Program> Wired { get; }
+
+    public HttpClient Client { get; }
+
+    public HeldAuthSessions Sessions { get; } = new();
+
+    public HeldLocalAccount Accounts { get; } = new();
+
+    public QuickPasswordHasher Hasher { get; } = new();
+
+    public HeldProgrammes Programmes { get; } = new();
+
+    public HeldEpochs Epochs { get; } = new();
+
+    public static AuthProbe OverHttp(Action<IServiceCollection>? alsoWired = null)
+        => new(secure: false, alsoWired);
+
+    /// <summary>
+    /// A probe whose every log, the framework's included, is turned up to its finest and heard by <paramref name="heard"/>.
+    /// </summary>
+    public static AuthProbe OverHttpHeardBy(RecordedStartup heard, Action<IServiceCollection>? alsoWired = null)
+        => new(secure: false, alsoWired, heard);
+
+    public static AuthProbe OverHttps() => new(secure: true, alsoWired: null);
+
+    public AuthProbe WithAnAccount()
+    {
+        Accounts.Account = LocalAccount.Bootstrap(
+            FirstCredentials.Username,
+            Hasher.Hash(Password, PasswordHashPolicy.Default),
+            DateTime.UtcNow);
+
+        return this;
+    }
+
+    public AuthSession Sitting(string device)
+    {
+        SessionId cookie = SessionId.Issue();
+
+        return Sessions.Seat(
+            cookie,
+            AuthSession.Start(
+                cookie,
+                new Subject(FirstCredentials.Username),
+                FirstCredentials.Username,
+                AuthMethod.Local,
+                device,
+                DateTime.UtcNow));
+    }
+
+    public Task<HttpResponseMessage> LogInAsync(string username, string password)
+        => Client.PostAsJsonAsync(
+            new Uri("/api/auth/login", UriKind.Relative),
+            new { username, password });
+
+    public HttpClient Relaying(string carried)
+    {
+        HttpClient client = Wired.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("http://localhost"),
+            AllowAutoRedirect = false,
+        });
+
+        client.DefaultRequestHeaders.Add(HeaderNames.Cookie, carried);
+
+        return client;
+    }
+
+    public async Task<HttpClient> RelayingAsync() => Relaying(await SignedInCookieAsync());
+
+    public async Task<string> SignedInCookieAsync()
+    {
+        WithAnAccount();
+
+        using HttpResponseMessage response = await LogInAsync(FirstCredentials.Username, Password);
+
+        response.EnsureSuccessStatusCode();
+
+        string handed = response.Headers.GetValues(HeaderNames.SetCookie).Single();
+
+        return handed[..handed.IndexOf(';', StringComparison.Ordinal)];
+    }
+
+    public async Task<AuthSession> SignedInAsync()
+    {
+        WithAnAccount();
+
+        using HttpResponseMessage response = await LogInAsync(FirstCredentials.Username, Password);
+
+        response.EnsureSuccessStatusCode();
+
+        string handed = response.Headers.GetValues(HeaderNames.SetCookie).Single();
+        string carried = handed[$"{SessionCookie.Name}=".Length..handed.IndexOf(';', StringComparison.Ordinal)];
+
+        Sessions.Remember(new SessionId(carried));
+
+        return Sessions.Sessions[^1];
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Client.Dispose();
+        await factory.DisposeAsync();
+    }
+}

@@ -1,12 +1,10 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
-using Carina.Infrastructure.Scanning;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -18,7 +16,7 @@ namespace Carina.Api.Tests.Feature.Scans;
 internal sealed class ScanFeature : IAsyncDisposable
 {
     private readonly TestingWebApplicationFactory factory = new();
-    private readonly WebApplicationFactory<Program> configured;
+    private readonly WebApplicationFactory<global::Program> configured;
 
     public ScanFeature()
     {

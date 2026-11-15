@@ -1,9 +1,15 @@
+extern alias driver;
+
 using System.Net.Sockets;
+using System.Runtime.Versioning;
 
 using Carina.Domain.Driver;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
 using Carina.TestSupport;
+
+using driver::Puppis.Driver.Sessions;
+using driver::Puppis.Driver.Tuning.Dvb;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -781,6 +787,27 @@ public sealed class DriverIpcClientTests
         Assert.Equal(DriverCallOutcome.Unreachable, call.Outcome);
         Assert.Equal("The driver answered with something this app could not read.", call.Failure);
     }
+
+    [Fact(DisplayName = "BR-D-022: the app waits for a session start longer than the driver may take to answer one")]
+    [SupportedOSPlatform("linux")]
+    public void TheAppWaitsForASessionStartLongerThanTheDriverMayTakeToAnswerOne()
+    {
+        TimeSpan theDriverMayTake =
+            TunerSessionManager.HandOverLimit
+            + TunerSessionManager.HandOverLimit
+            + DvbTunerSettings.Default.LockPatience;
+
+        Assert.True(
+            DriverIpcClient.SessionStartPatience > theDriverMayTake,
+            $"A start may wait {TunerSessionManager.HandOverLimit} for a session still starting, "
+            + $"{TunerSessionManager.HandOverLimit} for what it displaces to let go and "
+            + $"{DvbTunerSettings.Default.LockPatience} for the lock, {theDriverMayTake} in all, "
+            + $"and the app gives up after {DriverIpcClient.SessionStartPatience}.");
+    }
+
+    [Fact(DisplayName = "BR-D-022: every other call is still given up on sooner than a session start")]
+    public void EveryOtherCallIsStillGivenUpOnSoonerThanASessionStart()
+        => Assert.True(DriverIpcClient.RequestPatience < DriverIpcClient.SessionStartPatience);
 
     private static IReadOnlyList<string> WhereItIs(string socketPath)
         => [socketPath, Path.GetDirectoryName(socketPath)!, Path.GetFileName(socketPath)];

@@ -81,7 +81,6 @@ public sealed class CreateEncodeDestinationActionTests
         Assert.Empty(feature.Destinations.Destinations);
     }
 
-
     private static IEnumerable<JsonElement> Numbers(JsonElement element) => element.ValueKind switch
     {
         JsonValueKind.Object => element.EnumerateObject().SelectMany(property => Numbers(property.Value)),

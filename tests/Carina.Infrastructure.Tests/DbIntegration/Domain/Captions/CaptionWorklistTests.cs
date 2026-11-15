@@ -6,6 +6,7 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Tests.Fixtures.Integrity;
+using Carina.Infrastructure.Tests.Fixtures.Recordings;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,7 +14,8 @@ namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Captions;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class CaptionWorklistTests(RepositoryDatabase database)
+public sealed class CaptionWorklistTests(RepositoryDatabase database, MigratedRepositoryDatabase migrated)
+    : IClassFixture<MigratedRepositoryDatabase>
 {
     private static readonly DateTime Now = new(2026, 10, 3, 6, 0, 0, DateTimeKind.Utc);
 
@@ -218,6 +220,29 @@ public sealed class CaptionWorklistTests(RepositoryDatabase database)
         => Assert.Equal(
             "atMost",
             (await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => AwaitingAsync(Alone(), 0))).ParamName);
+
+    [Fact(DisplayName = "BR-PD-016: the recordings the caption pass reads as waiting are the ones each recording says awaits its captions, on the instant of the descrambling and either side of it")]
+    public async Task TheRecordingsWaitingForCaptionsAreTheOnesEachSaysAwaitsThem()
+    {
+        await using ServiceProvider container = migrated.Infrastructure();
+
+        IReadOnlyList<Recording> matrix = await RecordingMatrix.LaidAsync(container);
+
+        Assert.Contains(matrix, recording => recording.AwaitsCaptions);
+        Assert.Contains(matrix, recording => !recording.AwaitsCaptions);
+        Assert.Contains(matrix, recording => recording.DescrambledAt is { } at && at == recording.CaptionsMadeAt);
+
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        ICaptionWorklist worklist = context.ServiceProvider.GetRequiredService<ICaptionWorklist>();
+
+        IReadOnlyList<CaptionSubject> within = await worklist.AwaitingAsync([RecordingMatrix.Bulk], 1_000, CancellationToken.None);
+        int beyond = await worklist.WaitingOutOfReachAsync([RecordingMatrix.Bulk], CancellationToken.None);
+
+        Assert.Equal(
+            RecordingMatrix.Ids(matrix.Where(recording => recording.AwaitsCaptions && recording.OutputRoot.Equals(RecordingMatrix.Bulk))),
+            RecordingMatrix.Ids(within.Select(subject => subject.Id)));
+        Assert.Equal(matrix.Count(recording => recording.AwaitsCaptions && recording.OutputRoot.Equals(RecordingMatrix.Spare)), beyond);
+    }
 
     private static OutputRoot Alone() => new("captions" + Guid.NewGuid().ToString("N")[..12]);
 

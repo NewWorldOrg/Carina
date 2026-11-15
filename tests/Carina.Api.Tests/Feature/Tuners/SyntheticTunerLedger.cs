@@ -2,7 +2,7 @@ extern alias driver;
 
 using System.Runtime.Versioning;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 
 using driver::Puppis.Driver.Configuration;
 

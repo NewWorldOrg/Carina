@@ -1,4 +1,4 @@
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 
 using Microsoft.AspNetCore.Mvc.Testing;
 

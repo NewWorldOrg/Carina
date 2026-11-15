@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.TestSupport;
 
 using Puppis.Contracts;
@@ -98,7 +98,7 @@ public sealed class GetTunerHealthActionTests
     {
         await using DriverFeature feature = await StartAsync(TunerKind.Unspecified);
 
-        (HttpStatusCode status, JsonElement body) = await DriverFeature.ReadAsync(await feature.Client.GetAsync(Health));
+        (HttpStatusCode status, JsonElement body) = await DriverFeature.ReadAsync(await feature.Client.GetAsync(TunerHealthFeature.Health));
         JsonElement data = body.GetProperty("data");
         JsonElement systems = data.GetProperty("systems");
 
@@ -160,7 +160,7 @@ public sealed class GetTunerHealthActionTests
     {
         await using DriverFeature feature = await StartAsync(TunerKind.Terrestrial);
 
-        (HttpStatusCode status, JsonElement body) = await DriverFeature.ReadAsync(await feature.Client.GetAsync(Health));
+        (HttpStatusCode status, JsonElement body) = await DriverFeature.ReadAsync(await feature.Client.GetAsync(TunerHealthFeature.Health));
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(24, body.GetProperty("data").GetProperty("hoursOfSilence").GetInt32());
@@ -171,7 +171,7 @@ public sealed class GetTunerHealthActionTests
     {
         await using DriverFeature feature = await DriverFeature.StartAsync();
 
-        using HttpResponseMessage response = await feature.Client.GetAsync(Health);
+        using HttpResponseMessage response = await feature.Client.GetAsync(TunerHealthFeature.Health);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }

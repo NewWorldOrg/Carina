@@ -3,7 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 
 using Carina.Api.Playback;
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Encodings;
@@ -2089,6 +2089,40 @@ public sealed class PlayDeliveryTests
         Recording recording = feature.Ended();
 
         Assert.Equal("none", await feature.PlannedAsync(recording));
+    }
+
+    [Fact]
+    public async Task ThePlayerIsAskedToStartAtTheSecondADropIsMarkedAt()
+    {
+        await using var feature = new MarkedRecordingFeature();
+        Recording recording = feature.EndedWithDropsAt(12);
+
+        using HttpResponseMessage played = await feature.PlayedFromAsync(recording, 12);
+
+        Assert.Equal(HttpStatusCode.OK, played.StatusCode);
+        Assert.Equal("12", Header(played, PlaybackHeaders.StartsAt));
+        Assert.Equal(TimeSpan.FromSeconds(12), Assert.Single(feature.Player.AskedFrom));
+    }
+
+    [Fact]
+    public async Task ThePlayerStartsAtEverySecondADropIsMarkedAtRatherThanOnlyTheFirst()
+    {
+        await using var feature = new MarkedRecordingFeature();
+        Recording recording = feature.EndedWithDropsAt(12, 40, 903);
+
+        foreach (int second in new[] { 12, 40, 903 })
+        {
+            using HttpResponseMessage played = await feature.PlayedFromAsync(recording, second);
+
+            Assert.Equal(HttpStatusCode.OK, played.StatusCode);
+            Assert.Equal(
+                second.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Header(played, PlaybackHeaders.StartsAt));
+        }
+
+        Assert.Equal(
+            [TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(903)],
+            feature.Player.AskedFrom);
     }
 
     private static async Task<(HttpStatusCode Status, JsonElement Body)> KeepAsync(

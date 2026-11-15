@@ -336,7 +336,6 @@ public sealed class QueueEncodeJobActionTests
         Assert.Empty(feature.Events.Signalled);
     }
 
-
     private static IEnumerable<JsonElement> Numbers(JsonElement element) => element.ValueKind switch
     {
         JsonValueKind.Object => element.EnumerateObject().SelectMany(property => Numbers(property.Value)),

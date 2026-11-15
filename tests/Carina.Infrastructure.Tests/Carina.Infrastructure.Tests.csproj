@@ -5,6 +5,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Puppis.Driver" Aliases="driver" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/Carina.Api/Carina.Api.csproj" />
     <ProjectReference Include="../../src/Carina.Infrastructure/Carina.Infrastructure.csproj" />
     <ProjectReference Include="../../src/Carina.Db/Carina.Db.csproj" Aliases="db" />

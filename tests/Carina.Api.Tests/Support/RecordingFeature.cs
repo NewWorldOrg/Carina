@@ -1,0 +1,486 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Text.Json;
+
+using Carina.Api.Services;
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
+using Carina.Domain.Driver;
+using Carina.Domain.Encodings;
+using Carina.Domain.Events;
+using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
+using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
+using Carina.Domain.Viewing;
+using Carina.Infrastructure.Thumbnails;
+using Carina.TestSupport;
+
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+
+using Puppis.Contracts;
+
+namespace Carina.Api.Tests.Support;
+
+internal sealed class WritingDriver : IDriverClient
+{
+    private readonly List<SessionSnapshot> sessions = [];
+
+    public List<(SessionId Session, string Reason)> Stopped { get; } = [];
+
+    public string? Unreachable { get; set; }
+
+    public DriverProblem? RefusesToStop { get; set; }
+
+    public WritingDriver Writing(SessionId session, string recordingId)
+    {
+        sessions.Add(new SessionSnapshot(
+            session,
+            SessionPurpose.Recording,
+            "pt3-0",
+            SessionState.Active,
+            RecordingFeature.Noon)
+        {
+            RecordingId = recordingId,
+        });
+
+        return this;
+    }
+
+    public Task<DriverCall<IReadOnlyList<SessionSnapshot>>> GetActiveSessionsAsync(
+        CancellationToken cancellationToken)
+        => Task.FromResult(Unreachable is { } failure
+            ? DriverCall<IReadOnlyList<SessionSnapshot>>.Unreachable(failure)
+            : DriverCall<IReadOnlyList<SessionSnapshot>>.Reached([.. sessions]));
+
+    public Task<DriverCall<SessionSnapshot>> ExtendSessionAsync(
+        SessionId sessionId,
+        DateTimeOffset endsAt,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<SessionSnapshot>> StopSessionAsync(
+        SessionId sessionId,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        if (RefusesToStop is { } problem)
+        {
+            return Task.FromResult(DriverCall<SessionSnapshot>.Refused(problem));
+        }
+
+        Stopped.Add((sessionId, reason));
+        sessions.RemoveAll(session => session.SessionId == sessionId);
+
+        return Task.FromResult(DriverCall<SessionSnapshot>.Reached(
+            new SessionSnapshot(
+                sessionId,
+                SessionPurpose.Recording,
+                "pt3-0",
+                SessionState.Stopped,
+                RecordingFeature.Noon)));
+    }
+
+    public Task<DriverCall<DriverHello>> GetHealthAsync(CancellationToken cancellationToken)
+        => Task.FromResult(DriverCall<DriverHello>.Reached(
+            new DriverHello(DriverProtocol.Version, "instance-a", [])));
+
+    public Task<DriverCall<IReadOnlyList<TunerSnapshot>>> GetTunersAsync(CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<IReadOnlyList<DetectedDeviceDto>>> GetDetectedDevicesAsync(
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<TunerLedgerDto>> GetTunerLedgerAsync(CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<TunerLedgerDto>> ReplaceTunerLedgerAsync(
+        IReadOnlyList<TunerConfigEntry> tuners,
+        string? expectedSavedHash,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<TunerLedgerDto>> SwitchLnbPowerAsync(
+        string deviceId,
+        bool on,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<DriverRestartDto>> RequestRestartAsync(CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<TunerSnapshot>> ToggleTunerAsync(
+        string deviceId,
+        bool disabled,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<SessionSnapshot>> GetSessionAsync(
+        SessionId sessionId,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<SessionSnapshot>> StartSessionAsync(
+        StartSessionRequest request,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<IReadOnlyList<DiagnosticSnapshot>>> GetDiagnosticsAsync(
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<IReadOnlyList<StorageRootDto>>> GetStorageAsync(CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<Stream>> OpenSessionStreamAsync(
+        SessionId sessionId,
+        string? subscriber,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<StrayFileErasedDto>> EraseStrayFileAsync(
+        StrayFileErasureRequest request,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<RecordingErasedDto>> EraseRecordingAsync(
+        string recordingId,
+        string outputRoot,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<Stream>> OpenEventsAsync(CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+}
+
+internal sealed class ScriptedRemaker(HeldRecordings recordings) : IThumbnailRemaker
+{
+    public ThumbnailRemake Answer { get; set; } = ThumbnailRemake.Drawn;
+
+    public List<RecordingId> Asked { get; } = [];
+
+    public ThumbnailAskedAgain AskAgainAnswer { get; set; } = ThumbnailAskedAgain.Queued;
+
+    public Dictionary<RecordingId, ThumbnailAskedAgain> AskAgainAnswersByRecording { get; } = [];
+
+    public HashSet<RecordingId> ThrowsWhenAskedAgainFor { get; } = [];
+
+    public List<RecordingId> AskedAgain { get; } = [];
+
+    public int Nudges { get; private set; }
+
+    public void Nudge() => Nudges++;
+
+    public Task<ThumbnailRemake> RemakeAsync(RecordingId id, CancellationToken cancellationToken)
+    {
+        Asked.Add(id);
+
+        if (Answer is ThumbnailRemake.Drawn or ThumbnailRemake.Skipped or ThumbnailRemake.Failed
+            && recordings.Recordings.FirstOrDefault(recording => recording.Id.Equals(id)) is { } held)
+        {
+            held.Illustrate(
+                Answer switch
+                {
+                    ThumbnailRemake.Drawn => ThumbnailState.Ready,
+                    ThumbnailRemake.Skipped => ThumbnailState.Skipped,
+                    _ => ThumbnailState.Failed,
+                },
+                Answer is ThumbnailRemake.Failed ? ThumbnailFault.SourceOutOfReach : null);
+        }
+
+        return Task.FromResult(Answer);
+    }
+
+    public Task<ThumbnailAskedAgain> AskAgainAsync(RecordingId id, CancellationToken cancellationToken)
+    {
+        AskedAgain.Add(id);
+
+        if (ThrowsWhenAskedAgainFor.Contains(id))
+        {
+            throw new InvalidOperationException("the store went away while this recording was being queued");
+        }
+
+        ThumbnailAskedAgain answer = AskAgainAnswersByRecording.TryGetValue(id, out ThumbnailAskedAgain scripted) ? scripted : AskAgainAnswer;
+
+        if (answer is ThumbnailAskedAgain.Queued
+            && recordings.Recordings.FirstOrDefault(recording => recording.Id.Equals(id)) is { } held)
+        {
+            held.Illustrate(ThumbnailState.Pending);
+        }
+
+        return Task.FromResult(answer);
+    }
+}
+
+internal sealed class HeldRecordingEncodes : IRecordingEncodes
+{
+    public bool UnderWay { get; set; }
+
+    public Func<bool>? UnderWayWhenAsked { get; set; }
+
+    public EncodesErased Answer { get; set; } = new(0, []);
+
+    public Action? WhenErasing { get; set; }
+
+    public List<RecordingId> Asked { get; } = [];
+
+    public Task<bool> AnyUnderWayAsync(RecordingId recordingId, CancellationToken cancellationToken)
+        => Task.FromResult(UnderWayWhenAsked?.Invoke() ?? UnderWay);
+
+    public Task<EncodesErased> EraseAsync(RecordingId recordingId, CancellationToken cancellationToken)
+    {
+        Asked.Add(recordingId);
+        WhenErasing?.Invoke();
+
+        return Task.FromResult(Answer);
+    }
+}
+
+internal sealed class ScriptedEraser : IRecordingFileEraser
+{
+    public RecordingErasure Answer { get; set; } = RecordingErasure.Erased(1);
+
+    public Action? WhenErasing { get; set; }
+
+    public bool NeverFinishes { get; set; }
+
+    public List<RecordingId> Asked { get; } = [];
+
+    public Task<RecordingErasure> EraseAsync(
+        RecordingId id,
+        OutputRoot root,
+        CancellationToken cancellationToken)
+    {
+        Asked.Add(id);
+        WhenErasing?.Invoke();
+
+        return NeverFinishes ? WaitingAsync(cancellationToken) : Task.FromResult(Answer);
+    }
+
+    private static async Task<RecordingErasure> WaitingAsync(CancellationToken cancellationToken)
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+
+        return RecordingErasure.Erased(0);
+    }
+}
+
+internal sealed class RecordingFeature : IAsyncDisposable
+{
+    public static readonly DateTime Noon = new(2026, 8, 24, 12, 0, 0, DateTimeKind.Utc);
+
+    private readonly TestingWebApplicationFactory factory = new();
+
+    public RecordingFeature()
+        : this(null)
+    {
+    }
+
+    public RecordingFeature(IRecordingFileEraser? erasing)
+        : this(erasing, RecordingDeletions.LongestByDefault)
+    {
+    }
+
+    public RecordingFeature(IRecordingFileEraser? erasing, TimeSpan longestDeletion)
+    {
+        Remaker = new ScriptedRemaker(Recordings);
+        IRecordingFileEraser erasingWith = erasing ?? Eraser;
+
+        Built = factory
+            .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostedService>();
+                services.AddSingleton<IRecordingDirectory>(Recordings);
+                services.AddSingleton<IAppEventPublisher>(Events);
+                services.AddSingleton<IEncodeStandingReader>(Jobs);
+                services.AddSingleton<IQualityThresholdRepository>(Thresholds);
+                services.AddSingleton<IQualityThresholdChangeRepository>(ThresholdChanges);
+                services.AddSingleton<IAtomicWrite, UnguardedWrites>();
+                services.AddSingleton<IDriverClient>(Driver);
+                services.AddSingleton<IThumbnailRemaker>(Remaker);
+                services.AddSingleton(erasingWith);
+                services.AddSingleton<IRecordingEncodes>(Encodes);
+                services.AddSingleton<IPlaybackPositionRepository>(Positions);
+                services.AddSingleton(new RecordingDeletions(longestDeletion));
+                services.AddSingleton<TimeProvider>(new FixedTimeProvider(Noon.AddMinutes(30)));
+            }));
+
+        Client = Built.WithTestScheme().CreateClient();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            TestAuthenticationHandler.SchemeName,
+            "anything");
+    }
+
+    public WebApplicationFactory<Program> Built { get; }
+
+    public HttpClient Client { get; }
+
+    public HeldRecordings Recordings { get; } = new();
+
+    public HeldPlaybackPositions Positions { get; } = new();
+
+    public SilentEvents Events { get; } = new();
+
+    public HeldEncodeJobs Jobs { get; } = new();
+
+    public HeldQualityThresholds Thresholds { get; } = new();
+
+    public HeldQualityThresholdChanges ThresholdChanges { get; } = new();
+
+    public WritingDriver Driver { get; } = new();
+
+    public ScriptedRemaker Remaker { get; }
+
+    public ScriptedEraser Eraser { get; } = new();
+
+    public HeldRecordingEncodes Encodes { get; } = new();
+
+    public static Recording Begin(
+        RecordingId id,
+        int networkId = 32736,
+        int serviceId = 1024,
+        int eventId = 4001,
+        DateTime? startedAt = null,
+        TimeSpan? window = null,
+        string name = "A programme",
+        string summary = "What it is about",
+        string extended = "",
+        IReadOnlyList<ProgrammeGenre>? genres = null,
+        string? groupKey = null,
+        BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced,
+        bool encodeWhenRecorded = true)
+    {
+        DateTime started = startedAt ?? Noon;
+
+        return Recording.Begin(
+            id,
+            null,
+            new ProgrammeRef(new NetworkId(networkId), new ServiceId(serviceId), new EventId(eventId), started),
+            new OutputRoot("bulk"),
+            RecordingFileName.For(id, ".m2ts"),
+            started,
+            started + (window ?? TimeSpan.FromHours(1)),
+            new ProgrammeSnapshot(name, summary, extended, genres ?? [], started, audio, sounds),
+            groupKey is null ? null : new BroadcastGroupKey(groupKey),
+            groupRole,
+            started,
+            new TunerDeviceId("pt3-0"),
+            encodeWhenRecorded);
+    }
+
+    public Recording Held(
+        int networkId = 32736,
+        int serviceId = 1024,
+        int eventId = 4001,
+        DateTime? startedAt = null,
+        TimeSpan? window = null,
+        string name = "A programme",
+        string summary = "What it is about",
+        string extended = "",
+        IReadOnlyList<ProgrammeGenre>? genres = null,
+        string? groupKey = null,
+        BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced,
+        bool encodeWhenRecorded = true)
+    {
+        Recording recording = Begin(
+            RecordingId.New(),
+            networkId,
+            serviceId,
+            eventId,
+            startedAt,
+            window,
+            name,
+            summary,
+            extended,
+            genres,
+            groupKey,
+            groupRole,
+            audio,
+            sounds,
+            encodeWhenRecorded);
+
+        Recordings.Recordings.Add(recording);
+
+        return recording;
+    }
+
+    public async Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(string path)
+    {
+        using HttpResponseMessage response = await Client.GetAsync(new Uri(path, UriKind.Relative));
+
+        return await ReadAsync(response);
+    }
+
+    public async Task<string> GetTextAsync(string path)
+    {
+        using HttpResponseMessage response = await Client.GetAsync(new Uri(path, UriKind.Relative));
+
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
+
+    public HttpClient FromElsewhere()
+    {
+        HttpClient client = Built.WithTestScheme().CreateClient();
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthenticationHandler.SchemeName, "anything");
+        client.DefaultRequestHeaders.Remove(Microsoft.Net.Http.Headers.HeaderNames.Origin);
+        client.DefaultRequestHeaders.Add(Microsoft.Net.Http.Headers.HeaderNames.Origin, "https://elsewhere.example");
+
+        return client;
+    }
+
+    public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null, HttpClient? client = null)
+    {
+        using HttpResponseMessage response = await (client ?? Client).PostAsJsonAsync(
+            new Uri(path, UriKind.Relative),
+            body ?? new { });
+
+        return await ReadAsync(response);
+    }
+
+    public async Task<(HttpStatusCode Status, JsonElement Body)> PatchAsync(string path, object body)
+    {
+        using HttpResponseMessage response = await Client.PatchAsJsonAsync(new Uri(path, UriKind.Relative), body);
+
+        return await ReadAsync(response);
+    }
+
+    public async Task<(HttpStatusCode Status, JsonElement Body)> DeleteAsync(string path)
+    {
+        using var asking = new HttpRequestMessage(HttpMethod.Delete, new Uri(path, UriKind.Relative));
+        using HttpResponseMessage response = await Client.SendAsync(asking);
+
+        return await ReadAsync(response);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Client.Dispose();
+        await factory.DisposeAsync();
+    }
+
+    private static async Task<(HttpStatusCode Status, JsonElement Body)> ReadAsync(HttpResponseMessage response)
+    {
+        string body = await response.Content.ReadAsStringAsync();
+
+        if (!body.StartsWith('{') && !body.StartsWith('['))
+        {
+            return (response.StatusCode, default);
+        }
+
+        using var document = JsonDocument.Parse(body);
+
+        return (response.StatusCode, document.RootElement.Clone());
+    }
+}

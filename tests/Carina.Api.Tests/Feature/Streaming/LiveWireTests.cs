@@ -4,7 +4,7 @@ using System.Text.Json;
 
 using Carina.Api.Events;
 using Carina.Api.Live;
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.BroadcastTestSupport;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;

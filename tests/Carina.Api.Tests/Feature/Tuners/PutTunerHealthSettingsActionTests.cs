@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 
 using Puppis.Contracts;
 
@@ -47,7 +47,7 @@ public sealed class PutTunerHealthSettingsActionTests
 
         Assert.Equal(HttpStatusCode.OK, await AllowAsync(feature, hours));
 
-        (HttpStatusCode _, JsonElement body) = await DriverFeature.ReadAsync(await feature.Client.GetAsync(Health));
+        (HttpStatusCode _, JsonElement body) = await DriverFeature.ReadAsync(await feature.Client.GetAsync(TunerHealthFeature.Health));
 
         Assert.Equal(hours, body.GetProperty("data").GetProperty("hoursOfSilence").GetInt32());
     }
@@ -82,7 +82,7 @@ public sealed class PutTunerHealthSettingsActionTests
 
         Assert.Equal(HttpStatusCode.BadRequest, await AllowAsync(feature, hours));
 
-        (HttpStatusCode _, JsonElement body) = await DriverFeature.ReadAsync(await feature.Client.GetAsync(Health));
+        (HttpStatusCode _, JsonElement body) = await DriverFeature.ReadAsync(await feature.Client.GetAsync(TunerHealthFeature.Health));
 
         Assert.Equal(24, body.GetProperty("data").GetProperty("hoursOfSilence").GetInt32());
     }

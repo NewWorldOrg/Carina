@@ -4,7 +4,7 @@ using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
@@ -483,7 +483,7 @@ public sealed class DeleteIntegrityFindingActionTests
     {
         private readonly TestingWebApplicationFactory factory;
 
-        private readonly WebApplicationFactory<Program> configured;
+        private readonly WebApplicationFactory<global::Program> configured;
 
         public AppAgainstTheDriver(SyntheticDriverHost driver)
         {

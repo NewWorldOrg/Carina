@@ -1,14 +1,16 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
 using Carina.Api.Live;
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 
@@ -16,6 +18,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Net.Http.Headers;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.Feature.Streaming;
 
@@ -31,6 +35,8 @@ public sealed partial class LiveStreamDeliveryTests
     private static readonly DateTime At = new(2026, 9, 3, 0, 0, 0, DateTimeKind.Utc);
 
     private static readonly TimeSpan NoTimeAtAllToSayAnything = TimeSpan.FromMilliseconds(200);
+
+    private static readonly TimeSpan Window = TimeSpan.FromSeconds(20);
 
     private readonly PipedSupply supply = new();
 
@@ -362,6 +368,33 @@ public sealed partial class LiveStreamDeliveryTests
 
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
         Assert.Empty(Seating(probe).Asked);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    public async Task AViewerWatchingWhatIsBeingRecordedRidesTheSameTunerRatherThanAskingForASecondOne()
+    {
+        await using AppSwapFeature feature = await AppSwapFeature.StartAsync(window: Window);
+
+        RecordingRun begun = await feature.App.TickAsync();
+        RecordingId started = Assert.Single(begun.Started);
+
+        await feature.UntilTheFileGrowsPast(feature.FileOf(started), 0);
+
+        using HttpResponseMessage opened = await feature.App.Client.GetAsync(
+            Exit,
+            HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
+
+        SessionSnapshot watching = await ViewerSessions.WatchedSessionAsync(feature);
+        SessionSnapshot writing = Assert.Single(
+            await feature.App.SessionsAsync(),
+            session => session.Purpose is SessionPurpose.Recording);
+
+        Assert.Equal(writing.DeviceId, watching.DeviceId);
+        Assert.Equal(SessionState.Active, writing.State);
+        Assert.Equal(started.Wire, writing.RecordingId);
     }
 
     private static Uri Handshake()
