@@ -8,9 +8,10 @@ using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.TestSupport;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Health;
 
-public sealed class HealthEndpointTests(TestingWebApplicationFactory factory)
+[Trait("Category", "Feature")]
+public sealed class GetHealthActionTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {
     [Fact]
