@@ -12,8 +12,9 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Program;
 
+[Trait("Category", "Feature")]
 public sealed class FirstStartTests
 {
     [Fact]
@@ -22,7 +23,7 @@ public sealed class FirstStartTests
         var log = new RecordedStartup();
 
         await using var factory = new TestingWebApplicationFactory();
-        WebApplicationFactory<Program> wired = factory.WithWebHostBuilder(builder =>
+        WebApplicationFactory<global::Program> wired = factory.WithWebHostBuilder(builder =>
         {
             builder.UseSetting(TrustedProxies.ProxiesKey, string.Empty);
             builder.UseSetting(TrustedProxies.NetworksKey, string.Empty);

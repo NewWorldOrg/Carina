@@ -284,7 +284,7 @@ internal sealed class NotificationFeature : IAsyncDisposable
         Client = Signed();
     }
 
-    public WebApplicationFactory<Program> Built { get; }
+    public WebApplicationFactory<global::Program> Built { get; }
 
     public HttpClient Client { get; }
 

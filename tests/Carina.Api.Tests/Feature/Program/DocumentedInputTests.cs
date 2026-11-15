@@ -3,8 +3,9 @@ using System.Text.Json.Nodes;
 using Carina.Api.Playback;
 using Carina.Api.Tests.Support;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Program;
 
+[Trait("Category", "Feature")]
 public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

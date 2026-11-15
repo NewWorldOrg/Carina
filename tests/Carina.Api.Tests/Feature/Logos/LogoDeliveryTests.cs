@@ -152,7 +152,7 @@ public sealed class LogoDeliveryTests
 
         public LogoFeature()
         {
-            WebApplicationFactory<Program> configured = factory
+            WebApplicationFactory<global::Program> configured = factory
                 .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
                 {
                     services.RemoveAll<IHostedService>();

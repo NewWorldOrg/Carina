@@ -600,7 +600,7 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests(TestingWebApplicati
 
     private async Task<HttpResponseMessage> AskAsync(string method, string path)
     {
-        WebApplicationFactory<Program> guarded = factory.WithTestScheme();
+        WebApplicationFactory<global::Program> guarded = factory.WithTestScheme();
         using HttpClient client = guarded.CreateClient();
         using var asking = new HttpRequestMessage(new HttpMethod(method), new Uri(path, UriKind.Relative));
 
@@ -610,7 +610,7 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests(TestingWebApplicati
     private static string ReturnTargetOf(string sentTo)
         => Uri.UnescapeDataString(sentTo[(sentTo.IndexOf('=', StringComparison.Ordinal) + 1)..]);
 
-    private static HttpClient Browsing(WebApplicationFactory<Program> wired)
+    private static HttpClient Browsing(WebApplicationFactory<global::Program> wired)
     {
         HttpClient client = wired.CreateClient(new WebApplicationFactoryClientOptions
         {

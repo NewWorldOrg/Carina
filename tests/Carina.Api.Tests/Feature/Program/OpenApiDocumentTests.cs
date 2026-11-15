@@ -9,8 +9,9 @@ using Carina.Api.Responder.Recordings;
 using Carina.Api.Tests.Support;
 using Carina.Domain.Streaming;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Program;
 
+[Trait("Category", "Feature")]
 public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

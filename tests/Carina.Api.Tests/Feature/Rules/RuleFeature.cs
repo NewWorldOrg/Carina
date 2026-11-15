@@ -153,7 +153,7 @@ internal sealed class RuleFeature : IAsyncDisposable
                 [new ServiceId(Listed), new ServiceId(Alongside)]),
         ]);
 
-        WebApplicationFactory<Program> configured = factory
+        WebApplicationFactory<global::Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();

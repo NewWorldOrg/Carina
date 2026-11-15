@@ -6,8 +6,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Support;
 
+[Trait("Category", "Feature")]
 public sealed class DeletingSurfaceRuleSelfCheckTests
 {
     public const string LongWayRound = "DELETE /api/recordings/{id}/fixture-only";

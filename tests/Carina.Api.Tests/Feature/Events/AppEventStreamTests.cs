@@ -42,7 +42,7 @@ public sealed class AppEventStreamTests(TestingWebApplicationFactory factory)
     [Fact]
     public async Task ASignalRaisedOnTheHubArrivesOnTheOpenStream()
     {
-        using WebApplicationFactory<Program> authenticated = factory.WithTestScheme();
+        using WebApplicationFactory<global::Program> authenticated = factory.WithTestScheme();
         AppEventHub hub = authenticated.Services.GetRequiredService<AppEventHub>();
 
         using HttpClient client = authenticated.CreateClient();

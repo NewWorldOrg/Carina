@@ -21,7 +21,7 @@ internal sealed class DrawnFeature : IAsyncDisposable
 
     public DrawnFeature(bool anywhereToPutThem = true)
     {
-        WebApplicationFactory<Program> configured = factory
+        WebApplicationFactory<global::Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();

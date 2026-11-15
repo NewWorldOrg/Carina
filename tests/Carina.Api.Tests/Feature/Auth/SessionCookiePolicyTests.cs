@@ -25,7 +25,7 @@ public sealed class SessionCookiePolicyTests(TestingWebApplicationFactory factor
     [Fact]
     public async Task ACookieLeavesWithSameSiteLaxAndOutOfReachOfScripts()
     {
-        WebApplicationFactory<Program> probed = factory.WithWebHostBuilder(builder =>
+        WebApplicationFactory<global::Program> probed = factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
                 services
                     .AddAuthentication(CookieAppendingHandler.SchemeName)

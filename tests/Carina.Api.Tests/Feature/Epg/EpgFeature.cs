@@ -21,8 +21,8 @@ namespace Carina.Api.Tests.Feature.Epg;
 internal sealed class EpgFeature : IAsyncDisposable
 {
     private readonly TestingWebApplicationFactory factory = new();
-    private readonly WebApplicationFactory<Program> configured;
-    private readonly WebApplicationFactory<Program> authenticated;
+    private readonly WebApplicationFactory<global::Program> configured;
+    private readonly WebApplicationFactory<global::Program> authenticated;
 
     public EpgFeature(
         IReadOnlyList<BroadcastStream>? streams = null,

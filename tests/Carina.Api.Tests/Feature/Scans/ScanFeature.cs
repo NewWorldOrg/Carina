@@ -18,7 +18,7 @@ namespace Carina.Api.Tests.Feature.Scans;
 internal sealed class ScanFeature : IAsyncDisposable
 {
     private readonly TestingWebApplicationFactory factory = new();
-    private readonly WebApplicationFactory<Program> configured;
+    private readonly WebApplicationFactory<global::Program> configured;
 
     public ScanFeature()
     {

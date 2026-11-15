@@ -430,7 +430,7 @@ public sealed class GetDriverStatusActionTests : IDisposable
 
     private HttpClient ClientReading(IDriverStatusReader? reader)
     {
-        WebApplicationFactory<Program> reading = factory.WithWebHostBuilder(builder =>
+        WebApplicationFactory<global::Program> reading = factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
             {
                 services

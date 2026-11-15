@@ -88,7 +88,7 @@ internal sealed class MigrationFeature : IAsyncDisposable
 
     public MigrationFeature()
     {
-        WebApplicationFactory<Program> built = factory
+        WebApplicationFactory<global::Program> built = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();

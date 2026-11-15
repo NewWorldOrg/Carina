@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
-using System.Text;
 using System.Text.Json;
 
 using Carina.Api.Authentication;
@@ -21,8 +20,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Net.Http.Headers;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Program;
 
+[Trait("Category", "Feature")]
 public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {
@@ -530,7 +530,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     [Fact]
     public async Task EveryRoutedSurfaceOutsideTheEnumeratedListRefusesAClientCarryingNoCredentials()
     {
-        WebApplicationFactory<Program> guarded = factory.WithTestScheme();
+        WebApplicationFactory<global::Program> guarded = factory.WithTestScheme();
         using HttpClient client = guarded.CreateClient();
         var admitted = new List<string>();
         int asked = 0;
@@ -681,7 +681,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
 
         if (method is "POST")
         {
-            asking.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+            asking.Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
         }
 
         using HttpResponseMessage response = await feature.Anonymous.SendAsync(asking);
@@ -772,7 +772,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
 
         if (method == "POST")
         {
-            asking.Content = new StringContent("a=1", Encoding.UTF8, "application/x-www-form-urlencoded");
+            asking.Content = new StringContent("a=1", System.Text.Encoding.UTF8, "application/x-www-form-urlencoded");
         }
 
         using HttpResponseMessage response = await feature.Frame.SendAsync(asking);
@@ -834,7 +834,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     {
         string wherever = SomewhereTheRuntimeWillTalkAbout();
         await using var host = new TestingWebApplicationFactory { DriverSocketPath = wherever };
-        WebApplicationFactory<Program> guarded = host.WithTestScheme();
+        WebApplicationFactory<global::Program> guarded = host.WithTestScheme();
         using HttpClient client = Authenticated(guarded);
 
         IReadOnlyList<AnsweredSurface> answered = await EverySurfaceAsync(guarded, client);
@@ -851,7 +851,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         SocketError said = await WhatTheSocketSaysAsync(absent);
 
         await using var host = new TestingWebApplicationFactory { DriverSocketPath = absent };
-        WebApplicationFactory<Program> guarded = host.WithTestScheme();
+        WebApplicationFactory<global::Program> guarded = host.WithTestScheme();
         using HttpClient client = Authenticated(guarded);
 
         IReadOnlyList<AnsweredSurface> answered = await EverySurfaceAsync(guarded, client);
@@ -877,7 +877,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     public async Task ASweepThatRanOutOfTimeSaysSoRatherThanReadingAsASurfaceNamingTheSocket()
     {
         await using var host = new TestingWebApplicationFactory();
-        WebApplicationFactory<Program> guarded = host.WithTestScheme();
+        WebApplicationFactory<global::Program> guarded = host.WithTestScheme();
         using HttpClient client = Authenticated(guarded);
         client.Timeout = TimeSpan.FromTicks(1);
 
@@ -1001,7 +1001,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
             Directory.CreateTempSubdirectory("carina-socket-of-this-host-").FullName,
             new string('x', 200) + ".sock");
 
-    private static HttpClient Authenticated(WebApplicationFactory<Program> guarded)
+    private static HttpClient Authenticated(WebApplicationFactory<global::Program> guarded)
     {
         HttpClient client = guarded.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
@@ -1013,7 +1013,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     private static async Task<IReadOnlyList<AnsweredSurface>> EverySurfaceAsync(
-        WebApplicationFactory<Program> guarded,
+        WebApplicationFactory<global::Program> guarded,
         HttpClient client)
     {
         var answered = new List<AnsweredSurface>();
@@ -1033,7 +1033,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
 
             if (!HttpMethods.IsGet(surface.Method) && !HttpMethods.IsHead(surface.Method))
             {
-                asking.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+                asking.Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
             }
 
             answered.Add(await AnsweredAsync(client, surface, asking));

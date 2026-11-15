@@ -4,8 +4,9 @@ using Carina.Api.Tests.Support;
 
 using Microsoft.AspNetCore.Http;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Program;
 
+[Trait("Category", "Feature")]
 public sealed class DeletionTakesOneRecordingWholeTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

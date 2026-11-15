@@ -42,7 +42,7 @@ internal sealed class SegmentVersionFeature : IAsyncDisposable
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthenticationHandler.SchemeName, "anything");
     }
 
-    public WebApplicationFactory<Program> Built { get; }
+    public WebApplicationFactory<global::Program> Built { get; }
 
     public HttpClient Client { get; }
 

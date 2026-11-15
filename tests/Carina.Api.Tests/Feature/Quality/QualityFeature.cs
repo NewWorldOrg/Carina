@@ -29,7 +29,7 @@ internal sealed class QualityFeature : IAsyncDisposable
 
     public QualityFeature()
     {
-        WebApplicationFactory<Program> configured = factory
+        WebApplicationFactory<global::Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();

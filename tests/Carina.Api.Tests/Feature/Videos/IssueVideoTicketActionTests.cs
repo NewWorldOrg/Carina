@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 
 using Carina.Api.Tests.Support;
 using Carina.Domain.Recordings;
@@ -8,6 +9,20 @@ namespace Carina.Api.Tests.Feature.Videos;
 [Trait("Category", "Feature")]
 public sealed class IssueVideoTicketActionTests
 {
+    [Fact]
+    public async Task ATicketIsIssuedForOneRecordingAndSaysWhenItDies()
+    {
+        await using var feature = new TicketedFeature();
+        Recording recording = feature.Ended();
+
+        using HttpResponseMessage answer = await feature.AskForATicketAsync(recording.Id);
+        using JsonDocument read = JsonDocument.Parse(await answer.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal(43, read.RootElement.GetProperty("data").GetProperty("inTheClear").GetString()!.Length);
+        Assert.True(read.RootElement.GetProperty("data").TryGetProperty("lapsesAt", out _));
+    }
+
     [Fact]
     public async Task AskingForATicketWithAFormRatherThanJsonIsRefused()
     {

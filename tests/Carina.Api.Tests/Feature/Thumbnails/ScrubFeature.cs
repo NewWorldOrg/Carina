@@ -20,7 +20,7 @@ internal sealed class ScrubFeature : IAsyncDisposable
     {
         Frames = new HeldFrames(answer);
 
-        WebApplicationFactory<Program> configured = factory
+        WebApplicationFactory<global::Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();

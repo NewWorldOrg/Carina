@@ -483,7 +483,7 @@ public sealed class DeleteIntegrityFindingActionTests
     {
         private readonly TestingWebApplicationFactory factory;
 
-        private readonly WebApplicationFactory<Program> configured;
+        private readonly WebApplicationFactory<global::Program> configured;
 
         public AppAgainstTheDriver(SyntheticDriverHost driver)
         {

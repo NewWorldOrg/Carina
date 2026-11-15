@@ -6,8 +6,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Program;
 
+[Trait("Category", "Feature")]
 public sealed class CollectionSettingsFromConfigurationTests
 {
     [Fact]
@@ -41,7 +42,7 @@ public sealed class CollectionSettingsFromConfigurationTests
     private static CollectionSettings Served(params (string Name, string Value)[] settings)
     {
         using TestingWebApplicationFactory factory = new();
-        using WebApplicationFactory<Program> wired = factory.WithWebHostBuilder(builder =>
+        using WebApplicationFactory<global::Program> wired = factory.WithWebHostBuilder(builder =>
         {
             foreach ((string name, string value) in settings)
             {
