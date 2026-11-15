@@ -2,6 +2,7 @@ using System.Net;
 using System.Runtime.Versioning;
 
 using Carina.Api.Live;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Recordings;

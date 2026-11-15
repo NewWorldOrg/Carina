@@ -1,5 +1,6 @@
 using System.Runtime.Versioning;
 
+using Carina.Api.Tests.Support;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Recordings;
 

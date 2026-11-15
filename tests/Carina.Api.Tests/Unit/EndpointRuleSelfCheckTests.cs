@@ -1,4 +1,5 @@
 using Carina.Api.Authentication;
+using Carina.Api.Tests.Support;
 
 namespace Carina.Api.Tests.Unit;
 

@@ -255,7 +255,6 @@ public sealed class ListEncodeJobsActionTests
         Assert.Equal(0, running.GetProperty("data").GetProperty("total").GetInt32());
     }
 
-
     private static IEnumerable<JsonElement> Numbers(JsonElement element) => element.ValueKind switch
     {
         JsonValueKind.Object => element.EnumerateObject().SelectMany(property => Numbers(property.Value)),

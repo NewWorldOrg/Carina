@@ -6,6 +6,7 @@ using Carina.Api.Live;
 using Carina.Api.Playback;
 using Carina.Api.Responder.Playback;
 using Carina.Api.Responder.Recordings;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Streaming;
 
 namespace Carina.Api.Tests.FeatureTest;

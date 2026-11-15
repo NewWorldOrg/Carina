@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 
 using Carina.Api.Authentication;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.Infrastructure.Auth;
 using Carina.TestSupport;

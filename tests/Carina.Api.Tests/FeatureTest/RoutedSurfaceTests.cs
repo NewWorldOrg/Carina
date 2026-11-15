@@ -8,7 +8,7 @@ using Carina.Api.Authentication;
 using Carina.Api.Events;
 using Carina.Api.Live;
 using Carina.Api.Playback;
-using Carina.Api.Tests.Unit;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.Domain.Channels;
 using Carina.Domain.DataBroadcast;

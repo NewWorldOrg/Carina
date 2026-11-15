@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Streaming;
 
 namespace Carina.Api.Tests.Feature.Live;

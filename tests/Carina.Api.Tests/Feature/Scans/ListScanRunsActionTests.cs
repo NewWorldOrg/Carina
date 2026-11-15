@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 
 namespace Carina.Api.Tests.Feature.Scans;
 

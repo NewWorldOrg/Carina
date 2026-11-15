@@ -1,5 +1,7 @@
 using System.Text.Json.Nodes;
 
+using Carina.Api.Tests.Support;
+
 namespace Carina.Api.Tests.FeatureTest;
 
 public sealed class NonRestContractTests(TestingWebApplicationFactory factory)

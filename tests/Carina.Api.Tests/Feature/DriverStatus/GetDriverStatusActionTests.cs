@@ -7,8 +7,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-using Carina.Api.Tests.FeatureTest;
-using Carina.Api.Tests.Unit;
+using Carina.Api.Tests.Support;
 using Carina.Domain.DriverStatus;
 using Carina.TestSupport;
 

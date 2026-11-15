@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 
 using Carina.Api.Playback;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Encodings;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;

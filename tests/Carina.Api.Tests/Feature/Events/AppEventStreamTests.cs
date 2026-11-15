@@ -3,7 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json.Nodes;
 
 using Carina.Api.Events;
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.Infrastructure.Events;
 

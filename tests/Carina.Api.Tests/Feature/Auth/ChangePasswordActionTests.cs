@@ -5,8 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using Carina.Api.Authentication;
-using Carina.Api.Tests.FeatureTest;
-using Carina.Api.Tests.Unit;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.TestSupport;
 

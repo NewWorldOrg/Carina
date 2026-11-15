@@ -1,5 +1,6 @@
 using System.Runtime.Versioning;
 
+using Carina.Api.Tests.Support;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.TestSupport;

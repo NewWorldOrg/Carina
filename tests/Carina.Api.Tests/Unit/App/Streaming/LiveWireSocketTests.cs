@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using System.Threading.Channels;
 
 using Carina.Api.Live;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;

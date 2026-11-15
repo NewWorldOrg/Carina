@@ -4,6 +4,7 @@ using System.Text.Json;
 
 using Carina.Api.Responder.Health;
 using Carina.Api.Services;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.TestSupport;
 

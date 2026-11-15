@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;

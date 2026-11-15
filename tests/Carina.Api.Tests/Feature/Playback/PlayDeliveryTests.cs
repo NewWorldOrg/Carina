@@ -3,7 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 
 using Carina.Api.Playback;
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Encodings;

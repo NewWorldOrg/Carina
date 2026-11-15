@@ -2,7 +2,7 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Programmes;

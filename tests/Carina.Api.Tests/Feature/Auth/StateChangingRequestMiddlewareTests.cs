@@ -2,8 +2,7 @@ using System.Net;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
-using Carina.Api.Tests.Unit;
+using Carina.Api.Tests.Support;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;

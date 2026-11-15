@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 
 using Carina.Api.Authentication;
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 
 namespace Carina.Api.Tests.Feature.Auth;

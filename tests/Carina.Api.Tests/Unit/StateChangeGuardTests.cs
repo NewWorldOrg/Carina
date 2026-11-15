@@ -1,3 +1,5 @@
+using Carina.Api.Tests.Support;
+
 namespace Carina.Api.Tests.Unit;
 
 public sealed class StateChangeGuardTests

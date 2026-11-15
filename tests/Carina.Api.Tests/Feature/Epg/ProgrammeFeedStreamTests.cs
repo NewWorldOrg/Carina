@@ -1,7 +1,7 @@
 using System.Net;
 
 using Carina.Api.Events;
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;

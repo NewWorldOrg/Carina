@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.TestSupport;

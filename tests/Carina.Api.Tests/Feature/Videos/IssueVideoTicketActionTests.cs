@@ -1,6 +1,6 @@
 using System.Net;
 
-using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Support;
 using Carina.Domain.Recordings;
 
 namespace Carina.Api.Tests.Feature.Videos;
