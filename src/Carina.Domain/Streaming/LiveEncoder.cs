@@ -23,9 +23,6 @@ public static class LiveEncoders
 
     public static bool OnTheCard(LiveEncoder encoder) => Named(encoder) is not LiveEncoder.Software;
 
-    /// <summary>
-    /// The card an encoder runs on, or none for the processor.
-    /// </summary>
     public static CardKind? CardOf(LiveEncoder encoder)
         => Named(encoder) switch
         {

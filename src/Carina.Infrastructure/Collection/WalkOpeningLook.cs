@@ -6,10 +6,6 @@ using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Collection;
 
-/// <summary>
-/// Looks for an opening to walk ahead of the sweep's time: reads the ledger for the streams whose visit is
-/// due, and asks the driver for its tuners only when there is one.
-/// </summary>
 public sealed class WalkOpeningLook(
     IBroadcastStreamDirectory directory,
     IStreamVisitRepository visits,

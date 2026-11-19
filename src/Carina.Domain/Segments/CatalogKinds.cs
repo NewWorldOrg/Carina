@@ -5,65 +5,14 @@ public sealed record CatalogEstimate(CatalogKind Kind, double? Confidence, Catal
     public static readonly CatalogEstimate Unknown = new(CatalogKind.Unknown, null, null);
 }
 
-/// <summary>
-/// What the stretches of a catalog entry say of it: its kind, the series and stations its whole
-/// stretches are spread over, and what each stretch alone is taken for, in the order the stretches
-/// were handed over.
-/// </summary>
 public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, int StationCount, IReadOnlyList<SegmentKind?> Overrides);
 
-/// <summary>
-/// The kind of a catalog entry, from the way its stretches are spread, the first row that holds: a
-/// length on the 15-second grid (<see cref="OnTheGrid"/>, a second and a half short of a multiple to half
-/// a second over) heard in two series or on two stations is an advert, 0.9; a piece of
-/// <see cref="ThemeShortest"/> to <see cref="ThemeLongest"/>, other than one on the grid of up to a minute,
-/// heard in two episodes of one series starting within <see cref="ThemeEdgeWithin"/> after the guide's start
-/// of the programme is its opening, 0.8, and ending within as much before the guide's end its ending, 0.8,
-/// whichever more of those episodes hear it at, the opening on a tie, a stretch near both taken by the half
-/// of the programme it is heard in; a piece shorter than 30 seconds heard at about
-/// the same place (<see cref="SamePlaceWithin"/>) from the start of two episodes of one series is a fixed
-/// part of the programme, 0.7; a piece shorter than 15 seconds heard within 15 seconds of the start or end
-/// of programmes of two series is a fixed part of the station's output, 0.6; a length on the grid of up to
-/// a minute heard in one series is an advert, 0.5, since an opening or ending is often a whole slot of a
-/// minute and a half; anything else is not known. A fixed part of the programme of a length on the grid heard right
-/// beside an advert is a sponsor's advert, put in the same break every week, and so an advert of one series, 0.5
-/// (<see cref="Settle"/>). Only the stretches that cover the entry whole
-/// (<see cref="WholeWithin"/>) count; a shorter one is taken on its own. Two recordings on one station of a
-/// programme the guide starts at the same time are one episode (<see cref="SeriesMember.Episode"/>), so that a
-/// broadcast recorded twice does not make a sound heard once in it a sound heard in two episodes.
-/// <para>
-/// The series are those the links join, except that a sound heard as an opening or an ending joins the
-/// series that hears it so most often with every other series of the very same name
-/// (<see cref="SeriesNames.Same"/>), on whatever station and at whatever time, and with every series of another
-/// name whose
-/// recordings could be other episodes of it in its weekly slot
-/// (<see cref="SeriesLinks.AnotherEpisodeInTheSlot"/>) and hear it in two episodes or only at that place:
-/// the sound links those. When every whole stretch is of that one series, the opening or ending comes
-/// before the advert of two stations, so that a series whose opening fills a slot on the grid, broadcast
-/// on two stations, keeps its opening. When the entry is an opening or an ending, a whole stretch in a
-/// series that hears it so is taken for the kind of the place it is heard at, so that the opening sung at
-/// the end of a last episode is that episode's ending and one sung in the middle of an episode, an insert
-/// song, is the programme there, and a shorter one on the grid heard outside those series is an advert
-/// there, the song played in another series' break.
-/// </para>
-/// </summary>
 public static class CatalogKinds
 {
-    /// <summary>
-    /// The version an entry is put back to when what it was estimated from changed under it: an entry heard in one
-    /// of its recordings began or stopped linking series.
-    /// </summary>
     public const int Unsettled = 0;
 
-    /// <summary>
-    /// The version of these rows an entry was estimated with before the rows for openings and endings were
-    /// applied.
-    /// </summary>
     public const int FirstVersion = 1;
 
-    /// <summary>
-    /// The version of these rows: an entry estimated with an earlier one is estimated again.
-    /// </summary>
     public const int Version = 5;
 
     public static readonly TimeSpan Grid = TimeSpan.FromSeconds(15);
@@ -78,10 +27,6 @@ public static class CatalogKinds
 
     public static readonly TimeSpan ThemeLongest = TimeSpan.FromMinutes(3);
 
-    /// <summary>
-    /// How far after the guide's start an opening starts, and before the guide's end an ending ends, at the
-    /// most.
-    /// </summary>
     public static readonly TimeSpan ThemeEdgeWithin = TimeSpan.FromMinutes(6);
 
     public static readonly TimeSpan SamePlaceWithin = TimeSpan.FromSeconds(30);
@@ -92,16 +37,8 @@ public static class CatalogKinds
 
     public static readonly TimeSpan StationFixtureShorterThan = TimeSpan.FromSeconds(15);
 
-    /// <summary>
-    /// How far apart two pieces of an opening or ending lie at the most, and how far from where a piece lies
-    /// after the start of the opening or ending in another episode.
-    /// </summary>
     public static readonly TimeSpan PiecesWithin = TimeSpan.FromSeconds(2);
 
-    /// <summary>
-    /// How far a sponsor's advert lies from an advert beside it at the most: the silence between two slots falls outside
-    /// both matches, about a second as heard.
-    /// </summary>
     public static readonly TimeSpan AdvertsWithin = TimeSpan.FromSeconds(2);
 
     private const int FewestOnTheGrid = 1;
@@ -142,19 +79,6 @@ public static class CatalogKinds
             [.. occurrences.Select(placed => Override(placed, length, estimate.Kind, own, links))]);
     }
 
-    /// <summary>
-    /// The pattern its own stretches give an entry of <paramref name="length"/>, settled by the stretches heard around
-    /// them (<see cref="Settle"/>): taken for an advert when it is a sponsor's, and carried on as an opening or an
-    /// ending when the entry is a piece of one (BR-CD-005). An entry that may carry one on
-    /// (<see cref="MaySettle"/>), whose whole stretches in two episodes lie at the same distance, give or take
-    /// <see cref="PiecesWithin"/>, from the start of a stretch of one opening or ending, in the run of pieces that
-    /// follows or leads up to that stretch, is that opening or ending, 0.8. In a run each piece lies no more than
-    /// <see cref="PiecesWithin"/> from the next, the whole is no longer than <see cref="ThemeLongest"/>, and the
-    /// pieces are the stretches of entries that may carry one on or already do. The stretches so placed are taken
-    /// for the opening or ending, and every other one for what the entry is on its own, the programme when that is
-    /// not known. An opening or ending is often matched in pieces, as a phrase it sings twice matches apart from the
-    /// rest, and a piece shorter than <see cref="ThemeShortest"/> or on the grid is otherwise taken for something else.
-    /// </summary>
     public static CatalogPattern Estimate(TimeSpan length, IReadOnlyList<PlacedOccurrence> occurrences, SeriesLinks links, CatalogSurroundings around)
     {
         ArgumentNullException.ThrowIfNull(around);
@@ -171,17 +95,6 @@ public static class CatalogKinds
         return Settle(length, occurrences, own, around.Replacing(itself, Stretches(occurrences, own)));
     }
 
-    /// <summary>
-    /// <paramref name="own"/>, what the stretches of an entry give it on their own, settled by <paramref name="around"/>, which
-    /// holds the entry's own stretches as <paramref name="own"/> takes them: taken for an advert of one series when it is a
-    /// sponsor's, then carried on as an opening or an ending (<see cref="CarryOn"/>). A sponsor's advert is put in the same
-    /// break every week, so that it is heard at the same place in two episodes as a fixed part of the programme is: an entry
-    /// taken for a fixed part of the programme, of a length on the grid, with a whole stretch no more than
-    /// <see cref="AdvertsWithin"/> from a stretch that counts as a break in its recording, or over one, is an advert of one
-    /// series, 0.5. A fixed part of another length, such as a jingle or the sponsors read out, and one heard beside no
-    /// advert, stays as it is. One stretch beside an advert is enough, since the catalog knows only the adverts it has heard
-    /// twice and many a stretch of a break has none of them beside it.
-    /// </summary>
     public static CatalogPattern Settle(TimeSpan length, IReadOnlyList<PlacedOccurrence> occurrences, CatalogPattern own, CatalogSurroundings around)
     {
         ArgumentNullException.ThrowIfNull(occurrences);
@@ -191,14 +104,6 @@ public static class CatalogKinds
         return CarryOn(length, occurrences, Sponsored(length, occurrences, own, around), around);
     }
 
-    /// <summary>
-    /// The patterns of <paramref name="sounds"/> settled together (<see cref="Settle"/>), each from what its own stretches
-    /// give it in <paramref name="own"/>: every one is settled beside <paramref name="around"/> with the stretches of all of
-    /// them as they are settled so far, again while one of them changes, at most once more than there are sounds. Two
-    /// sponsor's adverts heard one after the other are settled so, the second beside the first taken for an advert once the
-    /// first leans on the advert before it. Only a fixed part of the programme turns into an advert by what lies beside it,
-    /// and nothing turns back, so the settling ends.
-    /// </summary>
     public static IReadOnlyDictionary<CatalogEntryId, CatalogPattern> SettleTogether(
         IReadOnlyList<CatalogSound> sounds,
         IReadOnlyDictionary<CatalogEntryId, CatalogPattern> own,
@@ -230,11 +135,6 @@ public static class CatalogKinds
         return settled;
     }
 
-    /// <summary>
-    /// <paramref name="own"/>, what the stretches of an entry give it on their own, carried on as an opening or
-    /// an ending when the entry is a piece of one heard in <paramref name="around"/>, which holds the entry's
-    /// own stretches as <paramref name="own"/> takes them (<see cref="Estimate(TimeSpan, IReadOnlyList{PlacedOccurrence}, SeriesLinks, CatalogSurroundings)"/>).
-    /// </summary>
     public static CatalogPattern CarryOn(TimeSpan length, IReadOnlyList<PlacedOccurrence> occurrences, CatalogPattern own, CatalogSurroundings around)
     {
         ArgumentNullException.ThrowIfNull(occurrences);
@@ -269,11 +169,6 @@ public static class CatalogKinds
             [.. occurrences.Select(placed => taken.Contains(placed.Occurrence) ? null : (SegmentKind?)elsewhere)]);
     }
 
-    /// <summary>
-    /// Whether the stretches heard around an entry its own stretches take as <paramref name="own"/> may settle it
-    /// (<see cref="Settle"/>): it is of one series, and taken for a programme fixture, which may be a sponsor's advert,
-    /// for an advert of one series or for nothing known, which may carry on an opening or an ending.
-    /// </summary>
     public static bool MaySettle(CatalogPattern own)
     {
         ArgumentNullException.ThrowIfNull(own);
@@ -281,10 +176,6 @@ public static class CatalogKinds
         return CarriesOn(own.Estimate, own.SeriesCount);
     }
 
-    /// <summary>
-    /// The stretches of an entry taken as <paramref name="pattern"/>, each with what it is to an opening or an ending
-    /// and the kind it counts as (<see cref="ThemeStretch.Of"/>).
-    /// </summary>
     public static IEnumerable<ThemeStretch> Stretches(IReadOnlyList<PlacedOccurrence> occurrences, CatalogPattern pattern)
     {
         ArgumentNullException.ThrowIfNull(occurrences);
@@ -299,12 +190,6 @@ public static class CatalogKinds
             pattern.Overrides[at]));
     }
 
-    /// <summary>
-    /// What a stretch of an entry taken for <paramref name="estimate"/>, in <paramref name="seriesCount"/> series, is to an
-    /// opening or an ending, when it alone is taken for <paramref name="kindOverride"/>: a piece, when the entry
-    /// carries one on or could; the opening or the ending, when the entry is one by its own stretches and the stretch counts as
-    /// one; nothing otherwise.
-    /// </summary>
     public static ThemePart PartOf(CatalogEstimate estimate, int seriesCount, SegmentKind? kindOverride)
     {
         ArgumentNullException.ThrowIfNull(estimate);
@@ -327,20 +212,8 @@ public static class CatalogKinds
         };
     }
 
-    /// <summary>
-    /// Whether a length is no more than <see cref="ShortOfTheGrid"/> short of a multiple of <see cref="Grid"/>
-    /// from one to eight, 15 to 120 seconds, and no more than <see cref="OverTheGrid"/> over it. A match is cut
-    /// to the sound it hears, and an advert's slot keeps about half a second of silence at either end, so what
-    /// is heard of a slot falls short of the slot rather than over it.
-    /// </summary>
     public static bool OnTheGrid(TimeSpan length) => OnTheGrid(length, MostOnTheGrid);
 
-    /// <summary>
-    /// Whether a stretch of an entry of <paramref name="kind"/> and <paramref name="entryLength"/> links the
-    /// recording it is heard in to the others its entry is heard in (BR-CD-011): the entry is an opening, an
-    /// ending or a fixed part of a programme, the stretch covers it whole, and the stretch alone is not
-    /// taken for an advert.
-    /// </summary>
     public static bool LinksSeries(CatalogKind kind, TimeSpan entryLength, CatalogOccurrence occurrence)
     {
         ArgumentNullException.ThrowIfNull(occurrence);
@@ -348,10 +221,6 @@ public static class CatalogKinds
         return LinksSeries(kind) && IsWhole(occurrence.Length, entryLength) && occurrence.KindOverride is not SegmentKind.Break;
     }
 
-    /// <summary>
-    /// Whether an entry of <paramref name="kind"/> links the recordings it is heard in: an opening, an ending or
-    /// a fixed part of a programme.
-    /// </summary>
     public static bool LinksSeries(CatalogKind kind) => kind is CatalogKind.Opening or CatalogKind.Ending or CatalogKind.ProgrammeFixture;
 
     private static bool OnTheGrid(TimeSpan length, int mostMultiple)
@@ -393,10 +262,6 @@ public static class CatalogKinds
            && one.StationCount == other.StationCount
            && one.Overrides.SequenceEqual(other.Overrides);
 
-    /// <summary>
-    /// How far apart two stretches lie: from the end of the earlier to the start of the later, less than nothing when
-    /// they overlap.
-    /// </summary>
     private static TimeSpan Apart(SoundSpan one, SoundSpan other)
         => (one.Starts > other.Starts ? one.Starts : other.Starts) - (one.Ends < other.Ends ? one.Ends : other.Ends);
 
@@ -432,13 +297,6 @@ public static class CatalogKinds
             : CatalogEstimate.Unknown;
     }
 
-    /// <summary>
-    /// The opening or ending a sound of its length is heard as, when two episodes of one series hear it at
-    /// that place in their programmes; the series it is heard as that in, with every other series of the very
-    /// same name as the one that hears it so most often, and every series in its slot that hears it in two episodes
-    /// or only at that place; the series once those are joined into one; and whether every whole stretch is of
-    /// that one series.
-    /// </summary>
     private static Theme? ThemeOf(TimeSpan length, IReadOnlyList<IReadOnlyList<PlacedOccurrence>> linked)
     {
         if (length < ThemeShortest || length > ThemeLongest || OnTheGrid(length, MostInOneSeries))
@@ -490,13 +348,6 @@ public static class CatalogKinds
     private static bool NamedAs(IReadOnlyList<PlacedOccurrence> group, IReadOnlyList<PlacedOccurrence> main)
         => group.Any(placed => main.Any(member => SeriesNames.Same(member.Occurrence.Member.SeriesName, placed.Occurrence.Member.SeriesName)));
 
-    /// <summary>
-    /// What the place of a stretch makes a theme heard there, by the guide's start and end of its programme:
-    /// an opening when it starts no more than <see cref="EdgeWithin"/> before the start or
-    /// <see cref="ThemeEdgeWithin"/> after it, an ending when it ends no more than as much before the end or
-    /// <see cref="EdgeWithin"/> after it, by the half its middle falls in when it is both, and neither,
-    /// <see cref="CatalogKind.Unknown"/>, anywhere else; null when the programme is not known.
-    /// </summary>
     private static CatalogKind? PlaceOf(PlacedOccurrence placed)
     {
         if (placed.ProgrammeStarts is not TimeSpan starts || placed.ProgrammeEnds is not TimeSpan ends || ends <= starts)
@@ -562,10 +413,6 @@ public static class CatalogKinds
 
     private static int Episodes(Carried[] together) => together.Select(one => one.Placed.Episode).Distinct().Count();
 
-    /// <summary>
-    /// The openings and endings whose run of pieces in its recording holds <paramref name="placed"/>, each with how far
-    /// after the start of its stretch there <paramref name="placed"/> starts.
-    /// </summary>
     private static IEnumerable<Carried> Carriers(PlacedOccurrence placed, CatalogSurroundings around)
     {
         IReadOnlyList<ThemeStretch> heard = around.In(placed.Occurrence.RecordingId);
@@ -582,12 +429,6 @@ public static class CatalogKinds
             .Select(theme => new Carried(placed, theme.Entry, theme.Part is ThemePart.Opening ? CatalogKind.Opening : CatalogKind.Ending, placed.Occurrence.StartsAt - theme.Span.Starts));
     }
 
-    /// <summary>
-    /// The stretch of an opening or ending and the pieces that follow it, then those that lead up to it, each no more
-    /// than <see cref="PiecesWithin"/> from the run so far, so long as the run is no longer than <see cref="ThemeLongest"/>:
-    /// pieces, and stretches of the same part. A stretch the run already covers is passed over, and any other one
-    /// ends the run on its side.
-    /// </summary>
     private static List<ThemeStretch> Run(IReadOnlyList<ThemeStretch> heard, ThemeStretch theme)
     {
         List<ThemeStretch> run = [theme];
@@ -633,10 +474,6 @@ public static class CatalogKinds
 
     private sealed record Theme(CatalogKind Kind, IReadOnlyList<PlacedOccurrence> Own, IReadOnlyList<IReadOnlyList<PlacedOccurrence>> Series, bool Prevails);
 
-    /// <summary>
-    /// A whole stretch of an entry in the run of pieces of the opening or ending of <paramref name="Theme"/>, of
-    /// <paramref name="Kind"/>, starting <paramref name="After"/> the start of its stretch there.
-    /// </summary>
     private sealed record Carried(PlacedOccurrence Placed, CatalogEntryId Theme, CatalogKind Kind, TimeSpan After)
     {
         public bool SameAs(Carried other)

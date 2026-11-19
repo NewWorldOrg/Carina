@@ -1,9 +1,5 @@
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// One event message of a data broadcast, with the moment it fires on the <see cref="StreamClock"/>, never a
-/// raw PTS, and the tag of the stream it came on, unknown for one kept before that was kept.
-/// </summary>
 public sealed record EventMessage
 {
     public const int FramingBytes = sizeof(byte) + sizeof(ushort) + sizeof(ushort) + sizeof(byte) + sizeof(byte) + sizeof(ulong) + sizeof(ushort);
@@ -51,10 +47,6 @@ public sealed record EventMessage
 
     public int? ComponentTag { get; }
 
-    /// <summary>
-    /// The bytes it takes in a record: its kind, group, id, type, timing, moment and the length of its private
-    /// data, the private data, and the tag of its stream when that is known.
-    /// </summary>
     public long Bytes => FramingBytes + (long)PrivateData.Length + (ComponentTag is null ? 0 : ComponentTagBytes);
 
     public EventMessage Shifted(long by) => new(Group, Id, MessageType, Timing, FiresAt + by, PrivateData, ComponentTag);

@@ -6,10 +6,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Auth;
 
-/// <summary>
-/// Names a session in the store, in the session list and in the request that ends it: the base64url
-/// SHA-256 of its session id.
-/// </summary>
 public sealed class SessionHandle : CommonValueObject<string>
 {
     public const int Length = 43;

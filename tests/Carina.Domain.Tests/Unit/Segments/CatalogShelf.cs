@@ -3,10 +3,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.Domain.Tests.Unit.Segments;
 
-/// <summary>
-/// The catalog held in memory for the domain services that read it: its entries, their stretches and the recordings
-/// sharing a sound, as a test lays them, and the recordings whose surroundings were asked for.
-/// </summary>
 internal sealed class CatalogShelf : ICatalogRepository
 {
     public List<CatalogEntry> Entries { get; } = [];

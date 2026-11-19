@@ -45,9 +45,6 @@ public sealed class ProgrammeSnapshot
 
     public int Sounds { get; }
 
-    /// <summary>
-    /// What the guide says of <paramref name="programme"/> at <paramref name="at"/>, as a reservation keeps it.
-    /// </summary>
     public static ProgrammeSnapshot Of(Programme programme, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(programme);
@@ -62,10 +59,6 @@ public sealed class ProgrammeSnapshot
             programme.Sounds);
     }
 
-    /// <summary>
-    /// This snapshot with the sound <paramref name="announced"/> carries where the guide has announced it, and as it
-    /// was where the guide is still silent. A guide that says nothing new leaves this snapshot itself.
-    /// </summary>
     public ProgrammeSnapshot HeardFrom(Programme announced)
     {
         ArgumentNullException.ThrowIfNull(announced);

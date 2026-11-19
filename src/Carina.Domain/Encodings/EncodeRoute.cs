@@ -1,9 +1,5 @@
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// Which encoder a run asked for and which it ran on, kept with the job. A swerve is present exactly
-/// when the two differ.
-/// </summary>
 public sealed record EncodeRoute
 {
     public EncodeRoute(EncodeEncoder asked, EncodeEncoder ran, EncodeSwerve? swerved)

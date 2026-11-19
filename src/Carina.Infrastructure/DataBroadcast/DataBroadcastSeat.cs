@@ -1,9 +1,5 @@
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// The seat a data broadcast takes at a live reading of its channel: whatever is written into it is read
-/// there and then, and it can be written into only.
-/// </summary>
 internal sealed class DataBroadcastSeat(DataBroadcastSession session) : Stream
 {
     private int closed;

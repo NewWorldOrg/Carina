@@ -1,10 +1,5 @@
 namespace Carina.Infrastructure.Driver;
 
-/// <summary>
-/// The wait between two runs of a job that a driver signal ends early. A signal that comes while the job is running
-/// rather than waiting is kept, and ends the next wait at once, so a run a signal asked for is never lost. One signal
-/// ends one wait.
-/// </summary>
 public sealed class SignalledWait(TimeProvider clock)
 {
     private CancellationTokenSource? waking;

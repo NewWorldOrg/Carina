@@ -12,12 +12,6 @@ public enum CaptionFailure
     None = 2,
 }
 
-/// <summary>
-/// Places the captions kept for a recording on the source a playback offer plays: the recording itself
-/// counts its seconds from where the file's own clock begins, an artefact from where the job that made it
-/// began reading plus what it skipped at the head. Nothing here writes; a record the row says is ready and
-/// the shelf no longer holds reads as coming until the caption pass takes it again.
-/// </summary>
 public sealed class CaptionService(
     IRecordingDirectory recordings,
     ICaptionRecords records,

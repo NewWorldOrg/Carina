@@ -15,10 +15,6 @@ using EventId = Carina.Domain.Programmes.EventId;
 
 namespace Carina.Api.Tests.DbIntegration.App.Notifications;
 
-/// <summary>
-/// The application raised over the scratch database for the writes of the notifications, with a clock turned by
-/// hand, and the rows a test needs written or read beside the service it asks.
-/// </summary>
 internal sealed class NotificationWrites(AppDatabase database) : IAsyncDisposable
 {
     public const string Address = "https://hooks.slack.com/services/T0000/B0000/made-up-token-wxyz";
@@ -42,10 +38,6 @@ internal sealed class NotificationWrites(AppDatabase database) : IAsyncDisposabl
     public static NotificationRuleChange Asked(params NotificationDestinationId[] destinations)
         => new("A made-up set", null, [NoticeKind.RecordingFailed], [.. destinations.Select(destination => destination.Value)]);
 
-    /// <summary>
-    /// A scope of the application, in which the sets of rules cannot be added when <paramref name="rulesCanBeAdded"/>
-    /// is false and the programmes asked to be told of cannot be saved when <paramref name="watchesCanBeSaved"/> is false.
-    /// </summary>
     public AsyncServiceScope Scope(bool rulesCanBeAdded = true, bool watchesCanBeSaved = true)
     {
         lock (gate)

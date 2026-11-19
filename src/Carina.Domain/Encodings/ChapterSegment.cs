@@ -1,8 +1,5 @@
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// What a chapter of an artefact is: the programme itself, a break for adverts, its opening or its ending.
-/// </summary>
 public enum ChapterKind
 {
     Programme = 1,
@@ -14,11 +11,6 @@ public enum ChapterKind
     Ending = 4,
 }
 
-/// <summary>
-/// One stretch of an artefact, on the artefact's own clock, and what a run took it to be. A
-/// detection lays these end to end over the whole length with no gap between them, so a position
-/// falls in exactly one of them.
-/// </summary>
 public sealed record ChapterSegment
 {
     public ChapterSegment(TimeSpan starts, TimeSpan ends, ChapterKind kind)

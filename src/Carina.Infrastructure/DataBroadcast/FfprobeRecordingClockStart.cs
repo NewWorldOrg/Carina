@@ -4,9 +4,6 @@ using Carina.Infrastructure.Streaming;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// Reads where a recorded file's own clock begins the way the captions taken from it read it.
-/// </summary>
 public sealed class FfprobeRecordingClockStart(MachineSettings machine, TimeProvider clock) : IRecordingClockStart
 {
     public async Task<RecordingClockStartReading> ReadAsync(string source, CancellationToken cancellationToken)

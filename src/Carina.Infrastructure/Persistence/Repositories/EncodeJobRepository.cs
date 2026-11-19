@@ -119,11 +119,6 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
             .ToListAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// Moves the oldest waiting job to running by a conditional update, and reads the job back only when
-    /// that update changed one row. A claim refused by the unique index over the running status, and a
-    /// row another claim took first, are answered rather than thrown.
-    /// </summary>
     public async Task<EncodeClaim> ClaimNextAsync(DateTime at, CancellationToken cancellationToken)
     {
         if (at.Kind is not DateTimeKind.Utc)
@@ -187,11 +182,6 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
             .ThenBy(row => row.Id)
             .ToListAsync(cancellationToken);
 
-    /// <summary>
-    /// Writes the name into the row by a conditional update, bypassing the change tracker; the unique
-    /// index over the root and the name decides who owns it, and a refusal leaves the job in memory as
-    /// it was.
-    /// </summary>
     public async Task<ArtefactClaim> ClaimArtefactAsync(
         EncodeJob job,
         EncodeFileName name,
@@ -229,11 +219,6 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
         return ArtefactClaim.Claimed;
     }
 
-    /// <summary>
-    /// Has the earlier holder let go of the name by a conditional update of its own, before this job
-    /// claims it. Only a job asked to make the artefact again may do this; what the earlier job made
-    /// stays named on it.
-    /// </summary>
     public async Task<int> TakeTheNameOverAsync(
         EncodeJob job,
         EncodeFileName name,
@@ -318,9 +303,6 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
         return new EncodeHold(unfinished is not null || await named.AnyAsync(cancellationToken), unfinished);
     }
 
-    /// <summary>
-    /// Reads a tracked job's row version again after a conditional update has moved it on.
-    /// </summary>
     private async Task CatchUpWithTheRowAsync(EncodeJob job, CancellationToken cancellationToken)
     {
         EntityEntry<EncodeJob> entry = context.Entry(job);

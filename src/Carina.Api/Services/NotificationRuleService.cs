@@ -10,9 +10,6 @@ public sealed record NotificationRuleChange(
     IReadOnlyList<NoticeKind>? Events,
     IReadOnlyList<Guid>? Destinations);
 
-/// <summary>
-/// Lists, makes, changes and removes the sets of rules that say which kinds of notice go to which destinations.
-/// </summary>
 public sealed class NotificationRuleService(
     INotificationRuleRepository rules,
     NotificationRuleDomainService defining,

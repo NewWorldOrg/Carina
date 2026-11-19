@@ -1,23 +1,12 @@
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// What removing a destination takes out of the rest: the sets of rules left with no destination, to be removed; the
-/// sets of rules that send to fewer destinations; and the programmes that wait and are no longer told to it.
-/// </summary>
 public sealed record NotificationDestinationRetirement(
     IReadOnlyList<NotificationRule> Emptied,
     IReadOnlyList<NotificationRule> Narrowed,
     IReadOnlyList<ProgrammeWatch> NoLongerTelling);
 
-/// <summary>
-/// The browser a subscription was registered for: the row added, with the set of rules made with the first
-/// destination, or the row already held under the same endpoint, which took the subscription.
-/// </summary>
 public sealed record PushEnrolment(NotificationDestination Destination, bool Added, NotificationRule? Usual);
 
-/// <summary>
-/// Why a browser does not take another subscription.
-/// </summary>
 public enum PushReplacementRefusal
 {
     NoSuchBrowser = 1,
@@ -25,25 +14,14 @@ public enum PushReplacementRefusal
     HeldByAnother = 2,
 }
 
-/// <summary>
-/// The browser that took another subscription, or why it did not.
-/// </summary>
 public sealed record PushReplacement(NotificationDestination? Destination, PushReplacementRefusal? Refusal);
 
-/// <summary>
-/// Decides what a destination registered, turned off or removed means for the sets of rules, the deliveries that wait
-/// and the programmes asked to be told of, looking each of them up.
-/// </summary>
 public sealed class NotificationDestinationDomainService(
     INotificationDestinationRepository destinations,
     INotificationRuleRepository rules,
     INotificationDeliveryRepository deliveries,
     IProgrammeWatchRepository watches)
 {
-    /// <summary>
-    /// The set of rules made with the first destination, when no destination and no set of rules is held yet;
-    /// otherwise nothing. It is asked before the destination is added.
-    /// </summary>
     public async Task<NotificationRule?> UsualRuleForAsync(NotificationDestination registered, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(registered);
@@ -56,11 +34,6 @@ public sealed class NotificationDestinationDomainService(
             : null;
     }
 
-    /// <summary>
-    /// Registers a browser by its subscription. A browser already held under the same endpoint takes the
-    /// subscription and stays one row, with its name, whether it is turned on and the sets of rules that send to it
-    /// as they were.
-    /// </summary>
     public async Task<PushEnrolment> EnrolAsync(
         NotificationName name,
         PushSubscription subscription,
@@ -90,9 +63,6 @@ public sealed class NotificationDestinationDomainService(
         return new PushEnrolment(added, true, await UsualRuleForAsync(added, cancellationToken));
     }
 
-    /// <summary>
-    /// Gives the browser of this row another subscription, unless another row is held under the same endpoint.
-    /// </summary>
     public async Task<PushReplacement> ReplaceAsync(
         NotificationDestinationId id,
         PushSubscription subscription,
@@ -122,9 +92,6 @@ public sealed class NotificationDestinationDomainService(
         return new PushReplacement(held, null);
     }
 
-    /// <summary>
-    /// Gives up every delivery that waits for a destination turned off, and hands them back to be written.
-    /// </summary>
     public async Task<IReadOnlyList<NotificationDelivery>> GiveUpWhatWaitsForAsync(
         NotificationDestinationId destination,
         CancellationToken cancellationToken)
@@ -143,10 +110,6 @@ public sealed class NotificationDestinationDomainService(
         return givenUp;
     }
 
-    /// <summary>
-    /// Takes a destination being removed out of every set of rules and every programme that waits, at
-    /// <paramref name="at"/>, and hands back what changed to be written.
-    /// </summary>
     public async Task<NotificationDestinationRetirement> RetireAsync(
         NotificationDestinationId destination,
         DateTime at,

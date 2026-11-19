@@ -82,9 +82,6 @@ public sealed class CatalogEvidenceReaderTests(RepositoryDatabase database) : IA
         return recording;
     }
 
-    /// <summary>
-    /// The loudness of the recording's first chunk, loud but for half a second of silence around each second named.
-    /// </summary>
     private async Task LoudnessAsync(RecordingId recording, params double[] silences)
     {
         byte[] loudness = [.. Enumerable.Repeat((byte)40, SoundLoudness.PerChunk)];
@@ -104,10 +101,6 @@ public sealed class CatalogEvidenceReaderTests(RepositoryDatabase database) : IA
             CancellationToken.None);
     }
 
-    /// <summary>
-    /// An entry of fifteen seconds of <paramref name="kind"/> and <paramref name="confidence"/>, heard at each second
-    /// named in each recording named.
-    /// </summary>
     private async Task EntryAsync(CatalogKind kind, double confidence, params (RecordingId Recording, double At)[] heard)
     {
         CatalogEntryId id = CatalogEntryId.New();

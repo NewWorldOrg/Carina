@@ -3,11 +3,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// A recording's transcoder, read as it writes and cut into the segments of an event, read no further ahead of the
-/// furthest segment a player has asked for than the settings allow, so that a transcoder faster than the player waits
-/// for it.
-/// </summary>
 internal sealed class RecordingHlsRendition(
     HlsHolding holding,
     IOnTheFlyViewing transcode,
@@ -31,10 +26,6 @@ internal sealed class RecordingHlsRendition(
 
     internal RecordingId Recording { get; } = recording;
 
-    /// <summary>
-    /// The segment numbered <paramref name="number"/>; asking for one further than any asked for before lets the
-    /// transcoder go on, and lets go of those further behind it than the segments held.
-    /// </summary>
     public override ReadOnlyMemory<byte>? Segment(long number)
     {
         ReadOnlyMemory<byte>? found;
@@ -83,10 +74,6 @@ internal sealed class RecordingHlsRendition(
         }
     }
 
-    /// <summary>
-    /// Cuts what the transcoder writes until it stops, and says whether it wrote the whole of the recording: an mp4
-    /// that ends where a box ends from a transcoder that ran to its end.
-    /// </summary>
     private async Task<HlsEnding> CutToTheEndAsync()
     {
         LiveFragmenter fragmenter = new(LiveTrack.Picture);
@@ -168,9 +155,6 @@ internal sealed class RecordingHlsRendition(
     }
 }
 
-/// <summary>
-/// How a recording's transcoder stopped: having written the whole recording, part way through, or called off.
-/// </summary>
 internal enum HlsEnding
 {
     CalledOff = 1,

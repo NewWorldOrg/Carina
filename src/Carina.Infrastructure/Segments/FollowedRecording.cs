@@ -4,11 +4,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// A recording being followed for its learning data: which one, the file it is read from, the
-/// programme in it, the version its data is made with, the state its record stands in while it is
-/// read, and what the follow has been told since — that the recording has ended, or that it has gone.
-/// </summary>
 public sealed class FollowedRecording(RecordingId id, string source, ServiceId service, ExtractionVersion version)
 {
     private const int StillRecording = 0;
@@ -33,10 +28,6 @@ public sealed class FollowedRecording(RecordingId id, string source, ServiceId s
 
     public bool HasGone => Volatile.Read(ref told) is HasGoneMark;
 
-    /// <summary>
-    /// A recording that has already ended, read from the head of its file to the end without waiting
-    /// there, its record reading.
-    /// </summary>
     public static FollowedRecording Recorded(RecordingId id, string source, ServiceId service, ExtractionVersion version)
     {
         FollowedRecording recorded = new(id, source, service, version) { Held = LearningExtractionState.Reading };
@@ -51,15 +42,7 @@ public sealed class FollowedRecording(RecordingId id, string source, ServiceId s
     public void Went() => Volatile.Write(ref told, HasGoneMark);
 }
 
-/// <summary>
-/// Follows one recording for its learning data.
-/// </summary>
 public interface ILearningFollower
 {
-    /// <summary>
-    /// Reads the recording from its head until it has ended and its file is read to the end, it has
-    /// gone, or its file can no longer be read, keeping the data as it is made, and settles the record
-    /// of taking it out. A follow the caller stops leaves the record where it stood.
-    /// </summary>
     Task FollowAsync(FollowedRecording recording, CancellationToken cancellationToken);
 }

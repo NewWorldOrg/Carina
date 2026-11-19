@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class EncodeLedger : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -183,7 +181,6 @@ public partial class EncodeLedger : Migration
             unique: true);
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

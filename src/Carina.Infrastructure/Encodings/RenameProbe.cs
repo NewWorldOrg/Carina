@@ -16,10 +16,6 @@ public sealed record RenameVerdict(RenameStanding Standing, string Note)
     public bool IsARename => Standing is RenameStanding.WouldBeARename;
 }
 
-/// <summary>
-/// Asks whether moving something from one directory to another would be a rename rather than a
-/// copy.
-/// </summary>
 public interface IRenameProbe
 {
     RenameVerdict Probe(string from, string to);

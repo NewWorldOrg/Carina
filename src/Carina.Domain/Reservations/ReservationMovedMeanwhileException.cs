@@ -1,8 +1,5 @@
 namespace Carina.Domain.Reservations;
 
-/// <summary>
-/// Thrown when a reservation was changed in the ledger after the writer read it.
-/// </summary>
 public sealed class ReservationMovedMeanwhileException(IReadOnlyList<ReservationId> reservations)
     : InvalidOperationException(
         $"Reservation(s) {string.Join(", ", reservations?.Select(id => id.Value) ?? [])} changed in the ledger "

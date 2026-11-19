@@ -1,38 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Decides the kind of each segment by dynamic programming over states of kind, how long the run of breaks so
-/// far is, and whether the opening and the ending have been used: the run's real length, the sum of its
-/// segments' fitted lengths, rounded to whole seconds and taken modulo the grid (<see cref="RunSteps"/> states).
-/// Each state keeps the real length of the best run reaching it, so no rounding builds up along a run; an
-/// opening or an ending keeps its real length the same way, in a state of its own while it is still too short
-/// to leave, so that a likelier one too short to last never takes the place of one that may. The sequence chosen has the greatest sum of the
-/// log-probabilities of its kinds and of what its moves cost: leaving a break for anything else after a run
-/// whose real length lies further off the grid than the tolerance costs the penalty. The opening and the ending
-/// are one each at most, the opening before the ending, and each lasts from
-/// <see cref="CatalogKinds.ThemeShortest"/> to <see cref="CatalogKinds.ThemeLongest"/>; a segment of the opening
-/// starts in the first half of the programme and one of the ending ends in its second half, by where it lies from
-/// the programme's start and end when that is known, unless the catalog fixes it to that kind; neither runs on across a
-/// seam (<see cref="SegmentPiece.AfterASeam"/>); a sequence that breaks one of these is not chosen. The sequence goes
-/// from the recording's zero to its end through segments and through neighbouring segments read as one
-/// (<see cref="JoinedPiece"/>), each such piece taken for one of its kinds in place of the segments it joins: a joined
-/// advert counts as one segment, since a pod is cut at every advert and the advert it joins is whole; a joined opening or
-/// ending counts as the segments it joins, each at the chance of the whole, since any stretch of a song's length is
-/// joined, so that a song is taken whole where the whole is likelier than its parts. Entering a break costs nothing, so a break may start at the recording's zero,
-/// and one running on to the end is never left. A tie keeps the programme. Neighbouring segments of one kind
-/// are then one stretch, whose probability is the length-weighted mean of its segments' chances of that kind.
-/// A break that does not run on to the end, within the tolerance of the grid, is pulled onto it by moving its
-/// end, as the rule-based detection did. Boundaries are kept to <see cref="Resolution"/>. A model that tells
-/// only breaks from the programme makes no opening or ending, and decides as it did before there were four.
-/// <para>
-/// A segment the catalog fixes to a kind (<see cref="SegmentPiece.Fixed"/>) is that kind whatever the regression
-/// takes it for, at the chance the catalog fixes it at, its entry's confidence, as long as the model tells that kind
-/// apart; every model tells the programme. It still sits inside the runs, the
-/// costs and the rules above, and the segments beside it are decided by the regression: the sequence chosen
-/// overrules the fewest fixed segments any sequence keeping the rules can, and among those has the greatest sum,
-/// an overruled segment counting as what the regression takes it for.
-/// </para>
-/// </summary>
 public static class SegmentSequence
 {
     public const int RunSteps = 15;
@@ -57,9 +24,6 @@ public static class SegmentSequence
 
     private const double HalfTheProgramme = 0.5;
 
-    /// <summary>
-    /// Decides the kinds from the scores of a break against the programme alone.
-    /// </summary>
     public static SegmentKind[] Decide(IReadOnlyList<SegmentPiece> pieces, IReadOnlyList<double> scores, SegmentThresholds thresholds)
         => Decide(pieces, Breaks(scores), thresholds);
 
@@ -78,11 +42,6 @@ public static class SegmentSequence
         return kinds;
     }
 
-    /// <summary>
-    /// The stretches of the kinds decided from the segments and the joined pieces over them: the sequence chosen goes
-    /// from the recording's zero to its end through segments and joined pieces, a joined piece taken for one of its kinds
-    /// at its own chance of that kind as one segment, in place of the segments it joins.
-    /// </summary>
     public static IReadOnlyList<SegmentSpan> Decided(
         IReadOnlyList<SegmentPiece> pieces,
         IReadOnlyList<SegmentChances> chances,
@@ -109,9 +68,6 @@ public static class SegmentSequence
         return Stretched(Chosen(pieces, chances, joined, joinedChances, thresholds), length, thresholds);
     }
 
-    /// <summary>
-    /// The stretches of the kinds decided from the scores of a break against the programme alone.
-    /// </summary>
     public static IReadOnlyList<SegmentSpan> Spans(
         IReadOnlyList<SegmentPiece> pieces,
         IReadOnlyList<SegmentKind> kinds,
@@ -163,10 +119,6 @@ public static class SegmentSequence
         return [.. stretches.Select(stretch => new SegmentSpan(stretch.Starts, stretch.Ends, stretch.Kind, Math.Clamp(stretch.Weighted / stretch.Weight, 0, 1)))];
     }
 
-    /// <summary>
-    /// The steps of the sequence chosen, from the recording's zero to its end: each a segment, or a joined piece, and
-    /// the kind it is taken for.
-    /// </summary>
     private static List<Step> Chosen(
         IReadOnlyList<SegmentPiece> pieces,
         IReadOnlyList<SegmentChances> chances,
@@ -197,10 +149,6 @@ public static class SegmentSequence
         return Traced(columns, leaving, Ending(columns[^1]));
     }
 
-    /// <summary>
-    /// Offers every move from each state reached at <paramref name="node"/> through <paramref name="step"/>, the
-    /// <paramref name="edge"/>th of the steps leaving it, to the node it reaches.
-    /// </summary>
     private static void Stepped(Column[] columns, int node, int edge, Edge step, SegmentThresholds thresholds)
     {
         Column from = columns[node];
@@ -233,11 +181,6 @@ public static class SegmentSequence
         }
     }
 
-    /// <summary>
-    /// Offers every move from the state <paramref name="came"/> from through <paramref name="step"/>, of the kinds it may
-    /// be taken for: to the programme, to a break, to the opening and to the ending, in that order, so that a tie keeps
-    /// the earlier.
-    /// </summary>
     private static void Moved(Column next, Came came, Reach reach, TimeSpan run, Edge step, SegmentThresholds thresholds)
     {
         int state = came.State;
@@ -282,11 +225,6 @@ public static class SegmentSequence
         }
     }
 
-    /// <summary>
-    /// Offers a move into the opening or the ending whose state while still too short to leave is
-    /// <paramref name="shortState"/>, lasting <paramref name="run"/> with it: to that state while it is still that
-    /// short, to the one after it once it may be left, and nowhere when it is longer than one may last.
-    /// </summary>
     private static void Themed(Column next, int shortState, Came came, Reach reach, TimeSpan run)
     {
         if (run <= CatalogKinds.ThemeLongest)
@@ -295,9 +233,6 @@ public static class SegmentSequence
         }
     }
 
-    /// <summary>
-    /// The state the sequence chosen ends in: the best one may end in, the earliest of those that tie.
-    /// </summary>
     private static int Ending(Column last)
     {
         int ending = 0;
@@ -377,10 +312,6 @@ public static class SegmentSequence
         }
     }
 
-    /// <summary>
-    /// How a state is reached: by overruling how many fixed segments, and with what sum. Fewer overruled beats
-    /// more, then the greater sum; a sum of nothing at all is not reached.
-    /// </summary>
     private readonly record struct Reach(int Overruled, double Score)
     {
         public static Reach None { get; } = new(int.MaxValue, double.NegativeInfinity);
@@ -392,19 +323,10 @@ public static class SegmentSequence
         public bool Beats(Reach other) => Overruled != other.Overruled ? Overruled < other.Overruled : Score > other.Score;
     }
 
-    /// <summary>
-    /// One segment with its chances, fixed when the catalog fixes it to a kind the model tells apart, counting as
-    /// <see cref="Counts"/> segments.
-    /// </summary>
     private readonly record struct Piece(SegmentPiece Segment, SegmentChances Chances, int Counts = 1)
     {
         public CatalogFix? Fixed => Segment.Fixed is { } fix && Chances.Weighs(fix.Kind) ? fix : null;
 
-        /// <summary>
-        /// Whether this segment lies where <paramref name="kind"/> may: an opening starts in the first half of the
-        /// programme and an ending ends in its second half; anywhere when where it lies is not known, or when the
-        /// catalog fixes it to that kind.
-        /// </summary>
         public bool Lies(SegmentKind kind)
             => Fixed?.Kind == kind || kind switch
             {
@@ -426,16 +348,8 @@ public static class SegmentSequence
         public double Chance(SegmentKind kind) => Fixed is { } fix && fix.Kind == kind ? fix.Chance : Chances.Of(kind);
     }
 
-    /// <summary>
-    /// Where a state was reached from: the node before the step, the state there, and which of the steps leaving that
-    /// node it took.
-    /// </summary>
     private readonly record struct Came(int Node, int State, int Edge);
 
-    /// <summary>
-    /// A step from one node to another: a segment, or a joined piece over the segments from <see cref="First"/> to
-    /// <see cref="Last"/>, which may be taken for any kind when <see cref="Kinds"/> is not given.
-    /// </summary>
     private readonly record struct Edge(int First, int Last, Piece Piece, IReadOnlyList<SegmentKind>? Kinds)
     {
         public bool Takes(SegmentKind kind) => Kinds is null || Kinds.Contains(kind);

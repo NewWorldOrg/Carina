@@ -406,10 +406,6 @@ public sealed class ReservationOutcomeServiceTests(RepositoryDatabase database) 
         Assert.Equal(ReservationState.Missed, await StateOfAsync(after.Id));
     }
 
-    /// <summary>
-    /// The container over the scratch database with the clock at <paramref name="at"/>, the grace this class
-    /// works to, and, when <paramref name="outcomes"/> is given, the outcomes wrapped by it.
-    /// </summary>
     private AsyncServiceScope StandingIn(
         DateTime at,
         Func<IReservationOutcomeRepository, IReservationOutcomeRepository>? outcomes = null)

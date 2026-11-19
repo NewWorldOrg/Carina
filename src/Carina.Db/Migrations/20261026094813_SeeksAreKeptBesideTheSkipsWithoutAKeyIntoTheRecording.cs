@@ -8,10 +8,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class SeeksAreKeptBesideTheSkipsWithoutAKeyIntoTheRecording : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.CreateTable(
@@ -47,7 +45,6 @@ public partial class SeeksAreKeptBesideTheSkipsWithoutAKeyIntoTheRecording : Mig
             columns: ["recording_id", "happened_at"]);
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropTable(

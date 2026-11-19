@@ -1,9 +1,5 @@
 namespace Carina.Domain.Auth;
 
-/// <summary>
-/// The answer to one sign-in to the local account: the account it opened, the moment the caller may try again, or
-/// neither when the name or the password is wrong.
-/// </summary>
 public sealed record LocalLogin(LocalAccount? Admitted, DateTime? HeldOffUntil)
 {
     public static LocalLogin HeldOff(DateTime until) => new(null, until);
@@ -13,11 +9,6 @@ public sealed record LocalLogin(LocalAccount? Admitted, DateTime? HeldOffUntil)
     public static LocalLogin Opened(LocalAccount account) => new(account, null);
 }
 
-/// <summary>
-/// Decides a sign-in to the local account: counts the caller's try before the password is checked, compares the
-/// password with the stored hash, or with a hash of the same cost when there is no account so that the time taken
-/// says nothing, and forgets the caller's tries once one passes.
-/// </summary>
 public sealed class LocalLoginDomainService(
     ILocalAccountRepository accounts,
     IPasswordHasher hasher,

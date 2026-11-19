@@ -354,10 +354,6 @@ public sealed class CandidateChannelRepositoryTests(RepositoryDatabase database)
 
     private static int NextNetwork() => BroadcastIds.NextNetwork();
 
-    /// <summary>
-    /// Removes one candidate, through a connection of its own, just before the first update the
-    /// context it watches sends.
-    /// </summary>
     private sealed class RemovedBeforeItIsWritten(ServiceProvider container, CandidateChannelId removed)
         : DbCommandInterceptor
     {

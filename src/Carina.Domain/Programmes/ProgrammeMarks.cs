@@ -1,9 +1,5 @@
 namespace Carina.Domain.Programmes;
 
-/// <summary>
-/// A mark a broadcaster writes into a programme's name or summary to say what kind of broadcast it
-/// is, one for each of the programme attributes in row 90 of the ARIB STD-B24 additional symbols.
-/// </summary>
 public enum ProgrammeMark
 {
     HighDefinition = 1,
@@ -78,10 +74,6 @@ public sealed record ProgrammeMarkSymbol(ProgrammeMark Mark, int CodePoint)
     public string Symbol { get; } = char.ConvertFromUtf32(CodePoint);
 }
 
-/// <summary>
-/// The marks a programme carries, read from the symbols in its name and summary. The symbols are
-/// the code points the ARIB STD-B24 additional symbols 90-48 to 90-63 and 90-66 to 90-82 decode to.
-/// </summary>
 public static class ProgrammeMarks
 {
     public static IReadOnlyList<ProgrammeMarkSymbol> Symbols { get; } =

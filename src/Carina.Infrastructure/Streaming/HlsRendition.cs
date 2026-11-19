@@ -3,10 +3,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// What a key holds: pictures and sound read as they come and cut into segments, for as long as a player goes on
-/// asking for them.
-/// </summary>
 internal abstract class HlsRendition : IHlsRendition
 {
     private readonly TimeProvider clock;
@@ -94,9 +90,6 @@ internal abstract class HlsRendition : IHlsRendition
         }
     }
 
-    /// <summary>
-    /// Ends once what the key holds has been let go of.
-    /// </summary>
     internal Task Life { get; private set; } = Task.CompletedTask;
 
     protected Lock Gate { get; } = new();
@@ -115,9 +108,6 @@ internal abstract class HlsRendition : IHlsRendition
         }
     }
 
-    /// <remarks>
-    /// Holds its own deadline, disposed of with the wait.
-    /// </remarks>
     public async Task<bool> ReadyAsync(CancellationToken cancellationToken)
     {
         using CancellationTokenSource deadline = new(Settings.LongestWait, clock);
@@ -151,9 +141,6 @@ internal abstract class HlsRendition : IHlsRendition
         }
     }
 
-    /// <summary>
-    /// Stops reading, which lets go of what the key holds.
-    /// </summary>
     internal void Close()
     {
         lock (Gate)
@@ -170,9 +157,6 @@ internal abstract class HlsRendition : IHlsRendition
         stopping.Cancel();
     }
 
-    /// <summary>
-    /// Reads what the key holds until it ends or the key is let go of, and lets go of it then.
-    /// </summary>
     protected abstract Task ReadAsync();
 
     protected void SayTheEndCame() => ready.TrySetResult();
@@ -221,7 +205,4 @@ internal abstract class HlsRendition : IHlsRendition
     }
 }
 
-/// <summary>
-/// The digest a key is held by and the watcher it was issued to.
-/// </summary>
 internal readonly record struct HlsHolding(string Digest, Subject Watcher);

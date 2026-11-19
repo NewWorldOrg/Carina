@@ -172,10 +172,6 @@ public static class IntegrityScan
         return reachable;
     }
 
-    /// <summary>
-    /// Whether a place other than a recording root holds a file under a recording's own file name, which
-    /// is how a recording root looks when it is mounted there as well.
-    /// </summary>
     private static bool ShowsTheRecordings(RootListing listing, HashSet<string> recordingFiles)
         => listing.Place is not StoragePlace.Recordings
            && listing.Files.Any(file => recordingFiles.Contains(file.Path));

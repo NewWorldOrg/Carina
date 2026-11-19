@@ -1,11 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Where the frames of a picture stream fall on the recording's own time: frame <c>n</c> is
-/// <c>n</c> frames of <see cref="Denominator"/> / <see cref="Numerator"/> seconds after
-/// <see cref="FirstFrameAt"/>. A clock faster than <see cref="FastestFrames"/> frames a second, or
-/// whose first frame comes before the recording's time zero, is refused.
-/// </summary>
 public sealed record FrameClock
 {
     public const int FastestFrames = 240;

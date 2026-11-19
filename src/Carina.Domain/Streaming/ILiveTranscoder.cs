@@ -14,9 +14,5 @@ public interface ILiveTranscoder : IAsyncDisposable
 
     Task<TranscoderExit> Completion { get; }
 
-    /// <summary>
-    /// Completes when the transcoder has read enough of its input to know what it carries, and never for one that
-    /// does not say so.
-    /// </summary>
     Task Probed { get; }
 }

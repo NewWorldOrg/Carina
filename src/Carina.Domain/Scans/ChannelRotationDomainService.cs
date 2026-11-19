@@ -2,19 +2,10 @@ using Carina.Domain.Channels;
 
 namespace Carina.Domain.Scans;
 
-/// <summary>
-/// Records on each candidate channel held what a scan or another tuning learnt of its reception, and which candidates
-/// a scan took out of the rotation.
-/// </summary>
 public sealed class ChannelRotationDomainService(
     IBroadcastServiceRepository services,
     ICandidateChannelRepository candidates)
 {
-    /// <summary>
-    /// A candidate whose channel the scan walked is received when the attempt succeeded and the stream it reached
-    /// names the candidate's service, and fails otherwise; an attempt that says nothing of reception leaves it alone.
-    /// A candidate the failure takes out of the rotation is returned as a departure.
-    /// </summary>
     public async Task<IReadOnlyList<RotationDeparture>> RecordScanAsync(
         IReadOnlyList<ScanRunAttempt> attempts,
         IReadOnlyDictionary<TuningParameters, IReadOnlySet<ServiceId>> named,
@@ -59,10 +50,6 @@ public sealed class ChannelRotationDomainService(
         return departures;
     }
 
-    /// <summary>
-    /// A tuning outside a scan that failed counts against the candidate it tuned with. Answers false when that
-    /// candidate is gone.
-    /// </summary>
     public Task<bool> RecordTuneFailureAsync(
         CandidateChannelId candidateChannelId,
         RotationBackoff backoff,
@@ -74,10 +61,6 @@ public sealed class ChannelRotationDomainService(
         return TellAsync(candidateChannelId, candidate => candidate.RecordTuningFailure(backoff, at), cancellationToken);
     }
 
-    /// <summary>
-    /// A tuning outside a scan that reached the candidate it tuned with takes it back into the rotation with a lock
-    /// and nothing measured, so the signal a scan measured stays. Answers false when that candidate is gone.
-    /// </summary>
     public Task<bool> RecordTuneReachedAsync(
         CandidateChannelId candidateChannelId,
         DateTime at,

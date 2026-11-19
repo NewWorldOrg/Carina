@@ -6,10 +6,6 @@ public static class Eventually
 
     private static TimeSpan Interval { get; } = TimeSpan.FromMilliseconds(10);
 
-    /// <summary>
-    /// Waits until <paramref name="condition"/> holds. Whether the patience has run out is read before each
-    /// look, so the look that gives up is one taken after it ran out, however long the look itself took.
-    /// </summary>
     public static async Task Happens(Func<bool> condition, string what, TimeSpan? patience = null)
     {
         ArgumentNullException.ThrowIfNull(condition);
@@ -35,11 +31,6 @@ public static class Eventually
         }
     }
 
-    /// <summary>
-    /// Asks <paramref name="attempt"/> until what it yields meets <paramref name="condition"/>. Whether the
-    /// patience has run out is read before each ask, so the answer that gives up is one asked for after it ran
-    /// out, however long the answer took to come.
-    /// </summary>
     public static async Task<T> Yields<T>(
         Func<Task<T>> attempt,
         Func<T, bool> condition,

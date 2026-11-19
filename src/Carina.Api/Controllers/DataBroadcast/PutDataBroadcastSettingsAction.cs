@@ -10,10 +10,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Carina.Api.Controllers.DataBroadcast;
 
-/// <summary>
-/// Registers where the receiver is, for data broadcast documents to read: the postal code and the prefecture are sent
-/// together, and either may be null, which leaves it unregistered.
-/// </summary>
 [ApiController]
 [Route("api/data-broadcast/settings")]
 [EndpointEffect(EndpointEffect.Changing)]

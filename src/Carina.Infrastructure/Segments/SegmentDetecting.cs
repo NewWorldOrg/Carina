@@ -3,19 +3,8 @@ using Carina.Domain.Segments;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// What a detection of one recording reads: its readings, what is known of it besides, and the moment up to
-/// which the catalog it heard was matched.
-/// </summary>
 public sealed record DetectionInputs(SegmentEvidence Evidence, SegmentContext Context, DateTime CatalogUntil);
 
-/// <summary>
-/// Detects the segments of one recording with one version of the model. It reads the recording's readings, and
-/// what the <see cref="SegmentContextDomainService"/> says is known of it besides, among the
-/// <see cref="SegmentDetectionSettings.EpisodesAmong"/> most recent earlier recordings on its station, the logo learned
-/// from the <see cref="SegmentDetectionSettings.LogoFrom"/> most recent of them. The counting is done on the
-/// <see cref="LowestPriorityScheduler"/>. Nothing is written here.
-/// </summary>
 public sealed class SegmentDetecting(
     IDetectionWorklist worklist,
     SegmentContextDomainService context,

@@ -6,12 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// What the day's round did: the rollback made before learning, if one was; what became of the candidate; the
-/// candidate kept, what judging it against the version in use said, the figures of the version in use on the
-/// same recordings with its number, and the candidates before it let go, when one was learned; the version in use
-/// after the round; and, when the round stopped partway, what stood in the way.
-/// </summary>
 public sealed record SegmentTrainingRound(
     DateOnly Day,
     SegmentRollback? Rollback,
@@ -29,32 +23,8 @@ public sealed record SegmentTrainingRound(
     public IReadOnlyList<int> LetGo { get; init; } = [];
 }
 
-/// <summary>
-/// What one look did: what in spare time stood in the way when no round was made, null when nothing was asked of
-/// spare time because the day's round had been finished or another process was taking it; and the round when one
-/// was made.
-/// </summary>
 public sealed record SegmentTrainingLook(SpareTimeVerdict? Verdict, SegmentTrainingRound? Round);
 
-/// <summary>
-/// Takes the day's round of learning (<see cref="SegmentLearningRound"/>) once a day, in <see cref="SpareTime"/>
-/// once the day has begun, so nothing of it happens while anything is recorded or watched, or just before a
-/// reservation. Spare time is asked again after each recording learning reads and after each step it
-/// takes; when it has ended, the round stops there, throws what it learned away, and is taken again at the next look
-/// in spare time the same day. A round is kept as finished once it ends otherwise, failing included, so it is not
-/// taken again that day; one process takes a round at a time. A round first rolls the version in use back when
-/// <see cref="SegmentRollback"/> says so; then, when <see cref="SegmentLearningRound.HasNews"/> finds something
-/// learning reads changed since the last round that kept a candidate, learns a candidate beside the version in use
-/// and keeps it as a candidate, unless no recording was judged, when there was nothing to learn from; lets go of the
-/// candidates before it that were never used (<see cref="SegmentVersionDomainService.LetGoBeforeAsync"/>),
-/// the round keeping the candidate's figures so that what it says outlasts it; and puts it in
-/// use when <see cref="SegmentAdoption"/> says so, no version was rolled
-/// back from in the days <see cref="SegmentAdoption.AfterRollbacks"/> holds candidates out, and the version in use
-/// is still the one it was judged against. The version in use moves only through
-/// <see cref="ISegmentModelVersionRepository.ChangeAsync"/>, after which detection in spare time detects the
-/// recordings still kept again with it. Spare time is looked for after
-/// <see cref="SegmentTrainingSettings.BeforeFirstLook"/>, then every <see cref="SegmentTrainingSettings.BetweenLooks"/>.
-/// </summary>
 public sealed class SegmentTrainingJob(
     IServiceScopeFactory scopes,
     SegmentTrainingSettings settings,
@@ -116,12 +86,6 @@ public sealed class SegmentTrainingJob(
         return SpareTime.Judge(await services.GetRequiredService<IOccupancyReader>().ReadAsync(now, cancellationToken), now);
     }
 
-    /// <summary>
-    /// Makes the round and keeps it as finished, with what became of it, the candidate it kept, the verdict on it, the
-    /// figures of the version in use it was judged against and its number, and the candidate's own figures and what
-    /// they stand on, unless it stopped partway; a round that fails is kept as finished too, as failed, so that the
-    /// next try is the next day's.
-    /// </summary>
     private async Task<SegmentTrainingRound> FinishedAsync(
         IServiceProvider services,
         ISegmentLearningRoundRepository rounds,
@@ -247,9 +211,6 @@ public sealed class SegmentTrainingJob(
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 
-    /// <summary>
-    /// Waits for <paramref name="waiting"/>; false once the process is stopping.
-    /// </summary>
     private async Task<bool> WaitAsync(TimeSpan waiting, CancellationToken stoppingToken)
     {
         try

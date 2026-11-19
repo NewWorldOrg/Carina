@@ -6,10 +6,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Api.Live;
 
-/// <summary>
-/// A live channel handed to a player through playlists: the first opened by the session or a ticket, the rest by the
-/// key it names.
-/// </summary>
 public static class LiveHlsDelivery
 {
     public const string Path = "/api/live/{networkId}-{serviceId}/hls.m3u8";
@@ -106,10 +102,6 @@ public static class LiveHlsDelivery
             keys);
     }
 
-    /// <summary>
-    /// Seats the watcher, issues a key holding the seat and, once the first segment is cut, answers the playlist
-    /// naming the key's own. The picture is in H.264, since a player opening a playlist says nothing of what it decodes.
-    /// </summary>
     public static async Task OpenAsync(
         HttpContext context,
         LiveSessionKey asked,

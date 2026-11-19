@@ -22,14 +22,6 @@ using static Carina.Infrastructure.Tests.Unit.Infra.Segments.LearningFollowHarne
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
-/// <summary>
-/// Makes a reduced copy of a broadcast synthesised with the ffmpeg the application runs, in the shape the
-/// copies were made in, imports it, and holds what was kept against what following the same broadcast
-/// keeps: the quiet and the dark at the same moments, fingerprints differing in fewer than a tenth of their
-/// bits, the two channels as alike and their difference as loud, frames as bright, and outlines of the
-/// corners alike. The copy's sound is encoded at a rate this
-/// ffmpeg's own Opus encoder carries without loss worth the name, so what is measured is the import.
-/// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
 public sealed class FfmpegReducedCopyImporterMaterialTests : IDisposable
@@ -290,12 +282,6 @@ public sealed class FfmpegReducedCopyImporterMaterialTests : IDisposable
     private async Task<string> WriteAsync(string name, SyntheticBroadcast broadcast)
         => await broadcast.WriteAsync(Path.Combine(room, name + SyntheticBroadcast.TransportStream));
 
-    /// <summary>
-    /// A reduced copy of the broadcast, made the way the copies were made: one ffmpeg reading the broadcast once,
-    /// the frames 64 by 36 in grey at every frame, the four corners of the picture shrunk to 960 by 540 cut out
-    /// 240 by 135 and laid out two by two four times a second, and the sound as the half sum and the half
-    /// difference of its channels at 16 kHz, each alone in its file.
-    /// </summary>
     private async Task<ReducedCopy> CopyAsync(string source, string name, int tileWidth = CornerTiles.TileWidth)
     {
         string directory = Path.Combine(room, name);
@@ -387,10 +373,6 @@ public sealed class FfmpegReducedCopyImporterMaterialTests : IDisposable
         return (new LearningRecords(provider.GetRequiredService<IServiceScopeFactory>()), extractions, data, provider);
     }
 
-    /// <summary>
-    /// What ffprobe reads of the file the way the copies were described: the format, the programmes and the
-    /// streams, read as far into the file as the copies read.
-    /// </summary>
     private static async Task<string> ProbeAsync(string source)
     {
         ProcessStartInfo start = new("ffprobe") { RedirectStandardOutput = true, UseShellExecute = false };

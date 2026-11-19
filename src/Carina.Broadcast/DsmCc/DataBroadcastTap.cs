@@ -3,16 +3,6 @@ using Carina.Broadcast.Tables;
 
 namespace Carina.Broadcast.DsmCc;
 
-/// <summary>
-/// Reads one programme's data broadcast out of a transport stream handed over in pieces of any length: the
-/// association table to the programme map, the map to the data streams, and each data stream's sections to
-/// the carousels, the event messages and the references of the programme time, timed on the programme's clock
-/// followed through its wrap. Carousels are put together only from the streams marked as carrying them.
-/// </summary>
-/// <remarks>
-/// Nothing is said of the data broadcast until the programme's clock has been heard. A new version of the
-/// programme map starts the carousels and the event messages again.
-/// </remarks>
 public sealed class DataBroadcastTap
 {
     public const int MostProgramNumber = 0xFFFF;
@@ -58,15 +48,8 @@ public sealed class DataBroadcastTap
         carousels = new DataCarousels(limits);
     }
 
-    /// <summary>
-    /// The moment what is read is stamped with: the programme's clock followed through its wrap, held where it
-    /// was when the clock steps back, or null until the clock has been heard.
-    /// </summary>
     public long? Now => stamp;
 
-    /// <summary>
-    /// The first moment of the programme's clock that was heard, or null until it has been heard.
-    /// </summary>
     public long? FirstHeard { get; private set; }
 
     public long UnreadablePackets { get; private set; }

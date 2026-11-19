@@ -1,8 +1,5 @@
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// The body of a notice, built one fact a line. A fact with nothing to say takes no line.
-/// </summary>
 internal sealed class NoticeLines
 {
     private const string Separator = " · ";

@@ -2,10 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// How long one job that finished took, and when it finished, both taken from the ledger's own
-/// marks.
-/// </summary>
 public sealed record EncodeSpell
 {
     public EncodeSpell(DateTime endedAt, TimeSpan took)
@@ -27,11 +23,6 @@ public sealed record EncodeSpell
     public TimeSpan Took { get; }
 }
 
-/// <summary>
-/// What the jobs that finished say about how long an encode takes on this machine. The average is
-/// null until <see cref="FewestToAverage"/> of them have finished; the count and the window, the two
-/// ends of what was counted, are answered either way. Nothing is split by profile.
-/// </summary>
 public sealed record EncodeSpells(int Counted, TimeSpan? Average, DateTime? Oldest, DateTime? Newest)
 {
     public const int FewestToAverage = 3;

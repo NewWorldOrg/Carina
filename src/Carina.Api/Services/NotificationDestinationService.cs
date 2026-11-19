@@ -13,11 +13,6 @@ public sealed record NoticeTrialOutcome(bool Delivered, NoticeFailure? Failure);
 
 public sealed record NotificationRemoved(Guid Id);
 
-/// <summary>
-/// Lists, changes, removes and tries the destinations notices are sent to, and registers the webhooks among them. The
-/// address of a webhook and the subscription of a browser are sealed before they are kept and are never given back. A
-/// destination removed leaves the sets of rules and the programmes that wait.
-/// </summary>
 public sealed class NotificationDestinationService(
     INotificationDestinationRepository destinations,
     INotificationRuleRepository rules,

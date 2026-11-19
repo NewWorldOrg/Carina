@@ -9,10 +9,6 @@ using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.Support;
 
-/// <summary>
-/// The host the feature tests raise the application from. Every application raised from it, or from
-/// a host reshaped from it however many times, is stopped and let go of when this one is.
-/// </summary>
 public class TestingWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly Lock gate = new();
@@ -37,10 +33,6 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
         TrustedProxies.NetworksKey,
     ];
 
-    /// <summary>
-    /// How many times this host, or one reshaped from it, asked an application raised from it to stop. The
-    /// stop an application then makes of itself, once its entry point sees it is stopping, is not counted.
-    /// </summary>
     public int StopsAsked => Volatile.Read(ref stopsAsked);
 
     public string DriverSocketPath { get; init; } =
@@ -76,11 +68,6 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
         return host;
     }
 
-    /// <summary>
-    /// Lets go of this host, then stops and lets go of every application raised from it that is still
-    /// running. One that fails to stop does not keep the rest from being stopped, and none is stopped
-    /// twice; what failed is thrown once everything has been let go of.
-    /// </summary>
     public override async ValueTask DisposeAsync()
     {
         (IHost Host, CancellationToken Stopped)[] running;

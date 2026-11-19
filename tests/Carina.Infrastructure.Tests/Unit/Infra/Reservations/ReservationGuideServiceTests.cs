@@ -353,10 +353,6 @@ public sealed class ReservationGuideServiceTests
                 lastHeardAt: heardWhole ? Now : null));
         }
 
-        /// <summary>
-        /// Another broadcast on the same service, named by a reading later than anything the reserved one
-        /// carries.
-        /// </summary>
         public void AnnounceBeside(bool heardWhole)
             => Programmes.Programmes.Add(Programme.Rehydrate(
                 new ProgrammeId(new NetworkId(Network), new ServiceId(Listed), new EventId(Carried + 1)),

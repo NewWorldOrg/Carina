@@ -10,11 +10,6 @@ public enum PlaybackPositionKeep
     NoSuchRecording = 2,
 }
 
-/// <summary>
-/// Where each viewer's place in each recording is kept. One row stands per viewer per recording and
-/// is moved by each report; the last one written is what the next player is told. It names the
-/// recording by value, and a place is kept only while the ledger still holds the recording.
-/// </summary>
 public interface IPlaybackPositionRepository
 {
     Task<PlaybackPosition?> FindAsync(
@@ -22,10 +17,6 @@ public interface IPlaybackPositionRepository
         Subject viewer,
         CancellationToken cancellationToken);
 
-    /// <summary>
-    /// The places this viewer holds in the recordings named, in one read. A recording the viewer has
-    /// not watched has no entry.
-    /// </summary>
     Task<IReadOnlyDictionary<RecordingId, PlaybackPosition>> FindEachAsync(
         IReadOnlyCollection<RecordingId> recordingIds,
         Subject viewer,

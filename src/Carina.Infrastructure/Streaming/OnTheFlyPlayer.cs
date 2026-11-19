@@ -181,9 +181,6 @@ public sealed class OnTheFlyPlayer(
             new OnTheFlyViewing(transcoder, standing, buffer.AsMemory(0, read), bearing.Seat.Dispose));
     }
 
-    /// <remarks>
-    /// Holds its own deadline, disposed of with the wait.
-    /// </remarks>
     private async Task<int?> FirstMouthfulAsync(Task<int> mouthful, CancellationToken cancellationToken)
     {
         using CancellationTokenSource deadline = new(settings.LongestWaitForTheFirstByte, clock);

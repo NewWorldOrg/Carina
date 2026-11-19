@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class TheArchiveKeepsWhichProgrammesWereSuperseded : Migration
 {
     private const string JudgeWhatIsAlreadyKept = """
@@ -77,7 +76,6 @@ public partial class TheArchiveKeepsWhichProgrammesWereSuperseded : Migration
               AND newer.ends > older.start_at);
         """;
 
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropIndex(
@@ -100,7 +98,6 @@ public partial class TheArchiveKeepsWhichProgrammesWereSuperseded : Migration
         migrationBuilder.Sql(JudgeWhatIsAlreadyKept);
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropIndex(

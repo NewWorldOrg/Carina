@@ -78,10 +78,6 @@ public static class RecordingFaults
         RecordingFault.DriverReplaced,
     ];
 
-    /// <summary>
-    /// Reasons that say how long the recording was promised rather than how it ran or how it ended.
-    /// They are written while it is still running, by whatever set the window.
-    /// </summary>
     public static readonly IReadOnlyList<RecordingFault> ThatExplainTheWindow =
     [
         RecordingFault.EndStillUndecided,

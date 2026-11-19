@@ -5,20 +5,10 @@ using Carina.Domain.Captions;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// The text of a recording's captions written as WebVTT on an artefact's clock: each text shown is a cue
-/// from its moment less the job's caption shift until the next change. A cue that begins before zero begins
-/// at zero, one that ends before zero or begins at or after the end is dropped, one that runs past the end
-/// is cut there, and the last one still shown lasts to the end, or <see cref="LastCueWithNoEnd"/> when no
-/// end is known.
-/// </summary>
 public static class CaptionTrackFile
 {
     public static readonly TimeSpan LastCueWithNoEnd = TimeSpan.FromSeconds(5);
 
-    /// <summary>
-    /// The file, or null when no cue is left to write.
-    /// </summary>
     public static string? Written(IReadOnlyList<CaptionLine> lines, TimeSpan shift, TimeSpan? length)
     {
         ArgumentNullException.ThrowIfNull(lines);

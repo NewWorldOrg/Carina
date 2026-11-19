@@ -53,9 +53,6 @@ public sealed record QueryInput
             [.. values]);
     }
 
-    /// <summary>
-    /// A query naming any of the values, each as a repeat of the name.
-    /// </summary>
     public static QueryInput SomeOfThese(string name, string says, IReadOnlyList<string> values)
     {
         ArgumentNullException.ThrowIfNull(values);

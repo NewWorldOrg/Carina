@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class TakingBackWhatWasLeftRunning : Migration
 {
     private const string Breaking =
@@ -26,7 +25,6 @@ public partial class TakingBackWhatWasLeftRunning : Migration
 
     private const string NothingWasWritingItAsJson = ", \"LeftRunningUnwatched\", \"DriverReplaced\"";
 
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -34,7 +32,6 @@ public partial class TakingBackWhatWasLeftRunning : Migration
         Reasons(migrationBuilder, NothingWasWritingIt, NothingWasWritingItAsJson);
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

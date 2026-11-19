@@ -2,10 +2,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// What decides whether it is spare time for the heavy work of learning: whether anything is being recorded or
-/// watched, and when the nearest reservation still to be recorded starts, its margin included.
-/// </summary>
 public sealed record Occupancy(bool Recording, bool Watching, DateTime? NextReservationStartsAt);
 
 public enum SpareTimeVerdict
@@ -19,10 +15,6 @@ public enum SpareTimeVerdict
     ReservationSoon = 5,
 }
 
-/// <summary>
-/// Whether it is spare time for the heavy work of learning: the machine is idle as <see cref="Idleness"/> judges it
-/// for every pass over ended recordings. Otherwise, the first of those that stands in the way.
-/// </summary>
 public static class SpareTime
 {
     public static readonly TimeSpan NoReservationWithin = Idleness.NoReservationWithin;

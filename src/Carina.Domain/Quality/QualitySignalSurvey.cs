@@ -7,16 +7,6 @@ using Puppis.Contracts;
 
 namespace Carina.Domain.Quality;
 
-/// <summary>
-/// What was read of one tuner's signal over a period.
-/// </summary>
-/// <param name="CarrierToNoiseUsual">
-/// The lowest carrier to noise figure that more than half of what was read sits at or under, or null when none
-/// was read.
-/// </param>
-/// <param name="BitErrorRateUsual">
-/// The highest bit error rate that more than half of what was read sits at or over, or null when none was read.
-/// </param>
 public sealed record SignalFigures(
     TunerDeviceId Tuner,
     long Samples,
@@ -39,9 +29,6 @@ public sealed record SignalFigures(
 
 public sealed record QualitySignalRead(QualityThresholdKey Key, QualityReading Reading, DateTime? LastTakenAt);
 
-/// <summary>
-/// What was read of one channel on one tuner over a period.
-/// </summary>
 public sealed record ReceptionFigures(NetworkId Network, ServiceId Service, SignalFigures Figures)
 {
     public QualitySubject Subject
@@ -113,9 +100,6 @@ public static class QualitySignalSurvey
         ];
     }
 
-    /// <summary>
-    /// Gathers what each channel read on each tuner, apart from every other channel and tuner.
-    /// </summary>
     public static IReadOnlyList<ReceptionFigures> ByReception(IReadOnlyList<QualitySignalWindow> windows)
     {
         ArgumentNullException.ThrowIfNull(windows);
@@ -134,18 +118,12 @@ public static class QualitySignalSurvey
         ];
     }
 
-    /// <summary>
-    /// Holds what each tuner usually read over the period against each level.
-    /// </summary>
     public static IReadOnlyList<QualitySignalRead> Read(
         IReadOnlyList<SignalFigures> figures,
         IReadOnlyList<TunerDeviceId> subjects,
         IReadOnlyList<QualityThresholdStanding> thresholds)
         => Read(figures, subjects, thresholds, Observed);
 
-    /// <summary>
-    /// Holds the worst each tuner read over the period against each level.
-    /// </summary>
     public static IReadOnlyList<QualitySignalRead> ReadAtWorst(
         IReadOnlyList<SignalFigures> figures,
         IReadOnlyList<TunerDeviceId> subjects,
@@ -244,9 +222,6 @@ public static class QualitySignalSurvey
         _ => false,
     };
 
-    /// <summary>
-    /// What a tuner usually read over the period: the reading its standing is told by.
-    /// </summary>
     public static double? Observed(QualityThresholdKey key, SignalFigures figure)
     {
         ArgumentNullException.ThrowIfNull(figure);
@@ -260,9 +235,6 @@ public static class QualitySignalSurvey
         };
     }
 
-    /// <summary>
-    /// The worst a tuner read at any one moment of the period.
-    /// </summary>
     public static double? Worst(QualityThresholdKey key, SignalFigures figure)
     {
         ArgumentNullException.ThrowIfNull(figure);

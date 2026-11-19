@@ -12,10 +12,6 @@ public sealed record RuleMatch(Rule Rule, ProgrammeMatch Programme)
     public BroadcastGroupRole GroupRole { get; init; } = BroadcastGroupRole.Standalone;
 }
 
-/// <summary>
-/// The programmes the rules take once each match is replaced by the programmes that stand for its
-/// broadcast, and how many matches were listings a moved broadcast suppresses.
-/// </summary>
 public sealed record RuleTaking(IReadOnlyList<RuleMatch> Matches, int Moved);
 
 public sealed record RuleFault(Rule Rule, Exception Cause);
@@ -25,9 +21,6 @@ public sealed record RuleMatchRun(
     IReadOnlyList<Rule> TurnedOff,
     IReadOnlyList<RuleFault> Faulted)
 {
-    /// <summary>
-    /// The search each rule read was matched by, bound to the services the guide lists.
-    /// </summary>
     public IReadOnlyDictionary<RuleId, ProgrammeSearch> Searches { get; init; } =
         new Dictionary<RuleId, ProgrammeSearch>();
 }
@@ -104,15 +97,6 @@ public sealed class RuleMatcher(ProgrammeSearchScopeDomainService scope, TimePro
         return new RuleMatchRun(found, turnedOff, faulted) { Searches = searches };
     }
 
-    /// <summary>
-    /// Replaces every match by the programmes that stand for its broadcast: the primary listing of a
-    /// moved broadcast, every segment still to come of a relayed one, and the programme on the service
-    /// with the smallest identifier when several services carry the broadcast at the same time and the
-    /// rule's search reaches that service too. Of a broadcast several services carry, a programme on
-    /// which a reservation of the same rule stands that a person changed (<paramref name="changed"/>) is
-    /// kept and taken in place of the others. The first rule to reach a programme keeps it, as it does
-    /// before the replacement.
-    /// </summary>
     public static RuleTaking Resolved(
         IReadOnlyList<RuleMatch> matches,
         IReadOnlyDictionary<RuleId, ProgrammeSearch> searches,
@@ -185,12 +169,6 @@ public sealed class RuleMatcher(ProgrammeSearchScopeDomainService scope, TimePro
         return new RuleTaking(taking, moved);
     }
 
-    /// <summary>
-    /// The programme the rule reserves for <paramref name="target"/>: the same broadcast on the service
-    /// with the smallest identifier, or on the service where a person changed the rule's reservation,
-    /// when the rule's search reaches it, so a rule that names only a sub channel keeps the sub channel
-    /// it named.
-    /// </summary>
     private static BroadcastTarget Reserved(
         BroadcastTarget target,
         Rule rule,

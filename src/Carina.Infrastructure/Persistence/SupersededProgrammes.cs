@@ -4,24 +4,12 @@ using Carina.Domain.Programmes;
 
 namespace Carina.Infrastructure.Persistence;
 
-/// <summary>
-/// <see cref="ProgrammeSupersession"/> written in SQL, for every read that shows the guide. Two programmes of one
-/// service share airtime only where, in start order, one begins before the latest end so far or ends after the
-/// next one begins, so a single ordered pass over the service's programmes finds them, and the heard marks are
-/// compared among those alone rather than across the whole service. The archive is judged when programmes move
-/// into it, and its reads filter on the verdict kept beside each row.
-/// </summary>
 public static class SupersededProgrammes
 {
     private static readonly string End = string.Create(
         CultureInfo.InvariantCulture,
         $"COALESCE(end_at, start_at + INTERVAL '{ProgrammeSupersession.LengthWhenTheEndIsNotAnnounced.TotalSeconds} seconds')");
 
-    /// <summary>
-    /// Every programme a programme heard later has superseded, each named by one number: its network, service and
-    /// event identifiers side by side, sixteen bits apiece, so a check against it compares one integer per
-    /// programme rather than three columns.
-    /// </summary>
     public static readonly string Sql = $"""
         WITH ordered AS MATERIALIZED (
             SELECT
@@ -64,20 +52,12 @@ public static class SupersededProgrammes
               AND newer.ends > older.start_at)
         """;
 
-    /// <summary>
-    /// Every programme of the guide but the superseded ones, to compose a query on.
-    /// </summary>
     public static readonly string StandingSql = $"""
         SELECT programme.*
         FROM programme
         WHERE {StandsIn("programme")}
         """;
 
-    /// <summary>
-    /// Holds for a row of <paramref name="table"/> that no programme heard later has superseded. The superseded
-    /// programmes are gathered into an array once, before the scan, so this is a filter rather than a join: a
-    /// union arm it is pushed into stays a plain scan and can still be read in parallel.
-    /// </summary>
     public static string StandsIn(string table)
         => $"{Key(table)} <> ALL (ARRAY({Sql}))";
 

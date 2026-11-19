@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class EncodeRunMarks : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -81,7 +79,6 @@ public partial class EncodeRunMarks : Migration
             sql: "((encoder_asked IS NULL) = (encoder_ran IS NULL))\nAND (encoder_asked IS NULL OR status <> 'Queued')\nAND (encoder_asked IS NULL OR encoder_asked IN ('Software', 'Vaapi'))\nAND (encoder_ran IS NULL OR encoder_ran IN ('Software', 'Vaapi'))\nAND (swerve IS NULL OR swerve IN ('TheCardIsOutOfReach', 'TheCardCannotDoThisCodec', 'TheProcessorCannotDoThisCodec'))\nAND (encoder_asked IS NULL OR ((swerve IS NULL) = (encoder_asked = encoder_ran)))");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

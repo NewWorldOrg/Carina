@@ -2,14 +2,6 @@ using Carina.Domain.Encodings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// A picture of the four corners of a frame shrunk to twice the size <see cref="WatermarkFrame"/> names,
-/// each corner a quarter of its width and of its height, laid out two by two: top left, top right, bottom
-/// left, bottom right, in grey, one byte a pixel, row after row. <see cref="Spread"/> puts each corner back
-/// where it lies in the picture <see cref="WatermarkFrame"/> names, shrunk by half, every pixel the mean of
-/// the two by two it covers. A pixel just right of a left corner or just below a top corner repeats the edge
-/// of the corner, so no step is read across where the corner was cut; the rest of the picture is black.
-/// </summary>
 public static class CornerTiles
 {
     public const int Shrink = 2;

@@ -6,10 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// The loop that reads the ledgers for what happened, and the programmes asked to be told of, and takes what there
-/// is to tell into the notice ledger, one look at a time. Either of the two may fail without stopping the other.
-/// </summary>
 public sealed class NotificationIntakeJob(
     IServiceScopeFactory scopes,
     NotificationIntakeSettings settings,

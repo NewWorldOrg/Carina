@@ -9,14 +9,6 @@ using Carina.Infrastructure.Streaming;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Streaming;
 
-/// <summary>
-/// Feeds a synthetic broadcast into the live transcoder at the rate it was written for, joining it part way
-/// through a group of pictures, and times how long the transcoder reads before it decodes. Within ffmpeg's own
-/// limits of five megabytes and five seconds, the same broadcast is read for five seconds.
-/// The superimposition is left out: written here as a stream ffmpeg has to guess the format of, it holds every
-/// packet back until a whole probe's worth has arrived, which a slow single-service file stretches out of all
-/// proportion to a multiplex.
-/// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
 public sealed class LiveTranscoderFactoryMaterialTests : IDisposable
@@ -102,10 +94,6 @@ public sealed class LiveTranscoderFactoryMaterialTests : IDisposable
             new MachineSettings(),
             TimeProvider.System);
 
-    /// <summary>
-    /// The ffmpeg the synthetic broadcast was written with, named by its path so it is found off the path the
-    /// application searches as well.
-    /// </summary>
     private static string Ffmpeg()
         => (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
             .Split(':', StringSplitOptions.RemoveEmptyEntries)

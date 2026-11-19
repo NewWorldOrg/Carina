@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class TheClientSecretIsSealed : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -28,7 +26,6 @@ public partial class TheClientSecretIsSealed : Migration
             sql: "(discovery_url IS NULL AND client_id IS NULL AND client_secret IS NULL AND client_secret_sealed IS NULL) OR (discovery_url IS NOT NULL AND client_id IS NOT NULL AND (client_secret IS NULL) <> (client_secret_sealed IS NULL))");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

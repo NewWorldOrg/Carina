@@ -25,19 +25,8 @@ public static class FfmpegEncodeInvocation
 
     public const string Seconds = "0.######";
 
-    /// <summary>
-    /// Where the chapters stand among the inputs.
-    /// </summary>
     public const string ChaptersInput = "1";
 
-    /// <summary>
-    /// The arguments for one run. The core cap is written for the decoder, the filters and the encoder.
-    /// The card is opened only when it is what encodes: a VAAPI card through the render node the machine is
-    /// set to, an NVIDIA card as the CUDA device.
-    /// Chapters to bake into the artefact come in as a second input, after the recording; with none,
-    /// no argument is added. The picture is encoded at <paramref name="rate"/>, and at the profile's own
-    /// when none is handed.
-    /// </summary>
     public static IReadOnlyList<string> Arguments(
         ServiceId service,
         EncodeProfile profile,
@@ -184,16 +173,9 @@ public static class FfmpegEncodeInvocation
         return string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a:{ordinal}");
     }
 
-    /// <summary>
-    /// The filter arguments for the picture, or none when the profile keeps the source's size, leaves
-    /// the fields alone and encodes on the processor.
-    /// </summary>
     internal static IReadOnlyList<string> Filtering(EncodeProfile profile, EncodeEncoder encoder)
         => Filter(profile, encoder) is { Length: > 0 } filter ? ["-vf", filter] : [];
 
-    /// <summary>
-    /// The filter chain for the picture. The samples are squared up only after a resize.
-    /// </summary>
     internal static string Filter(EncodeProfile profile, EncodeEncoder encoder)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -220,9 +202,6 @@ public static class FfmpegEncodeInvocation
         return string.Join(',', steps);
     }
 
-    /// <summary>
-    /// The filter that hands the decoded frames to the card: each kind of card has its own.
-    /// </summary>
     private static string Uploading(EncodeEncoder encoder)
         => encoder is EncodeEncoder.Nvenc ? "hwupload_cuda" : "hwupload";
 
@@ -266,9 +245,6 @@ public static class FfmpegEncodeInvocation
         };
     }
 
-    /// <summary>
-    /// The tag an H.265 picture track is written with. An H.264 track keeps the tag ffmpeg gives it.
-    /// </summary>
     public static IReadOnlyList<string> Tagging(EncodeCodec codec)
         => EncodeShapes.Named(codec) is EncodeCodec.H265 ? ["-tag:v", ArtefactCodecReading.TagSafariPlays] : [];
 

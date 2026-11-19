@@ -14,20 +14,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Playback;
 
-/// <summary>
-/// Writes a synthetic H.265 picture into an mp4 with the ffmpeg the application runs, the way an encode
-/// tags it and the way ffmpeg would on its own, puts a text track of captions into it as an artefact
-/// already made has one put in, and reads each file back the way playback does before choosing what to
-/// hand over.
-/// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
 public sealed class FfprobeArtefactCodecsMaterialTests : IDisposable
 {
-    /// <summary>
-    /// Two black 64x64 frames in H.265 as a raw stream, made once with x265. The ffmpeg the application
-    /// runs has no H.265 encoder on the processor, so the picture is carried here and only copied.
-    /// </summary>
     private const string TwoBlackFrames =
         "AAAAAUABDAH//wQIAAADAJ+oAAADAAAeugJAAAAAAUIBAQQIAAADAJ+oAAADAAAeoCCBBZbpKTC8BaAgAAADACAAAAMDIQAAAAFE"
         + "AcBxgRIAAAEoAa3g0Rf/05FzI4uAAAAAAUABDAH//wQIAAADAJ+oAAADAAAeugJAAAAAAUIBAQQIAAADAJ+oAAADAAAeoCCBBZbp"

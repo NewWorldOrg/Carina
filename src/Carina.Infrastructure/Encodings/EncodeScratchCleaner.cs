@@ -5,12 +5,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Removes what a job that has ended still owes a removal for, a file a running job wrote and will
-/// not use, and the artefact a completed job made. What is removed is read off the ledger: scratch
-/// from where the work goes, a replaced artefact from where the artefact went. A file that is not
-/// there any more is settled as already gone.
-/// </summary>
 public sealed class EncodeScratchCleaner(
     IEncodeScratchLedger ledger,
     EncodePlaces places,
@@ -37,11 +31,6 @@ public sealed class EncodeScratchCleaner(
         return owed;
     }
 
-    /// <summary>
-    /// Removes the one file named <paramref name="unused"/> that a running job wrote and will not use, read off
-    /// the ledger among what the job owes a removal for, so it does not wait on the disk for the job to end.
-    /// Nothing, when the ledger holds no such file as owed.
-    /// </summary>
     public async Task<EncodeScratchFate?> ClearOneAsync(EncodeJob job, EncodeFileName unused, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(job);
@@ -67,10 +56,6 @@ public sealed class EncodeScratchCleaner(
         return fate;
     }
 
-    /// <summary>
-    /// Removes the artefact the ledger says a completed job made, from under the root that job
-    /// placed it in.
-    /// </summary>
     public EncodeScratchFate RemoveArtefact(EncodeJob job)
     {
         ArgumentNullException.ThrowIfNull(job);

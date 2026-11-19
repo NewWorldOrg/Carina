@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class ADataBroadcastStateForEveryRecording : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.AddColumn<int>(
@@ -45,7 +43,6 @@ public partial class ADataBroadcastStateForEveryRecording : Migration
             sql: "data_broadcast_state IN ('None', 'Coming', 'Made', 'Missing', 'Failed')\nAND (data_broadcast_state = 'None' OR recording_outcome IS NOT NULL)\nAND (data_broadcast_state IN ('None', 'Coming')) = (data_broadcast_made_at IS NULL)\nAND (data_broadcast_state = 'Made') = (data_broadcast_modules IS NOT NULL)\nAND (data_broadcast_modules IS NULL OR data_broadcast_modules > 0)\nAND (data_broadcast_state <> 'Failed' OR data_broadcast_attempts > 0)\nAND (data_broadcast_state IN ('Failed', 'Coming') OR data_broadcast_attempts = 0)\nAND data_broadcast_attempts >= 0");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(

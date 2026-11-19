@@ -5,11 +5,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// The records of taking the learning data out, held in memory the way the table holds them: every
-/// read hands back a copy of the row as it stands, a copy saved after the row changed since it was
-/// read is refused, and a copy that would read a recording while another is read is not written.
-/// </summary>
 public sealed class HeldLearningExtractions : ILearningExtractionRepository
 {
     private readonly Lock gate = new();
@@ -18,14 +13,8 @@ public sealed class HeldLearningExtractions : ILearningExtractionRepository
 
     private readonly ConditionalWeakTable<LearningExtraction, StrongBox<int>> readAt = new();
 
-    /// <summary>
-    /// Asked before each save; when it says so, the row is changed by something else first.
-    /// </summary>
     public Func<RecordingId, bool>? MovesBeforeSaving { get; set; }
 
-    /// <summary>
-    /// Asked before each save; when it says so, the save cannot reach the store.
-    /// </summary>
     public Func<RecordingId, bool>? FailsSaving { get; set; }
 
     public int Refused { get; private set; }
@@ -162,10 +151,6 @@ public sealed class HeldLearningExtractions : ILearningExtractionRepository
             row.MatchedAt);
 }
 
-/// <summary>
-/// The learning data held in memory, one block per recording, kind and chunk, a block written again
-/// taking the place of the one before.
-/// </summary>
 public sealed class HeldLearningData : ILearningDataRepository
 {
     private readonly Lock gate = new();

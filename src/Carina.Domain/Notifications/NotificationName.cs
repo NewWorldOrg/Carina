@@ -11,9 +11,6 @@ public sealed class NotificationName : CommonValueObject<string>
     {
     }
 
-    /// <summary>
-    /// The name as written, or nothing where it is not one a destination or a set of rules can carry.
-    /// </summary>
     public static NotificationName? Read(string? written)
     {
         string trimmed = written?.Trim() ?? string.Empty;

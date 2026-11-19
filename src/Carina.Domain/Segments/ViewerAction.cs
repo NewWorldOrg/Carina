@@ -2,10 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// What a viewer did with a button offering to skip a stretch: pressed it, closed it, or came back into the
-/// stretch soon after skipping it and watched on.
-/// </summary>
 public enum ViewerActionKind
 {
     Skipped = 1,
@@ -15,13 +11,6 @@ public enum ViewerActionKind
     Returned = 3,
 }
 
-/// <summary>
-/// One thing a viewer did with a skip button on one recording: when it was taken in, what was done, the
-/// kind of the stretch the button offered, the two moments in the recording's own time the action names,
-/// and the version whose detection offered the button, or none when the chapters an encode marked did. A
-/// skip names where it was pressed and where it landed; closing the button names where it was closed and
-/// where the stretch ends; coming back names where the viewer was and where they came back to.
-/// </summary>
 public sealed record ViewerAction
 {
     public ViewerAction(DateTime happenedAt, ViewerActionKind action, SegmentKind kind, TimeSpan from, TimeSpan to, int? modelVersion)

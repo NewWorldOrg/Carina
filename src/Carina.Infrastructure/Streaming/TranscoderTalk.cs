@@ -4,11 +4,6 @@ namespace Carina.Infrastructure.Streaming;
 
 public readonly record struct TranscoderLine(string? Kept, bool InputRead);
 
-/// <summary>
-/// Reads what ffmpeg writes to standard error one line at a time. A line ffmpeg marked with how serious it is
-/// is kept, without the mark, only when it is an error or worse; a line it did not mark goes with the line before
-/// it, so a programme asked for its errors alone has every line kept.
-/// </summary>
 public sealed partial class TranscoderTalk
 {
     private const string WhatTheInputHolds = "Input #0";

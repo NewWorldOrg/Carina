@@ -28,9 +28,6 @@ public static class PesWriter
             .ToArray();
     }
 
-    /// <summary>
-    /// A PES of the first audio stream, stamped with <paramref name="pts"/> when there is one to stamp.
-    /// </summary>
     public static byte[] Sound(long? pts, ReadOnlySpan<byte> data)
     {
         ByteWriter writer = new ByteWriter()
@@ -68,10 +65,6 @@ public static class PesWriter
         return writer.Bytes;
     }
 
-    /// <summary>
-    /// Carries <paramref name="pes"/> on the packets <paramref name="writer"/> writes next, so that the counter
-    /// runs on unbroken from whatever it carried before.
-    /// </summary>
     public static void Packets(TransportStreamWriter writer, ReadOnlySpan<byte> pes)
     {
         ArgumentNullException.ThrowIfNull(writer);

@@ -2,18 +2,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// Versions of the model made by hand before the one a release ships (<see cref="SegmentModel.BuiltIn"/>), kept for
-/// the tests that read with fewer kinds or other weights. <see cref="First"/> is the rule-based detection before any
-/// learning: a piece of 15-second multiples between two silent cuts, out of the logo, is a break.
-/// <see cref="FirstOfFourKinds"/> weighs the break the same way and adds the opening and the ending, which earlier
-/// episodes of the series having one at the same place make likelier but never enough on their own.
-/// <see cref="FourKindsBelowPauses"/> weighs as that one does and hears silence only from -55 dBFS.
-/// <see cref="FourKindsInAnySeries"/> weighs the break by the grid only up to a minute and tells the opening and the
-/// ending by what they are like in any series. <see cref="FourKindsWithDynamicSongs"/> weighs as that one does but
-/// centres the loudness range on 10 dB rather than 8 and weighs an advert's length more against the opening and the
-/// ending.
-/// </summary>
 public static class HandMadeModels
 {
     public static SegmentModel First { get; } = new(
@@ -115,11 +103,6 @@ public static class HandMadeModels
             [SegmentFeature.LoudnessRange] = new(10, 1),
         });
 
-    /// <summary>
-    /// The weights made by hand of the opening, or of the ending, whose place is <paramref name="place"/>, whose
-    /// earlier episodes are <paramref name="past"/>, against which an advert's length weighs <paramref name="advert"/>
-    /// and any multiple of the grid <paramref name="multiple"/>, not at all when that is 0.
-    /// </summary>
     private static SegmentClassWeights ThemeWeights(string place, string past, double advert = -2.0, double multiple = -1.0)
     {
         Dictionary<string, double> features = new(StringComparer.Ordinal)

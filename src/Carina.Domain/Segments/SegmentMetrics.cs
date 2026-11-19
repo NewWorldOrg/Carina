@@ -1,22 +1,7 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The seconds of one kind the catalog is sure of that were detected as it, as a share of those seconds; a share of
-/// nothing is not known.
-/// </summary>
 public sealed record KindMetrics(SegmentKind Kind, double? Recall);
 
-/// <summary>
-/// How a version detects the recordings it is judged on, measured against what the catalog is sure of in them
-/// (<see cref="CatalogTruth"/>): the share of its boundaries, the outer edges of each pod of adverts and of each opening
-/// and ending but those beside an advert, with a detected boundary within <see cref="NearWithin"/>
-/// and within <see cref="CloseWithin"/> turning the same way, that is into the kind where the kind starts and out of
-/// it where it ends, not known without one; the share of its seconds of breaks, of openings and of endings detected as
-/// the same kind, a kind the catalog is sure of nowhere not known; and the share of skips on the version's buttons that
-/// viewers came back from, and how many skips that is of. A detection thrown away shows nothing, so it has no
-/// boundaries and finds no second. What a detection finds beyond what the catalog is sure of is not counted, since it
-/// cannot be told from an advert the catalog has not heard yet.
-/// </summary>
 public sealed record SegmentMetrics
 {
     public static readonly TimeSpan NearWithin = TimeSpan.FromSeconds(2);
@@ -52,20 +37,10 @@ public sealed record SegmentMetrics
 
     public int Skips { get; }
 
-    /// <summary>
-    /// The share of the seconds of adverts the catalog is sure of that were detected as breaks.
-    /// </summary>
     public double? BreakRecall => Recall(SegmentKind.Break);
 
-    /// <summary>
-    /// The share of the seconds of <paramref name="kind"/> the catalog is sure of that were detected as it; not known
-    /// when it is sure of none, or the kind is not measured.
-    /// </summary>
     public double? Recall(SegmentKind kind) => Kinds.FirstOrDefault(measured => measured.Kind == kind)?.Recall;
 
-    /// <summary>
-    /// These figures beside what viewers did with the version's buttons as <paramref name="returns"/> counts.
-    /// </summary>
     public SegmentMetrics WithReturns(SkipReturns returns)
     {
         ArgumentNullException.ThrowIfNull(returns);
@@ -73,10 +48,6 @@ public sealed record SegmentMetrics
         return new SegmentMetrics(BoundaryRecallWithin2s, BoundaryRecallWithin1s, Kinds, returns.Share, returns.Skips);
     }
 
-    /// <summary>
-    /// The figures of <paramref name="compared"/>, beside what viewers did with the version's buttons; none for no
-    /// recording.
-    /// </summary>
     public static SegmentMetrics? Of(IReadOnlyList<SegmentComparison> compared, SkipReturns returns)
     {
         ArgumentNullException.ThrowIfNull(compared);
@@ -97,9 +68,6 @@ public sealed record SegmentMetrics
             returns.Skips);
     }
 
-    /// <summary>
-    /// Where the kind turns in stretches laid end to end, and which way.
-    /// </summary>
     private static Boundary[] Boundaries(IReadOnlyList<SegmentSpan> spans)
         => [.. spans.Zip(spans.Skip(1)).Where(pair => pair.First.Kind != pair.Second.Kind).Select(pair => new Boundary(pair.Second.Starts, pair.First.Kind, pair.Second.Kind))];
 
@@ -130,10 +98,6 @@ public sealed record SegmentMetrics
 
     private readonly record struct Boundary(TimeSpan At, SegmentKind From, SegmentKind To)
     {
-        /// <summary>
-        /// Whether this boundary turns into the kind where <paramref name="truth"/> starts it, or out of it where
-        /// <paramref name="truth"/> ends it.
-        /// </summary>
         public bool Turns(TruthBoundary truth) => truth.Enters ? To == truth.Kind : From == truth.Kind;
     }
 }

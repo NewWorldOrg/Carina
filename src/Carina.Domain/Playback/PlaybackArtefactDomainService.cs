@@ -3,11 +3,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Playback;
 
-/// <summary>
-/// Which encoded artefacts a recording is played from: every job whose artefact stands as the recording's, the one
-/// that ended last first, and among those that ended together the one queued last. A job whose profile is not defined
-/// is left out, because nothing then says what it was made as.
-/// </summary>
 public sealed class PlaybackArtefactDomainService(IEncodeJobRepository jobs, IEncodeProfileRepository profiles)
 {
     public async Task<PlaybackArtefacts> OfferedAsync(RecordingId id, CancellationToken cancellationToken)

@@ -21,10 +21,6 @@ public sealed class CollectionRound(
     TimeProvider clock,
     ILogger<CollectionRound> logger)
 {
-    /// <summary>
-    /// Visits every stream that is due, in the order of the plan. A stream every tuner is too busy for is
-    /// stepped over, and those stepped over are tried again together after each wait on full tuners.
-    /// </summary>
     public async Task<RoundResult> WalkAsync(
         IReadOnlyList<BroadcastStream> streams,
         CancellationToken interruption,

@@ -104,10 +104,6 @@ public sealed class TunerLedgerService(
             await MergeAsync(document, tuners, cancellationToken));
     }
 
-    /// <summary>
-    /// Turns one satellite tuner's low-noise block power on or off in the saved ledger. Nothing else in the
-    /// ledger is written, so no candidate is asked to prove itself again and no allocation is settled again.
-    /// </summary>
     public async Task<ServiceResult<TunerLedgerView, TunerLedgerFailure>> SwitchLnbPowerAsync(
         string deviceId,
         bool on,

@@ -2,12 +2,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// An earlier episode of the series of the recording judged: which recording it is, where its programme starts
-/// and ends in its own recording's time, and the stretches the version of the model detected in it. An episode
-/// whose programme end the guide did not give ends where its stretches do. A stretch shorter than
-/// <see cref="ShortestHeld"/>, as far as boundary candidates are merged, says nothing of what the episode had.
-/// </summary>
 public sealed record PastEpisode
 {
     public static readonly TimeSpan ShortestHeld = BoundaryCandidates.MergedWithin;
@@ -36,11 +30,6 @@ public sealed record PastEpisode
 
     public IReadOnlyList<SegmentSpan> Segments { get; }
 
-    /// <summary>
-    /// The episode as it is remembered without the part of each stretch it was taken to hold that lies over any of
-    /// <paramref name="sounds"/>; what is left of a stretch keeps its kind and probability, and a piece left shorter
-    /// than <see cref="ShortestHeld"/> is not kept, the stretch's edges seldom lying exactly on the sound's.
-    /// </summary>
     public PastEpisode Without(IReadOnlyList<SoundSpan> sounds)
     {
         ArgumentNullException.ThrowIfNull(sounds);
@@ -50,24 +39,12 @@ public sealed record PastEpisode
             : new PastEpisode(Recording, ProgrammeStarts, ProgrammeEnds, [.. Segments.SelectMany(segment => Left(segment, sounds))]);
     }
 
-    /// <summary>
-    /// Whether a break of this episode lies within <paramref name="within"/> of the same distance from
-    /// its programme's start as <paramref name="fromProgrammeStart"/>.
-    /// </summary>
     public bool HadABreakNear(TimeSpan fromProgrammeStart, TimeSpan within)
         => Had(SegmentKind.Break, ProgrammeStarts + fromProgrammeStart, within);
 
-    /// <summary>
-    /// Whether an opening of this episode lies within <paramref name="within"/> of the same distance from
-    /// its programme's start as <paramref name="fromProgrammeStart"/>.
-    /// </summary>
     public bool HadAnOpeningNear(TimeSpan fromProgrammeStart, TimeSpan within)
         => Had(SegmentKind.Opening, ProgrammeStarts + fromProgrammeStart, within);
 
-    /// <summary>
-    /// Whether an ending of this episode lies within <paramref name="within"/> of the same distance before
-    /// its programme's end as <paramref name="beforeProgrammeEnd"/>.
-    /// </summary>
     public bool HadAnEndingNear(TimeSpan beforeProgrammeEnd, TimeSpan within)
         => Segments.Count is not 0 && Had(SegmentKind.Ending, (ProgrammeEnds ?? Segments[^1].Ends) - beforeProgrammeEnd, within);
 

@@ -80,9 +80,6 @@ internal sealed class SegmentVersionFeature : IAsyncDisposable
             => Task.FromResult(new Occupancy(false, false, null));
     }
 
-    /// <summary>
-    /// Keeps which version each look of the detection asked a waiting recording for, and has none waiting.
-    /// </summary>
     internal sealed class AskedWorklist : IDetectionWorklist
     {
         public List<int> Asked { get; } = [];

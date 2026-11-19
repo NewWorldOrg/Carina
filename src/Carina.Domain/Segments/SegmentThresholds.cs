@@ -2,13 +2,6 @@ using System.Runtime.CompilerServices;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The thresholds a version of the model reads with: how quiet sound is to count as silence, in dBFS;
-/// how dark a frame is to count as black and how far it moves from the frame before to count as a change
-/// of scene, both as shares of full scale; how far off the 15-second grid a run of breaks may end, in
-/// seconds, and what leaving a break off it costs; and how strongly learning pulls the weights, the
-/// station offsets and the series offsets towards the version in use.
-/// </summary>
 public sealed record SegmentThresholds
 {
     public const double QuietestDbfs = -SoundLoudness.Silent * SoundLoudness.StepDecibels;

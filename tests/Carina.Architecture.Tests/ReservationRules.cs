@@ -54,11 +54,6 @@ public static partial class ReservationRules
         => ReservationFolders.Any(folder => file.Relative.Contains(folder, StringComparison.Ordinal))
            || ReservationNamespaces.Any(space => file.Source.Contains(space, StringComparison.Ordinal));
 
-    /// <summary>
-    /// Whether a file writes a column the recording ledger owns. The SQL forms count everywhere; a typed
-    /// write of <c>StartedAt</c> counts only where the reservation is named, and the outcome counts
-    /// everywhere.
-    /// </summary>
     private static bool WritesARecordingOwnedColumn(SourceFile file)
         => UpdatesTheClaim().IsMatch(file.Source)
            || UpdatesTheOutcome().IsMatch(file.Source)

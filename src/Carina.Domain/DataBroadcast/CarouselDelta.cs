@@ -1,10 +1,5 @@
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// What changed in a <see cref="CarouselState"/>: the catalog, a module version that arrived, an event
-/// message that came, a data stream's reference of the programme time that moved, the data broadcast found
-/// not to be there, or a carousel left out.
-/// </summary>
 public abstract record CarouselDelta
 {
     private CarouselDelta()

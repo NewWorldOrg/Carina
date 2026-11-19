@@ -2,10 +2,6 @@ using System.Text;
 
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// One resource of a module: where the documents find it, its media type, how its bytes are read, and
-/// the bytes.
-/// </summary>
 public sealed record CarouselResource
 {
     public const int FramingBytes = sizeof(ushort) + sizeof(byte) + sizeof(uint);

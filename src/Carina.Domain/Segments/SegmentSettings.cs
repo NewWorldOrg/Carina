@@ -2,10 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The one row of the segment settings changed from a screen: the threshold a skip button is offered from, with when
-/// it last changed, or none while it never has. No row is held until somebody changes it.
-/// </summary>
 public sealed class SegmentSettings
 {
     public const int TheOnlyRow = 1;
@@ -36,12 +32,6 @@ public sealed class SegmentSettings
     }
 }
 
-/// <summary>
-/// The segment settings as they stand: how likely a break, an opening or an ending is to be before a button offers
-/// to skip it, which stands at <see cref="DefaultSkipThreshold"/> while no setting holds another and is set from
-/// <see cref="LowestSkipThreshold"/> to <see cref="HighestSkipThreshold"/>, to the hundredth, and when it last
-/// changed.
-/// </summary>
 public sealed record SegmentSettingsStanding
 {
     public const double DefaultSkipThreshold = 0.70;
@@ -67,19 +57,11 @@ public sealed record SegmentSettingsStanding
                 SkipThresholdChangedAt = held.SkipThresholdChangedAt,
             };
 
-    /// <summary>
-    /// The threshold <paramref name="asked"/> sets, to the hundredth; none when it lies outside
-    /// <see cref="LowestSkipThreshold"/> to <see cref="HighestSkipThreshold"/>.
-    /// </summary>
     public static double? SkipThresholdOf(double asked)
         => asked is >= LowestSkipThreshold and <= HighestSkipThreshold
             ? Math.Round(asked, ThresholdDigits, MidpointRounding.AwayFromZero)
             : null;
 
-    /// <summary>
-    /// The row once the threshold is set to <paramref name="skipThreshold"/> at <paramref name="at"/>; none when it
-    /// does not move. The threshold is one <see cref="SkipThresholdOf"/> takes.
-    /// </summary>
     public SegmentSettings? Set(double skipThreshold, DateTime at)
     {
         if (SkipThresholdOf(skipThreshold) != skipThreshold)

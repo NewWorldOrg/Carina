@@ -11,11 +11,6 @@ using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Notifications;
 
-/// <summary>
-/// The network as the line of notices sees it in a test: names resolve to the addresses written here, an unknown name
-/// does not resolve, every connection reaches the stand-in on the loopback interface, and the one certificate written
-/// as trusted is the only one taken.
-/// </summary>
 internal sealed class PointedNoticeNetwork(int port) : INoticeNetwork
 {
     public Dictionary<string, IPAddress[]> Names { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -50,10 +45,6 @@ internal sealed class PointedNoticeNetwork(int port) : INoticeNetwork
         => certificate is not null && Trusted is not null && certificate.GetCertHashString() == Trusted.GetCertHashString();
 }
 
-/// <summary>
-/// A webhook or a push service on the loopback interface that answers as it is told to, the network pointed at it,
-/// and a line that sends over that network.
-/// </summary>
 internal sealed class WebhookRig : IAsyncDisposable
 {
     public const string SlackHost = "hooks.slack.com";

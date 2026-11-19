@@ -146,10 +146,6 @@ internal sealed class EncodeHarness : IDisposable
         Clock,
         RunnerLog);
 
-    /// <summary>
-    /// Keeps a detection of the recording by the version in use, standing as it is told, its stretches given
-    /// in the recording's own time.
-    /// </summary>
     public RecordingDetection Detected(Recording recording, SegmentDetectionState state, params SegmentSpan[] stretches)
     {
         double breaks = stretches.Where(stretch => stretch.Kind is SegmentKind.Break).Sum(stretch => stretch.Length.Ticks);
@@ -348,10 +344,6 @@ internal sealed class EncodeHarness : IDisposable
     public string ArtefactPathOf(EncodeJob job)
         => Path.Combine(Shelf.Root, EncodeFileName.Artefact(job.RecordingId, job.ProfileId).Value);
 
-    /// <summary>
-    /// A programme standing in for ffmpeg: a shell script that is handed ffmpeg's arguments, the
-    /// destination last, and writes what it is told to on standard output and standard error.
-    /// </summary>
     public string Standing(string script)
     {
         string path = StandInProgramme.Written(
@@ -363,11 +355,6 @@ internal sealed class EncodeHarness : IDisposable
         return path;
     }
 
-    /// <summary>
-    /// Registers, over what the infrastructure registered, the stand-ins this harness holds for what lies outside the
-    /// database: the places on disk, ffmpeg and the machine it reads, the measured source, the captions kept on disk,
-    /// the rename probe and the clock.
-    /// </summary>
     public void StandIn(IServiceCollection services)
     {
         services.AddSingleton(Places);

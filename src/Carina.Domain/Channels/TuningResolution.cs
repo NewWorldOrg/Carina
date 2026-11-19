@@ -32,10 +32,6 @@ public sealed record TuningResolution
 
     public TuningParameters? Tuning { get; }
 
-    /// <summary>
-    /// The tuning the selected channel holds, whether or not a tuner can take it now. Null when no
-    /// channel was selected for the service.
-    /// </summary>
     public TuningParameters? ChannelTuning { get; }
 
     public bool Impaired { get; }

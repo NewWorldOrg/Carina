@@ -11,9 +11,6 @@ public sealed class NotificationSettingsRepository(CarinaDbContext context) : IN
             .AsNoTracking()
             .FirstOrDefaultAsync(row => row.Id == NotificationSettings.TheOnlyRow, cancellationToken);
 
-    /// <summary>
-    /// Inserts the one row, or writes the lead time and when it changed over the row held, in a single statement.
-    /// </summary>
     public async Task SaveAsync(NotificationSettings settings, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);

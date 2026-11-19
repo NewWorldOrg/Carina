@@ -5,9 +5,6 @@ using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Recordings;
 
-/// <summary>
-/// What one recording session counted, in the shape the recording keeps it.
-/// </summary>
 public sealed record RecordingSessionCount(
     DropCounters Counters,
     DropTimeline Positions,
@@ -34,10 +31,6 @@ public sealed record RecordingSessionCount(
             session.DeviceId);
     }
 
-    /// <summary>
-    /// The count of the session a recording ended on, or null when the driver's greeting or the
-    /// session is not there to read it from.
-    /// </summary>
     public static RecordingSessionCount? Ending(DriverHello? hello, SessionSnapshot? session)
         => hello is null || session is null ? null : Of(hello, session);
 
@@ -50,11 +43,6 @@ public sealed record RecordingSessionCount(
 
     public bool CountedAnything => Counters.Measured || Scrambled is not null;
 
-    /// <summary>
-    /// Writes the count a session ended with onto a recording about to be given its outcome, unless
-    /// the session counted nothing or the recording was already counted at <paramref name="at"/> or
-    /// later.
-    /// </summary>
     public void LastInto(Recording recording, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(recording);

@@ -19,9 +19,5 @@ public interface ILiveTransportStream : IAsyncDisposable
 
     LiveSupplyEnding? Ending { get; }
 
-    /// <summary>
-    /// Asks that the supply be held open at least until the given time, and answers whether it now is.
-    /// A supply already held that far is not asked again.
-    /// </summary>
     Task<bool> HoldOpenUntilAsync(DateTimeOffset until, CancellationToken cancellationToken);
 }

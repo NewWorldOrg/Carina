@@ -3,11 +3,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Infrastructure.Captions;
 
-/// <summary>
-/// The directory the captions taken from recordings are kept in, one file a recording named after it.
-/// A record is written beside its final name and moved over it, so a reader sees the old one or the new
-/// one and never half of either.
-/// </summary>
 public sealed class CaptionShelf(CaptionSettings settings) : ICaptionRecords
 {
     public const string Unfinished = ".part";
@@ -77,9 +72,6 @@ public sealed class CaptionShelf(CaptionSettings settings) : ICaptionRecords
 
     public void Forget(RecordingId id) => Unlink(Kept(id));
 
-    /// <summary>
-    /// The recordings a record is kept for, read off the names on the shelf.
-    /// </summary>
     public IReadOnlySet<string> Shelved()
     {
         if (settings.WrittenTo is not { } shelf || !Directory.Exists(shelf))
@@ -95,9 +87,6 @@ public sealed class CaptionShelf(CaptionSettings settings) : ICaptionRecords
             .ToHashSet(StringComparer.Ordinal);
     }
 
-    /// <summary>
-    /// The recordings whose record on the shelf was kept before the text of captions was taken.
-    /// </summary>
     public IReadOnlySet<string> Textless()
         => Shelved()
             .Where(id => KeptWithoutText(Path.Combine(settings.WrittenTo!, id + CaptionSettings.Extension)))

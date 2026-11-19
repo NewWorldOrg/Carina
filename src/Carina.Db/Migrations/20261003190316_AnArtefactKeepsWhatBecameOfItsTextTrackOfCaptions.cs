@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class AnArtefactKeepsWhatBecameOfItsTextTrackOfCaptions : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(
@@ -47,7 +45,6 @@ public partial class AnArtefactKeepsWhatBecameOfItsTextTrackOfCaptions : Migrati
             sql: "(caption_track IS NULL) = (caption_track_from IS NULL)\nAND (caption_track IS NULL OR caption_track IN ('Added', 'Withheld', 'Failed'))\nAND caption_track_attempts >= 0\nAND (caption_track_attempts = 0 OR caption_track = 'Failed')");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(

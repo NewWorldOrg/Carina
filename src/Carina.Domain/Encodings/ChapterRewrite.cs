@@ -9,14 +9,6 @@ public enum ChapterRewriteVerdict
     RewrittenToday = 3,
 }
 
-/// <summary>
-/// Whether the chapters an artefact carries are written again to be the ones it would embed now: when there are
-/// more or fewer of them, one is of another kind, or a boundary between two has moved by
-/// <see cref="BoundaryMoves"/> or more, and the artefact was not written again within <see cref="OncePer"/>.
-/// Both are read on the artefact's own clock, which is the recording's own time less the same head skip, so the
-/// boundaries are as far apart on either. Where the first starts and the last ends are the artefact's own ends,
-/// not boundaries.
-/// </summary>
 public static class ChapterRewrite
 {
     public static readonly TimeSpan BoundaryMoves = TimeSpan.FromSeconds(1);

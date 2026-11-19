@@ -14,11 +14,6 @@ using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Playback;
 
-/// <summary>
-/// The data broadcast of a recording: its catalog over the source it is played from, each moment at the second of
-/// that source, and each module version as the live side channel carries it. Both are opened with the reader's own
-/// session and never with a ticket, because no player outside the browser shows them.
-/// </summary>
 public static class DataBroadcastDelivery
 {
     public const string Path = "/api/videos/{id}/data-broadcast";

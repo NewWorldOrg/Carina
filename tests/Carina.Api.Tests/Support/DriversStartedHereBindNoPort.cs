@@ -7,10 +7,6 @@ using driver::Puppis.Driver.Ipc;
 
 namespace Carina.Api.Tests.Support;
 
-/// <summary>
-/// Clears, once for the whole test process, the environment variables that would have a driver
-/// started here bind a TCP port.
-/// </summary>
 [SupportedOSPlatform("linux")]
 internal static class DriversStartedHereBindNoPort
 {

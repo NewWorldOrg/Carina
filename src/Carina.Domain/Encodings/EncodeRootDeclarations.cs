@@ -2,11 +2,6 @@ using Puppis.Contracts;
 
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// The set of output roots a destination may name: what the driver declares, and after it what this
-/// process holds for writing. A name both declare stays the driver's and is reported in
-/// <c>Shadowed</c>.
-/// </summary>
 public sealed record DeclaredOutputRoots(IReadOnlyList<StorageRootDto> Declared, IReadOnlyList<string> Shadowed);
 
 public static class EncodeRootDeclarations

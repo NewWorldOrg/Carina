@@ -1,9 +1,5 @@
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// A programme asked to be told of, as it stood when one thing about it was told: that it begins, that its time
-/// moved, or that the guide no longer names it.
-/// </summary>
 public sealed record ProgrammeWatchNoticeSource(
     NoticeKind Told,
     Guid WatchId,

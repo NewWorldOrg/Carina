@@ -11,14 +11,6 @@ public sealed record EncodeRestartReport(int PutBack, int GivenUp, int Stopped, 
     public int Found => PutBack + GivenUp;
 }
 
-/// <summary>
-/// Handles the jobs the ledger still holds as running when the process comes up. A programme
-/// written down against a job is stopped first when what runs under its id began at the time
-/// written down, and left alone otherwise. Each job then goes back to the queue with its work files
-/// left in place, or is given up when its attempts are spent, with what it still owes a removal for
-/// swept. Every recording made more than once is then left with the artefact of its last completed
-/// job as its only one, and the removals its replaced artefacts still owe are made again.
-/// </summary>
 public sealed class EncodeRestart(
     IEncodeJobRepository jobs,
     IStrayProgrammes strays,

@@ -6,9 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// The loop that reads the recording ledger for what has ended and queues it, one look at a time.
-/// </summary>
 public sealed class EncodeIntakeJob(
     IServiceScopeFactory scopes,
     EncodeSettings settings,

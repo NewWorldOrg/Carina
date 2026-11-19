@@ -1320,10 +1320,6 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
 
     private static IReadOnlyList<Guid> Ids(IEnumerable<ReservationId> ids) => [.. ids.Select(id => id.Value).Order()];
 
-    /// <summary>
-    /// Lays the whole matrix down as rows written straight into the store, then reads every row back as the
-    /// reservation it is, so both arms judge the same row.
-    /// </summary>
     private async Task<IReadOnlyList<Reservation>> LaidAsync()
     {
         await ExecuteAsync("DELETE FROM reservation");

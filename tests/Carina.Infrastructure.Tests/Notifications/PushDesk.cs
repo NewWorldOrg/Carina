@@ -8,10 +8,6 @@ using Microsoft.Extensions.Options;
 
 namespace Carina.Infrastructure.Tests.Notifications;
 
-/// <summary>
-/// What sending to a browser needs besides the line: the seal of the subscriptions, the key of the server in a
-/// directory of its own that goes when the test is over, and the watches the handling of a message is read from.
-/// </summary>
 internal sealed class PushDesk : IDisposable
 {
     public static readonly Uri Screens = new("https://screens.example");

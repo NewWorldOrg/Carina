@@ -3,20 +3,8 @@ using Carina.Domain.Segments;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// What matching one recording against the catalog found, and what it changes in the catalog.
-/// </summary>
 public sealed record CatalogMatched(RecordingId Recording, int Matches, CatalogChange Change);
 
-/// <summary>
-/// Matches the learning data of one recording against every catalog entry, against the stretches of the
-/// recordings started within the window around it that no entry explains yet, and against itself, one
-/// recording's data read at a time; then works out what the matches change in the catalog. Estimates a kept
-/// entry again from the stretches it has. What is read beside the matches is the
-/// <see cref="CatalogMatchingDomainService"/>'s to say. The counting is done on the
-/// <see cref="LowestPriorityScheduler"/>, so that it gives way to everything else the machine does. Nothing
-/// is written here.
-/// </summary>
 public sealed class CatalogMatching(
     ICatalogWorklist worklist,
     ICatalogRepository catalog,
@@ -47,9 +35,6 @@ public sealed class CatalogMatching(
         return new CatalogMatched(id, matches.Count, await lowest.Run(() => Catalog.Absorb(id, sound, matches, known, at), cancellationToken));
     }
 
-    /// <summary>
-    /// What estimating <paramref name="entry"/> again from every stretch it has changes in the catalog.
-    /// </summary>
     public async Task<CatalogChange> ReestimateAsync(CatalogEntry entry, DateTime at, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(entry);

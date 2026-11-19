@@ -6,10 +6,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// Cuts what a transcoder writes into segments that each begin with a keyframe, cutting a fragment in two where a
-/// keyframe falls inside it.
-/// </summary>
 public sealed class HlsSegmenter
 {
     private const int AVisualEntryBeforeItsBoxes = 78;
@@ -61,18 +57,11 @@ public sealed class HlsSegmenter
 
     public bool HoldsASegment => listed.Count > 0;
 
-    /// <summary>
-    /// How many segments have been cut since the first.
-    /// </summary>
     public long Cut => next;
 
     public ReadOnlyMemory<byte>? Segment(long number)
         => held.FirstOrDefault(segment => segment.Segment.Number == number)?.Bytes;
 
-    /// <summary>
-    /// Lets go of the bytes of the segments numbered before <paramref name="number"/>, which an event's playlist goes on
-    /// listing.
-    /// </summary>
     public void ForgetBefore(long number)
     {
         while (held.Count > 0 && held.Peek().Segment.Number < number)
@@ -98,9 +87,6 @@ public sealed class HlsSegmenter
         }
     }
 
-    /// <summary>
-    /// Says the transcoder wrote to its end, and closes the segment left open with the last of what it wrote.
-    /// </summary>
     public void Finish()
     {
         if (!ended && open.Count > 0 && picture is { } track)
@@ -111,9 +97,6 @@ public sealed class HlsSegmenter
         End();
     }
 
-    /// <summary>
-    /// Says no more is coming, and drops the segment left open, which no keyframe closed.
-    /// </summary>
     public void End()
     {
         ended = true;
@@ -124,10 +107,6 @@ public sealed class HlsSegmenter
     private static uint? Word(ReadOnlySpan<byte> box, int at)
         => at >= 0 && at + 4 <= box.Length ? BinaryPrimitives.ReadUInt32BigEndian(box[at..]) : null;
 
-    /// <summary>
-    /// The number a track header or media header carries after its two dates, which take four bytes each in the
-    /// first version of the box and eight in the second.
-    /// </summary>
     private static uint? AfterTheDates(ReadOnlySpan<byte> box) => box.Length is 0 ? null : Word(box, box[0] is 1 ? 20 : 12);
 
     private static bool Handles(ReadOnlySpan<byte> mdia, ReadOnlySpan<byte> handler)
@@ -144,10 +123,6 @@ public sealed class HlsSegmenter
         return stsd.Length > 8 ? stsd[8..] : [];
     }
 
-    /// <summary>
-    /// The picture's codec as a playlist names it, from the profile, compatibility and level its configuration
-    /// carries, or nothing for a picture in a codec this does not name.
-    /// </summary>
     private static string? PictureCodec(ReadOnlySpan<byte> mdia)
     {
         var walk = new IsoBoxWalk(Descriptions(mdia));
@@ -303,10 +278,6 @@ public sealed class HlsSegmenter
         Begin(fragment, read, track, keyframe, closes);
     }
 
-    /// <summary>
-    /// Begins a segment at the keyframe, closing the one open with what was decoded before it when
-    /// <paramref name="closes"/>, and dropping that when no segment was open.
-    /// </summary>
     private void Begin(ReadOnlyMemory<byte> fragment, Fmp4Fragment read, uint track, int keyframe, bool closes)
     {
         Fmp4Run pictures = read.Of(track)!;

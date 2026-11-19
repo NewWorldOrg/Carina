@@ -39,10 +39,6 @@ public sealed class NoticeRepository(CarinaDbContext context) : INoticeRepositor
         return held.ToHashSet();
     }
 
-    /// <summary>
-    /// Writes the notice and its deliveries in one transaction, or none of them. Nothing stays tracked
-    /// afterwards, so what was refused is not written by a later save.
-    /// </summary>
     public async Task<bool> AddAsync(
         Notice notice,
         IReadOnlyList<NotificationDelivery> deliveries,

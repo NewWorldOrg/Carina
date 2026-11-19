@@ -4,10 +4,6 @@ using System.Security.Cryptography;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// A browser's end of a push subscription, with keys made for one test: it hands out what a browser would register,
-/// and opens a message encrypted to it the way RFC 8291 has the receiver do.
-/// </summary>
 public sealed class PushReceiver : IDisposable
 {
     private const int SaltLength = 16;

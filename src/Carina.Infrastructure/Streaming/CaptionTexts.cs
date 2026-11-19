@@ -3,13 +3,6 @@ using Carina.Domain.Captions;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// The text of the captions, read statement by statement from the caption stream carried beside the
-/// pictures, as each change on the file's own 90 kHz clock once the lift the moments carry is taken off.
-/// A statement that arrives before a change the last one had waited for cuts that change short: from the
-/// moment it arrives the screen shows what the last statement left once it ran to its end, and then what
-/// this one writes.
-/// </summary>
 public sealed class CaptionTexts(long lift)
 {
     public const long TicksATenth = CaptionCue.Hertz / 10;

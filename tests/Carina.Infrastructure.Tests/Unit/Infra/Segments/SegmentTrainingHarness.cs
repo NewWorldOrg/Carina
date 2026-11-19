@@ -8,11 +8,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
-/// <summary>
-/// Learning as a test sets it: what a candidate and the version in use came to on the recordings judged, or
-/// nothing to learn from, judged against the version in use as learning judges it; what to do while learning,
-/// failing included; and one boundary after it, where learning asks whether it may go on.
-/// </summary>
 internal sealed class HeldTrainer : ISegmentTrainer
 {
     public SegmentEvaluation? Candidate { get; set; }
@@ -90,9 +85,6 @@ internal sealed class KeptLines<T> : ILogger<T>
 
 internal sealed class SegmentTrainingHarness : IDisposable
 {
-    /// <summary>
-    /// Half past three in the morning in Japan, half an hour into the day.
-    /// </summary>
     public static readonly DateTime Start = new(2026, 11, 1, 18, 30, 0, DateTimeKind.Utc);
 
     public static readonly EvaluationEvidence Enough = new(12, 148, Start.AddHours(-6));
@@ -145,9 +137,6 @@ internal sealed class SegmentTrainingHarness : IDisposable
     public SegmentTrainingJob Job(SegmentTrainingSettings? settings = null)
         => new(provider.GetRequiredService<IServiceScopeFactory>(), settings ?? SegmentTrainingSettings.Default, Clock, Log);
 
-    /// <summary>
-    /// Puts version 2 in use <paramref name="daysAgo"/> days ago in the place of the first, as learning would.
-    /// </summary>
     public async Task SecondInUseAsync(int daysAgo)
     {
         DateTime adopted = Now.AddDays(-daysAgo);
@@ -157,10 +146,6 @@ internal sealed class SegmentTrainingHarness : IDisposable
         Versions.Written.Clear();
     }
 
-    /// <summary>
-    /// Viewers' skips on the buttons of <paramref name="version"/> from <paramref name="from"/>, a minute apart,
-    /// and how many of them they came back from.
-    /// </summary>
     public async Task SkippedAsync(int version, DateTime from, int skips, int returned)
     {
         RecordingId recording = RecordingId.New();

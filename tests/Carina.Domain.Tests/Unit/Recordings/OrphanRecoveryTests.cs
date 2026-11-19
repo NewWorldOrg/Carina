@@ -6,9 +6,6 @@ namespace Carina.Domain.Tests.Unit.Recordings;
 [Trait("Category", "Unit")]
 public sealed class OrphanRecoveryTests
 {
-    /// <summary>
-    /// Every sighting there is, with the treatment each one gets, written out.
-    /// </summary>
     public static TheoryData<bool, bool, bool, OrphanTreatment> EverySighting => new()
     {
         { false, false, false, OrphanTreatment.MarkWhatWasLeftBehind },
@@ -21,9 +18,6 @@ public sealed class OrphanRecoveryTests
         { true, true, true, OrphanTreatment.ReadoptTheSession },
     };
 
-    /// <summary>
-    /// The same sightings of a recording whose session the driver ended at the end it was opened with.
-    /// </summary>
     public static TheoryData<bool, bool, bool, OrphanTreatment> EverySightingOfOneEndedAtItsOpenedEnd => new()
     {
         { false, false, false, OrphanTreatment.LeaveForTheWatch },

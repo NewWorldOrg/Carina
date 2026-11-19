@@ -7,10 +7,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Programmes;
 
-/// <summary>
-/// A schedule and the programmes that replaced parts of it, heard at different times, written to the guide and to the
-/// archive so that each repository can be asked what it leaves out.
-/// </summary>
 internal static class SupersededProgrammes
 {
     public const int Service = 1049;

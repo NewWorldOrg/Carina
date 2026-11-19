@@ -26,11 +26,6 @@ public static class CaptionFrames
 
     public const int PictureStream = 0;
 
-    /// <summary>
-    /// The longest a subtitle can say it stays on screen, 2^32 − 1 ms, on the 90 kHz clock. A picture ffmpeg
-    /// stamps at the end of a caption that never said how long it lasts lands this long after the picture
-    /// before it, and is not one the broadcast sent.
-    /// </summary>
     public const ulong ShownIndefinitely = (ulong)uint.MaxValue * (LivePts.Hertz / 1000);
 
     public static async Task<CaptionFlowFault?> CarryAsync(
@@ -55,11 +50,6 @@ public static class CaptionFrames
         }
     }
 
-    /// <summary>
-    /// Reads the stamped RGBA pictures ffmpeg draws the captions as, and says each change of what is on
-    /// screen once: a picture cut to what was drawn and packed as a palette PNG, or null when the screen
-    /// is cleared. A picture repeated unchanged says nothing. What follows a fault is read and dropped.
-    /// </summary>
     public static Task<CaptionFlowFault?> DrawAsync(
         Stream pictures,
         CaptionCanvas canvas,
@@ -67,11 +57,6 @@ public static class CaptionFrames
         CancellationToken cancellationToken)
         => DrawAsync(pictures, canvas, changed, static _ => { }, cancellationToken);
 
-    /// <summary>
-    /// Reads the pictures as <see cref="DrawAsync(Stream, CaptionCanvas, Func{LivePts, CaptionPicture?, bool}, CancellationToken)"/>
-    /// does from the first stream of the container, and hands every frame of any other stream to
-    /// <paramref name="carried"/> as it arrives.
-    /// </summary>
     public static async Task<CaptionFlowFault?> DrawAsync(
         Stream pictures,
         CaptionCanvas canvas,

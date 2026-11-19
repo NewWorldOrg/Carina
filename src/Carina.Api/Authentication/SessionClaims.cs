@@ -60,9 +60,6 @@ public static class SessionClaims
         return Enum.TryParse(carried, ignoreCase: false, out AuthMethod method) ? method : null;
     }
 
-    /// <summary>
-    /// The display name of whoever the session signed in as, or null for a principal no session made.
-    /// </summary>
     public static string? DisplayNameOf(ClaimsPrincipal principal)
     {
         ArgumentNullException.ThrowIfNull(principal);

@@ -1,15 +1,7 @@
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// What one look at the ledgers found at <paramref name="At"/>: how many happenings fell within the look-back, and
-/// those of them the notice ledger does not hold yet, in the order they happened.
-/// </summary>
 public sealed record NoticeHappenings(DateTime At, int Seen, IReadOnlyList<NoticeHappening> Fresh);
 
-/// <summary>
-/// Decides what the ledgers show that is to be taken as a notice: each happening within the look-back, up to now,
-/// that no notice of the same kind taken from the same row is held for.
-/// </summary>
 public sealed class NotificationIntakeDomainService(
     INoticeSourceReader sources,
     INoticeRepository notices,

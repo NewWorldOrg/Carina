@@ -8,11 +8,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Programmes;
 
-/// <summary>
-/// The queries that pick what leaves the guide and what the archive lets go of, held to the stand-ins the domain
-/// tests use for the same rows. Each row ends a moment before, exactly on, or a moment after the line the domain
-/// draws, and a programme whose end was never told ends where the next one of its service begins.
-/// </summary>
 [Trait("Category", "DbIntegration")]
 public sealed class ProgrammeArchivingDomainServiceTests(MigratedRepositoryDatabase database)
     : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime

@@ -11,16 +11,6 @@ namespace Carina.Infrastructure.Encodings;
 
 public sealed record EncodeLook(EncodeClaimStanding Standing, EncodeJobId? Job, EncodeJobStatus? Ended);
 
-/// <summary>
-/// The loop that runs encode jobs.
-/// </summary>
-/// <remarks>
-/// It first puts back what was running when the last process stopped, then looks at the queue: a
-/// claim is a conditional update in the ledger, one job is run to its end, and the queue is looked
-/// at again at once, or after a pause when nothing was waiting. While the card is making a picture
-/// for a viewer, a job bound for the card is left for the next look. A job already running is left
-/// to finish.
-/// </remarks>
 public sealed class EncodeDispatch(
     IServiceScopeFactory scopes,
     EncodeSettings settings,
@@ -134,12 +124,6 @@ public sealed class EncodeDispatch(
         }
     }
 
-    /// <summary>
-    /// Writes the ending a run reached before it threw. A write that fails throws and is made again at
-    /// the next look, before anything else is claimed; after <see cref="MostTriesAtAnEnding"/> failed
-    /// writes the ending is dropped and the row is closed as failed. A row that has moved on meanwhile
-    /// is read again and left as it is.
-    /// </summary>
     private async Task<EncodeJobStatus?> WriteTheEndingAsync(CancellationToken cancellationToken)
     {
         EncodeJob job = unwritten ?? throw new InvalidOperationException("There is no ending waiting to be written.");
@@ -195,11 +179,6 @@ public sealed class EncodeDispatch(
         return job.Status;
     }
 
-    /// <summary>
-    /// Closes as failed the row of a job whose ending the ledger would not take, sweeps what it still
-    /// owes a removal for, and removes the artefact it had placed when no completed job names that
-    /// file. A row that is no longer running the attempt that ended is left as it is.
-    /// </summary>
     private async Task<EncodeJobStatus?> CloseWithoutItsEndingAsync(EncodeJob ended, CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
@@ -247,10 +226,6 @@ public sealed class EncodeDispatch(
             ? $"the job ended {ended.Status} ({failure.Failure}) and the ledger refused that ending {MostTriesAtAnEnding} times"
             : $"the job ended {ended.Status} and the ledger refused that ending {MostTriesAtAnEnding} times";
 
-    /// <summary>
-    /// Reads the job again in a fresh scope, and sweeps what it still owes a removal for if it has
-    /// ended.
-    /// </summary>
     private async Task<EncodeJobStatus?> SweptAsync(EncodeJobId id, CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();

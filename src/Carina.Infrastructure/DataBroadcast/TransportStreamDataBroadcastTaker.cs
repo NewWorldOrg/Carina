@@ -7,12 +7,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// Takes the data broadcast out of a recording's file in one pass from its start to its end, reading the sections
-/// of the service's data streams the way live viewing reads them, and gathers what changed into the record of it.
-/// The service's clock, its wrap followed through, is moved by whole turns of the clock onto the clock the file's
-/// captions are told on, and the record is kept within the size a record may take.
-/// </summary>
 public sealed class TransportStreamDataBroadcastTaker(
     IRecordingClockStart starts,
     CaptionSettings settings,
@@ -62,9 +56,6 @@ public sealed class TransportStreamDataBroadcastTaker(
             record.Shifted(Turns(startsAt - gathered.FirstHeard), startsAt).Within(DataBroadcastRecord.MostBytes));
     }
 
-    /// <summary>
-    /// The whole turns of the 33-bit clock nearest to <paramref name="apart"/>, as ticks.
-    /// </summary>
     public static long Turns(long apart)
     {
         long turn = (long)LivePts.ComesAroundAt;

@@ -68,10 +68,6 @@ public sealed class LearningWorklistTests
         Assert.Equal(CatalogEstimate.Unknown, unknown.Estimate);
     }
 
-    /// <summary>
-    /// A weekly recording of a half-hour programme the guide holds no row for, started ten seconds before it and
-    /// promised to end with it.
-    /// </summary>
     private static Recording Weekly(int week)
     {
         RecordingId id = RecordingId.New();

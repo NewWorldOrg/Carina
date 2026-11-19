@@ -4,20 +4,10 @@ using Puppis.Contracts;
 
 namespace Carina.Domain.Scans;
 
-/// <summary>
-/// Matches what a scan saw against the services and candidate channels held: it proposes the difference, and once
-/// that is confirmed it writes it, touching only the systems the scan walked.
-/// </summary>
 public sealed class ChannelLineupDomainService(
     IBroadcastServiceRepository services,
     ICandidateChannelRepository candidates)
 {
-    /// <summary>
-    /// The difference between the services held and those seen on the channels the scan reached. A held service seen
-    /// nowhere loses the channels the scan reached, and is missing once it has no other; a service seen is changed
-    /// when a channel is added, carries another stream or is gone, or when its name, kind or remote-control key moved;
-    /// a service seen but not held is added.
-    /// </summary>
     public async Task<ScanDifference> ProposeAsync(
         IReadOnlyList<ScannedService> seen,
         IReadOnlyCollection<TuningParameters> reached,
@@ -68,13 +58,6 @@ public sealed class ChannelLineupDomainService(
         return new ScanDifference(changes, departures);
     }
 
-    /// <summary>
-    /// Writes a confirmed difference, only on the channels of the systems the scan walked: a channel gone is dropped,
-    /// a service left with no channel is removed, a service not held is added only when the scan saw it, a channel
-    /// already held takes the stream seen, and a channel found is added. Then each service whose channel was chosen
-    /// blind by a scan, or that is new, is moved onto its best channel, and so is every other service with a channel
-    /// on those systems.
-    /// </summary>
     public async Task<ChannelLineupApplied> ApplyAsync(
         ScanDifference difference,
         IReadOnlySet<TuneSystem> covered,

@@ -4,21 +4,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Carina.Conventions.Tests;
 
-/// <summary>
-/// Reads source for conditional expressions joined directly to one another: one standing as the
-/// condition or as either answer of the next, through any parentheses. A run of more than two is
-/// named by the line it starts on. It reads the syntax tree, so a conditional inside an argument
-/// starts a run of its own, and generated migrations are left alone.
-/// <para>
-/// Reads the same source for blocks standing inside one another. The statements that open a block
-/// are <c>if</c>, <c>for</c>, <c>foreach</c>, <c>while</c>, <c>do</c>, <c>switch</c>, <c>try</c>,
-/// a <c>using</c> statement, <c>lock</c>, <c>fixed</c>, <c>checked</c>, <c>unchecked</c> and
-/// <c>unsafe</c>; an <c>else</c>, a <c>catch</c>, a <c>finally</c> and a <c>switch</c> section
-/// stand level with the statement they belong to, and an <c>else if</c> stands level with the
-/// <c>if</c> before it. The count starts again at each method, accessor, local function and
-/// lambda. A function that goes deeper than three is named by the line of its deepest block.
-/// </para>
-/// </summary>
 public static class NestingConventionRules
 {
     public const int MostConditionalsJoinedInOneExpression = 2;

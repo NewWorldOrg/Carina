@@ -4,18 +4,10 @@ using Puppis.Contracts;
 
 namespace Carina.Domain.Scans;
 
-/// <summary>
-/// Decides what a scan walks, looking up the tuners in service and the satellite streams known: only the systems a
-/// tuner in service receives, or every one asked for while what a tuner receives is undetermined; every terrestrial
-/// channel, every known BS stream, and every other CS slot.
-/// </summary>
 public sealed class ScanPlanningDomainService(
     ITunerCapacityDirectory capacity,
     ISatelliteTransportStreamRepository satelliteStreams)
 {
-    /// <summary>
-    /// What the scope walks, or nothing when no tuner in service receives any of it.
-    /// </summary>
     public async Task<ScanPlan?> PlanAsync(ScanScope scope, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(scope);

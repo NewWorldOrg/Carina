@@ -2,12 +2,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// What putting a recording's matches into the catalog reads: the entries the matches name and every
-/// stretch they have, the copies of the programmes of the recordings involved, how series are linked, and
-/// the stretches heard in the recordings where they may settle an entry (<see cref="CatalogKinds.Settle"/>), none when
-/// it is not said.
-/// </summary>
 public sealed record CatalogKnowledge(
     IReadOnlyList<CatalogEntry> Entries,
     IReadOnlyList<CatalogOccurrence> Occurrences,
@@ -17,9 +11,6 @@ public sealed record CatalogKnowledge(
 {
     public CatalogSurroundings Around => Surroundings ?? CatalogSurroundings.None;
 
-    /// <summary>
-    /// A stretch beside where its programme starts and ends.
-    /// </summary>
     public PlacedOccurrence Placed(CatalogOccurrence occurrence)
     {
         ArgumentNullException.ThrowIfNull(occurrence);
@@ -28,14 +19,6 @@ public sealed record CatalogKnowledge(
     }
 }
 
-/// <summary>
-/// The entries started, the entries already kept that were estimated again, the stretches found, the
-/// stretches already kept that are now taken for another kind on their own, the entries whose links
-/// between series changed (<see cref="CatalogKinds.LinksSeries(CatalogKind)"/>): every other entry heard in
-/// one of their recordings was estimated with links that no longer hold; and the entries whose kind or confidence is
-/// not what it was, started as a kind or estimated again as another kind or as surer or less sure, which changes what
-/// the catalog hears in every recording they are heard in.
-/// </summary>
 public sealed record CatalogChange(
     IReadOnlyList<CatalogEntry> Started,
     IReadOnlyList<CatalogEntry> Reestimated,
@@ -44,25 +27,8 @@ public sealed record CatalogChange(
     IReadOnlyList<CatalogEntryId> Relinking,
     IReadOnlyList<CatalogEntryId> Recast);
 
-/// <summary>
-/// Puts the matches found in one recording into the catalog. A stretch matched in an entry is a
-/// stretch of that entry. A stretch matched in another recording, or elsewhere in itself, joins the
-/// entry already heard over the same stretch of the recording, when one is, and otherwise starts an
-/// entry whose fingerprint is that stretch of the recording: the matches with entries are taken
-/// first, then those within the recording itself, which join both of their stretches, then those with
-/// other recordings, each kind the longest first. A stretch an entry already has in a recording is not added again, and a
-/// recording whose programme is not known adds none. An entry started is estimated from its first
-/// stretches, and one already kept is estimated again from all of them, each beside the stretches heard around
-/// it as the others started or estimated again are settled (<see cref="CatalogKinds.SettleTogether"/>). The links between series change with an entry started as a kind
-/// that links them, and with an entry estimated again that links them before or after, since its stretches grew.
-/// </summary>
 public static class Catalog
 {
-    /// <summary>
-    /// Estimates a kept entry again from every stretch it has, as the estimation now stands, and hands it
-    /// back with the stretches whose own kind changed, and as changing the links between series when it began
-    /// or stopped linking them.
-    /// </summary>
     public static CatalogChange Reestimate(CatalogEntry entry, CatalogKnowledge known, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(entry);

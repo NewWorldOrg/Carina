@@ -2,25 +2,11 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// What detecting one recording knows of it besides its own readings: the catalog's stretches heard in it, the corner
-/// outlines of its station's earlier recordings to learn the logo from, and its earlier episodes.
-/// </summary>
 public sealed record SegmentSurroundings(
     IReadOnlyList<CatalogHeard> Heard,
     IReadOnlyList<RecordedCorners> Corners,
     IReadOnlyList<PastEpisode> Past);
 
-/// <summary>
-/// Decides what detecting one recording with one version of the model reads of what is known of it, looking up the
-/// recordings read for their learning data, the catalog and the detections kept. The catalog's stretches heard in it
-/// are each counted as the kind the stretch alone is taken for when that differs from its entry. The station's logo is
-/// learned from the corner outlines of the most recent earlier recordings on its station that read something, as many
-/// as asked, with the catalog's stretches heard in them. The earlier episodes are those of its series among the most
-/// recent earlier recordings on the station, as many as asked, and the earlier recordings sharing the sound of a
-/// programme fixture with it, wherever they were broadcast (<see cref="SeriesLinks"/>), each by the detection the same
-/// version made of it; one that version threw away is no clue, and one it did not detect is left out.
-/// </summary>
 public sealed class SegmentContextDomainService(
     IDetectionWorklist worklist,
     ICatalogRepository catalog,

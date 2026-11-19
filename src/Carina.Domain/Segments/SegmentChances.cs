@@ -1,11 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// How likely one segment is to be each kind, by the softmax of the scores of the kinds a model weighs against
-/// the programme, which scores nothing; a kind the model does not weigh is not likely at all. With the break
-/// alone weighed, the chance of a break is the logistic function of its score, to the last bit, and the
-/// programme has the rest.
-/// </summary>
 public sealed class SegmentChances
 {
     private static readonly SegmentKind[] Every = Enum.GetValues<SegmentKind>();
@@ -63,9 +57,6 @@ public sealed class SegmentChances
 
     public static SegmentChances OfABreak(double score) => Of(new Dictionary<SegmentKind, double> { [SegmentKind.Break] = score });
 
-    /// <summary>
-    /// The chance of <paramref name="kind"/>; the programme's is what the others leave.
-    /// </summary>
     public double Of(SegmentKind kind)
     {
         if (kind is SegmentKind.Programme)
@@ -78,9 +69,6 @@ public sealed class SegmentChances
 
     public double LogOf(SegmentKind kind) => (scores[At(kind)] - highest) - Math.Log(sum);
 
-    /// <summary>
-    /// Whether the model these chances come from tells <paramref name="kind"/> apart; it always tells the programme.
-    /// </summary>
     public bool Weighs(SegmentKind kind) => !double.IsNegativeInfinity(scores[At(kind)]);
 
     private static int At(SegmentKind kind) => (int)kind - (int)SegmentKind.Programme;

@@ -8,9 +8,6 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace Carina.Infrastructure.Tests.Notifications;
 
-/// <summary>
-/// The deliveries that wait, held in memory in the order the ledger hands them out.
-/// </summary>
 internal sealed class HeldDeliveries : INotificationDeliveryRepository
 {
     public List<NoticeOnItsWay> Rows { get; } = [];
@@ -81,9 +78,6 @@ internal sealed class HeldDeliveries : INotificationDeliveryRepository
     }
 }
 
-/// <summary>
-/// The destinations, held in memory, counting how often a result was kept.
-/// </summary>
 internal sealed class HeldDestinationsOfNotices : INotificationDestinationRepository
 {
     public List<NotificationDestination> Destinations { get; } = [];
@@ -130,10 +124,6 @@ internal sealed class HeldDestinationsOfNotices : INotificationDestinationReposi
     }
 }
 
-/// <summary>
-/// Everything a pass over the waiting notices needs, with a webhook or a push service that answers as it is told to
-/// and a clock turned by hand.
-/// </summary>
 internal sealed class DeliveryBench : IAsyncDisposable
 {
     public static readonly DateTime Began = new(2031, 4, 2, 3, 0, 0, DateTimeKind.Utc);

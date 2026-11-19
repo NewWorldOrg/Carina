@@ -7,22 +7,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// The data broadcast of one live channel: one reading of its transport stream and one state of its carousels,
-/// shared by every fan-out showing the channel. What changes is handed to each of them as a frame, beside the
-/// frames a viewer joining later is handed first: the catalog as it stands with every valid module that has
-/// arrived and each data stream's latest reference of the programme time, or word that the channel carries no
-/// data broadcast. The catalog is handed on only when what it lists changes; the one kept for a viewer joining
-/// later is made again whenever a module arrives.
-/// </summary>
-/// <remarks>
-/// Each fan-out is handed the frames on the clock of the pictures it carries: the transcoder behind it counts from
-/// the raw clock where it began, so the times are moved back by the wraps the clock had made by the time the
-/// fan-out was first shown the data broadcast. The state goes on being read while no fan-out is showing it, so a fan-out that comes later starts from
-/// where the channel is. Once reading stops, every fan-out shown it, then or afterwards, is told there is no data
-/// broadcast, nothing is kept for a viewer joining later, and the reading that raised it is told so it can raise
-/// another.
-/// </remarks>
 public sealed class DataBroadcastSession
 {
     private const long Lap = (long)LivePts.ComesAroundAt;
@@ -70,9 +54,6 @@ public sealed class DataBroadcastSession
         Seat = new DataBroadcastSeat(this);
     }
 
-    /// <summary>
-    /// What the reading of the channel writes the transport stream into.
-    /// </summary>
     public Stream Seat { get; }
 
     public IReadOnlyList<LiveFrame> Standing
@@ -86,9 +67,6 @@ public sealed class DataBroadcastSession
         }
     }
 
-    /// <summary>
-    /// Whether reading has stopped, after which a fan-out shown it is only told there is none.
-    /// </summary>
     public bool HasStopped
     {
         get
@@ -136,10 +114,6 @@ public sealed class DataBroadcastSession
         }
     }
 
-    /// <summary>
-    /// Reads what the reading of the channel wrote. A failure stops the data broadcast: the fan-outs shown it are
-    /// told there is none, and only then is the failure written down and the reading told.
-    /// </summary>
     public void Read(ReadOnlySpan<byte> bytes)
     {
         Exception? failed = null;
@@ -168,9 +142,6 @@ public sealed class DataBroadcastSession
         }
     }
 
-    /// <summary>
-    /// Stops reading: every fan-out shown the data broadcast is told there is none, and nothing is kept of it.
-    /// </summary>
     public void Stop()
     {
         bool halted;

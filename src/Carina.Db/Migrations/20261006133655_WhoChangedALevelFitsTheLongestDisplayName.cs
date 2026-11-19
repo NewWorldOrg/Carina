@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class WhoChangedALevelFitsTheLongestDisplayName : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.AlterColumn<string>(
@@ -33,7 +31,6 @@ public partial class WhoChangedALevelFitsTheLongestDisplayName : Migration
             oldNullable: true);
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.AlterColumn<string>(

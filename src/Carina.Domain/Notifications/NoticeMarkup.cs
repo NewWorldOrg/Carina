@@ -1,8 +1,5 @@
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// Escapes the words of a notice so that the destination shows them as written, and cuts them to what it accepts.
-/// </summary>
 public static class NoticeMarkup
 {
     public const int SlackSectionLongest = 3000;

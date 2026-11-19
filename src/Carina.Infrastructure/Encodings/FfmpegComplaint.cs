@@ -2,10 +2,6 @@ using Carina.Domain.Encodings;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Which of the ledger's reasons a non-zero exit is: the one the disk explains, or the programme
-/// refusing. The words themselves go into the note beside the classification.
-/// </summary>
 public static class FfmpegComplaint
 {
     public const string OutOfRoom = "No space left on device";

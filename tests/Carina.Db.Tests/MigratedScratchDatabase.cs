@@ -8,10 +8,6 @@ using Npgsql;
 
 namespace Carina.Db.Tests;
 
-/// <summary>
-/// A database made by every migration, with the built-in version of the model kept as the application keeps it when it
-/// starts, at <see cref="Installed"/>.
-/// </summary>
 public sealed class MigratedScratchDatabase : IAsyncLifetime
 {
     public static readonly DateTime Installed = new(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);

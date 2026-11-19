@@ -7,11 +7,6 @@ namespace Carina.Infrastructure.Persistence;
 
 public static class ReservationWrites
 {
-    /// <summary>
-    /// Saves the pending changes. When a reservation among them was changed in the store after it was
-    /// read, detaches every tracked reservation and every pending change and throws
-    /// <see cref="ReservationMovedMeanwhileException"/>.
-    /// </summary>
     public static async Task SaveAsync(CarinaDbContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);

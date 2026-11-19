@@ -4,11 +4,6 @@ using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Recordings;
 
-/// <summary>
-/// The moves that put a recording back on a stream, shared by the stream watcher and by recovery.
-/// A resumed recording is asked for under its own session name and output root, so the driver
-/// appends to the file it already has.
-/// </summary>
 internal static class RecordingResumption
 {
     public static bool OpenABreak(Recording recording, RecordingFault fault, DateTime at)

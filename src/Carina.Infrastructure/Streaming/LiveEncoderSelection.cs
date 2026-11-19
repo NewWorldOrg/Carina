@@ -3,10 +3,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// Which encoder the live path uses, from what live asked for and whether
-/// <see cref="IMachineCapabilityReader"/> says the card can be reached.
-/// </summary>
 public sealed class LiveEncoderSelection(LiveTranscodeSettings settings, IMachineCapabilityReader machine)
     : ILiveEncoderSelector
 {
@@ -30,9 +26,6 @@ public sealed class LiveEncoderSelection(LiveTranscodeSettings settings, IMachin
             : LiveEncoderChoice.FellBackToSoftware(can.Card, can.Note);
     }
 
-    /// <remarks>
-    /// H.265 and AV1 are encoded on the card alone, and only when live is set to encode on it.
-    /// </remarks>
     public async Task<IReadOnlyList<VideoCodec>> FormatsAsync(CancellationToken cancellationToken)
     {
         if (!LiveEncoders.OnTheCard(settings.Prefer))

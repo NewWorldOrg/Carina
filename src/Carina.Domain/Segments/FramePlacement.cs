@@ -1,18 +1,7 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Where a frame goes: whether it is kept, how many copies of the frame before it are put in ahead
-/// of it, and the gap those copies stand for when they last long enough to be one.
-/// </summary>
 public readonly record struct FramePlace(bool Kept, long Repeats, LearningDataGap? Gap);
 
-/// <summary>
-/// Places frames handed over with their times on the frames of <see cref="Clock"/>: each goes to the
-/// frame nearest its time. A frame that lands where one is already placed, or before it, is dropped.
-/// One that lands further on is kept after copies of the frame before it, filling the frames it
-/// skipped, and the frames it skipped are a gap when they last at least
-/// <see cref="LearningDataGaps.Shortest"/>.
-/// </summary>
 public sealed class FramePlacement(FrameClock clock)
 {
     public FrameClock Clock { get; } = clock ?? throw new ArgumentNullException(nameof(clock));

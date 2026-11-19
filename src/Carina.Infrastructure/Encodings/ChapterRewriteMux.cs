@@ -6,10 +6,6 @@ using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// What writing a standing artefact again with other chapters came to: the copy written, when it was, and why
-/// not otherwise.
-/// </summary>
 public sealed record ChapterRewriteMade(string? Rewritten, string Note)
 {
     public bool Made => Rewritten is not null;
@@ -19,9 +15,6 @@ public sealed record ChapterRewriteMade(string? Rewritten, string Note)
     public static ChapterRewriteMade Failed(string note) => new(null, note);
 }
 
-/// <summary>
-/// The names the chapters and the copy are written under for one try, so that no two tries share a name.
-/// </summary>
 public sealed record ChapterRewriteNames(EncodeFileName Chapters, EncodeFileName Chaptered)
 {
     public static ChapterRewriteNames Tried(EncodeJob job)
@@ -36,13 +29,6 @@ public sealed record ChapterRewriteNames(EncodeFileName Chapters, EncodeFileName
     }
 }
 
-/// <summary>
-/// Writes a copy of a standing artefact with its chapters in place of the ones it carries, beside the work of
-/// the job that made it: the chapters and the copy are written into the ledger as scratch first, the picture,
-/// sound and subtitle tracks are copied as they are, a subtitle track is turned off by default again, and the
-/// copy is checked against the artefact and against the chapters before it is handed back. The artefact itself
-/// is only read.
-/// </summary>
 public sealed class ChapterRewriteMux(EncodeScratchFiles scratch, MachineSettings machine, TimeProvider clock)
 {
     public static readonly TimeSpan LongestCopy = CaptionTrackMux.LongestCopy;

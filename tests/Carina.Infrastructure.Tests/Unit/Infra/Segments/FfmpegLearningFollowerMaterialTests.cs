@@ -19,14 +19,6 @@ using static Carina.Infrastructure.Tests.Unit.Infra.Segments.LearningFollowHarne
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
-/// <summary>
-/// Follows broadcasts synthesised with the ffmpeg the application runs and reads back what was kept:
-/// stretches made quiet and dark at known moments must be found where they are on the recording's own
-/// time, counted from where the file begins, through a recording carried on after a gap, a sound that
-/// turns mono and back, a picture that changes size, another programme in the same file whose clock
-/// begins ahead, and a file still being written while it is read. A recording that has ended is read
-/// from its head to its end without waiting there.
-/// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
 public sealed class FfmpegLearningFollowerMaterialTests : IDisposable

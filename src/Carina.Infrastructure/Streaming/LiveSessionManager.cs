@@ -190,14 +190,6 @@ public sealed class LiveSessionManager(
             "what the transcoder wrote ended before a viewer could be seated.");
     }
 
-    /// <summary>
-    /// Gives up what nobody is watching and asks again once a tuner has come free. Asked again before the
-    /// transcoders given up have finished, the answer can be a full budget; then it is asked once more after
-    /// they have ended. Both waits run against one deadline, and when it runs out the answer before it stands.
-    /// </summary>
-    /// <remarks>
-    /// Holds its own deadline, disposed of with the waits.
-    /// </remarks>
     private async Task<LiveJoin> SeatedAfterLettingGoAsync(
         LiveSessionKey key,
         LiveJoin refused,
@@ -231,14 +223,6 @@ public sealed class LiveSessionManager(
             : again;
     }
 
-    /// <summary>
-    /// Gives up the sessions nobody is watching any more, and hands them back with the ones already on
-    /// their way out.
-    /// </summary>
-    /// <remarks>
-    /// A session leaves the ledger the moment it is closed, and the tuner behind it is let go of by the
-    /// reading as soon as the session has stopped reading it, before its transcoder has finished.
-    /// </remarks>
     private List<LiveSession> LetGoOfWhatNobodyIsWatching(LiveSessionKey asked)
     {
         List<LiveSession> candidates;
@@ -266,9 +250,6 @@ public sealed class LiveSessionManager(
         return [.. given, .. going];
     }
 
-    /// <summary>
-    /// Hands back what the wait answered, or false when the leash ran out first.
-    /// </summary>
     private static async Task<bool> WithinAsync(
         Task<bool> waiting,
         CancellationToken leash,
@@ -284,10 +265,6 @@ public sealed class LiveSessionManager(
         }
     }
 
-    /// <summary>
-    /// Waits for the sessions to stop reading, not for their transcoders to finish, and for the readings
-    /// that closed behind them to let their supply go, and says whether any reading did.
-    /// </summary>
     private static async Task<bool> ReleasedAsync(IReadOnlyList<LiveSession> letting)
     {
         await Task.WhenAll(letting.Select(session => session.Released));
@@ -302,9 +279,6 @@ public sealed class LiveSessionManager(
         return closing.Length > 0;
     }
 
-    /// <summary>
-    /// Waits for the sessions given up to be torn down, transcoders and all.
-    /// </summary>
     private static async Task<bool> EndedAsync(IReadOnlyList<LiveSession> letting)
     {
         await Task.WhenAll(letting.Select(session => QuietlyAsync(session.Life)));
@@ -312,9 +286,6 @@ public sealed class LiveSessionManager(
         return true;
     }
 
-    /// <summary>
-    /// Waits for a teardown or a reading to be over, however it ended.
-    /// </summary>
     private static async Task QuietlyAsync(Task ending)
     {
         try
@@ -327,9 +298,6 @@ public sealed class LiveSessionManager(
         }
     }
 
-    /// <summary>
-    /// The sessions that have left the ledger and have not yet let go of what they were reading.
-    /// </summary>
     private IReadOnlyList<LiveSession> StillLettingGo()
     {
         leaving.RemoveAll(HasLetGo);
@@ -372,9 +340,6 @@ public sealed class LiveSessionManager(
         return raised;
     }
 
-    /// <summary>
-    /// The reading of this channel, raised if this is the first profile being made from it.
-    /// </summary>
     private LiveReception Receiving(NetworkId network, ServiceId service)
     {
         (NetworkId Network, ServiceId Service) channel = (network, service);

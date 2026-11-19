@@ -89,9 +89,6 @@ internal sealed class LiveSession
 
     public Task Life { get; private set; } = Task.CompletedTask;
 
-    /// <summary>
-    /// Ends once the session has stopped reading the channel, which it does before its transcoder has finished.
-    /// </summary>
     internal Task Released => released.Task;
 
     public int Viewers => fanout.Viewers;
@@ -166,9 +163,6 @@ internal sealed class LiveSession
         }
     }
 
-    /// <remarks>
-    /// Holds its own deadline, disposed of with the wait.
-    /// </remarks>
     private async Task<LiveJoin?> RaisedAsync(CancellationToken cancellationToken)
     {
         using CancellationTokenSource deadline = new(settings.LongestRaise, clock);
@@ -206,10 +200,6 @@ internal sealed class LiveSession
         LetGo();
     }
 
-    /// <summary>
-    /// Closes the session if no viewer is expected on it, and says whether it did. Whether anybody is
-    /// expected is read under the same lock that marks the session closed.
-    /// </summary>
     internal bool CloseIfNobodyIsWatching()
     {
         lock (gate)
@@ -256,10 +246,6 @@ internal sealed class LiveSession
         }
     }
 
-    /// <summary>
-    /// Logs once, when the first picture has reached the viewers, how far into the session each part of its
-    /// startup was reached, the moment the transcoder had read its input among them.
-    /// </summary>
     private void TellHowItStarted()
     {
         LiveStartup? reached = startup.Current;
@@ -423,11 +409,6 @@ internal sealed class LiveSession
         return null;
     }
 
-    /// <summary>
-    /// The transcoder's output, starting the transcoder again without captions when it ended before
-    /// writing anything because the service carries no caption stream. The reading remembers this for
-    /// the next profile of the channel.
-    /// </summary>
     private async Task<Stream?> OutputOrRestartAsync(CancellationToken cancellationToken)
     {
         ILiveTranscoder running;
@@ -506,11 +487,6 @@ internal sealed class LiveSession
         }
     }
 
-    /// <summary>
-    /// Takes the seat out of the reading and waits for the write going into the transcoder to end,
-    /// for no longer than the stop grace. However the write ends, a failure is logged, whether it
-    /// ends within the grace or after it has been given up on.
-    /// </summary>
     private async Task LeftTheReadingAsync(LiveSeat? given)
     {
         if (given is null)
@@ -561,10 +537,6 @@ internal sealed class LiveSession
         }
     }
 
-    /// <summary>
-    /// Carries what the transcoder writes to the viewers until the session is stopped or the carrying ends on its own,
-    /// and says how it ended when nobody asked it to.
-    /// </summary>
     private async Task<UnaskedEnding?> CarryAsync(CancellationToken cancellationToken)
     {
         if (await OutputOrRestartAsync(cancellationToken) is not { } output)
@@ -646,10 +618,6 @@ internal sealed class LiveSession
         }
     }
 
-    /// <summary>
-    /// Logs once, for a session that ended without being stopped, how its transcoder exited and the error lines it
-    /// kept, beside why the supply ended and what broke in the fragments when either had by then.
-    /// </summary>
     private void TellHowItEnded(UnaskedEnding? unasked, ILiveTranscoder? running)
     {
         if (unasked is null)
@@ -676,10 +644,6 @@ internal sealed class LiveSession
     private static string OnOneLine(string kept)
         => string.Join(" | ", kept.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 
-    /// <summary>
-    /// Stops showing the data broadcast and detaches from the reading, which lets the tuner go when nothing else
-    /// reads the channel, while the transcoder is still finishing what it was given.
-    /// </summary>
     private void LetGoOfTheReading()
     {
         try

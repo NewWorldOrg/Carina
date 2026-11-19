@@ -25,9 +25,6 @@ public sealed class Rule
 
     public Margin MarginAfter { get; private set; } = null!;
 
-    /// <summary>
-    /// Whether a recording this rule brings about is encoded once it ends. Defaults to true.
-    /// </summary>
     public bool EncodeWhenRecorded { get; private set; }
 
     public DateTime CreatedAt { get; private set; }
@@ -44,10 +41,6 @@ public sealed class Rule
         bool encodeWhenRecorded = true)
         => Rehydrate(id, name, query, priority, enabled, marginBefore, marginAfter, at, encodeWhenRecorded);
 
-    /// <summary>
-    /// A rule carried over from the recording system being replaced: turned off until someone looks at what it would
-    /// reserve and turns it on, with the default priority and no margin on either side.
-    /// </summary>
     public static Rule CarriedOver(RuleId id, string name, RuleQuery query, DateTime at)
         => Draft(id, name, query, Priority.Default, false, Margin.None, Margin.None, at);
 

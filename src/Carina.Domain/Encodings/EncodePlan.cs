@@ -12,10 +12,6 @@ public enum EncodeSwerve
     TheProcessorCannotDoThisCodec = 3,
 }
 
-/// <summary>
-/// Which encoder a job will actually run on, worked out against what this machine can do. A
-/// shortfall degrades the run and is written down; the one refusal is a codec neither side has.
-/// </summary>
 public sealed record EncodePlan
 {
     private EncodePlan(EncodeEncoder? encoder, EncodeSwerve? swerved, EncodeFailure? refused, string note)
@@ -58,11 +54,6 @@ public sealed record EncodePlan
 
 public static class EncodePlans
 {
-    /// <summary>
-    /// The plan for a run asked to encode on <paramref name="asked"/>, on a machine whose card is of
-    /// <paramref name="card"/>'s kind. An encoder asking for a card of another kind is refused outright,
-    /// because what the machine was asked about is the one card it has.
-    /// </summary>
     public static EncodePlan For(EncodeProfile profile, EncodeEncoder asked, CardKind card, MachineCapabilities can)
     {
         ArgumentNullException.ThrowIfNull(profile);

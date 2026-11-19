@@ -13,9 +13,6 @@ public sealed class LearningDataAmountReader(CarinaDbContext context) : ILearnin
         nameof(LearningExtractionState.Partial),
     ];
 
-    /// <summary>
-    /// The tables of the segment entities, whose room on disk is the room the learning data takes.
-    /// </summary>
     public static IReadOnlyList<string> MeasuredTables(IModel model)
     {
         ArgumentNullException.ThrowIfNull(model);

@@ -91,19 +91,11 @@ public sealed class RepositoryDatabase : IAsyncLifetime
 
     public ServiceProvider Infrastructure(DirectoryInfo sealingKeys) => Infrastructure(sealingKeys, _ => { });
 
-    /// <summary>
-    /// The container the infrastructure builds over the scratch database, with what <paramref name="replace"/>
-    /// registers last standing in for what the infrastructure registered.
-    /// </summary>
     public ServiceProvider Infrastructure(Action<IServiceCollection> replace) => Infrastructure(SealingKeys.Fresh(), replace);
 
     public ServiceProvider Infrastructure(DirectoryInfo sealingKeys, Action<IServiceCollection> replace)
         => Container(connectionString, sealingKeys, replace);
 
-    /// <summary>
-    /// The container the infrastructure builds over the database <paramref name="connectionString"/> names, with what
-    /// <paramref name="replace"/> registers last standing in for what the infrastructure registered.
-    /// </summary>
     internal static ServiceProvider Container(string connectionString, DirectoryInfo sealingKeys, Action<IServiceCollection> replace)
     {
         ArgumentNullException.ThrowIfNull(sealingKeys);

@@ -1,35 +1,7 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The corner outlines of one recording, one a second, beside what says which station it is of and
-/// when it started, and the stretches the catalog heard in it, when they are known.
-/// </summary>
 public sealed record RecordedCorners(SeriesMember Member, ReadOnlyMemory<byte> Outlines, IReadOnlyList<CatalogHeard>? Catalog = null);
 
-/// <summary>
-/// The shapes a station's logo draws in the corner outlines, learned from the station's other recordings that
-/// started before the one judged, never from the one judged. A block on in at least <see cref="SteadyShare"/>
-/// of the seconds of a recording of at least <see cref="FewestSeconds"/> seconds is steady there, save one on
-/// the outermost column or row of the picture, where the edge of a letterboxed or pillarboxed picture lies; a
-/// recording with fewer than <see cref="FewestBlocks"/> steady blocks shows no logo. A recording whose steady
-/// blocks cover more than <see cref="MostOfTheCorners"/> of the corners carries a still picture besides any
-/// logo: it may agree with a shape another recording draws and count towards its blocks, but a block only
-/// such recordings hold steady is never part of a shape. Each recording, newest first and those carrying a
-/// still picture last, joins the first shape it agrees with by at least <see cref="SameShape"/>
-/// (<see cref="Agreement"/>), or else draws a new one. A shape is kept when at least
-/// <see cref="FewestRecordings"/> broadcasts agree on it, two recordings of one broadcast counting once
-/// (<see cref="SeriesMember.Episode"/>), as the blocks steady in at least that many of those broadcasts and
-/// in at least half of them, less any whose mirror across the middle of the picture is kept too, as the
-/// borders of a letterboxed picture are; and when it then has from <see cref="FewestBlocks"/> blocks to
-/// <see cref="MostOfTheCorners"/> of the corners. A shape is kept only when, in those recordings, the share
-/// of the seconds the catalog heard as a break, away from their edges by
-/// <see cref="SegmentFeatures.LogoAwayFromTheEdges"/>, that show it is at most <see cref="MostSeenInBreaks"/>
-/// of the share of the rest of their seconds that show it; with nothing heard as a break, nothing says
-/// otherwise. A station may keep several shapes, as its logo changes with the season. A second shows the logo
-/// when at least <see cref="SeenShare"/> of the blocks of one of the shapes are on. A logo seen in at least
-/// <see cref="NearlyEverywhere"/> of a recording's seconds, or in no more than <see cref="NearlyNowhere"/> of
-/// them, tells programme from break nowhere in it.
-/// </summary>
 public sealed class CornerLogo
 {
     public const double SteadyShare = 0.4;
@@ -99,9 +71,6 @@ public sealed class CornerLogo
         return new CornerLogo([.. gathered.Select(Agreed).OfType<int[]>().Where(shape => TellsBreaks(shape, earlier))]);
     }
 
-    /// <summary>
-    /// Whether each second of <paramref name="outlines"/> shows the logo.
-    /// </summary>
     public bool[] Sightings(ReadOnlySpan<byte> outlines)
     {
         if (outlines.Length % CornerOutline.Bytes is not 0)
@@ -119,10 +88,6 @@ public sealed class CornerLogo
         return seen;
     }
 
-    /// <summary>
-    /// Whether each second of <paramref name="outlines"/> shows the logo, when that tells programme from
-    /// break; null when there is no logo, nothing to look at, or it is seen nearly everywhere or nowhere.
-    /// </summary>
     public bool[]? Telling(ReadOnlySpan<byte> outlines)
     {
         if (shapes.Length is 0 || outlines.IsEmpty)
@@ -176,13 +141,6 @@ public sealed class CornerLogo
         }
     }
 
-    /// <summary>
-    /// How far the smaller of two sets of steady blocks lies inside the larger beyond chance: the blocks they
-    /// share, less those the smaller would share by chance given how much of each corner the larger covers,
-    /// over the smaller's blocks less that chance. A logo inside a still picture agrees fully with the same
-    /// logo alone, however much more the picture covers, while a picture busy all over a corner agrees with
-    /// nothing there by chance alone.
-    /// </summary>
     private static double Agreement(SteadyBlocks one, SteadyBlocks other)
     {
         (SteadyBlocks smaller, SteadyBlocks larger) = one.Count <= other.Count ? (one, other) : (other, one);
@@ -324,17 +282,8 @@ public sealed class CornerLogo
 
     private static bool IsOn(ReadOnlySpan<byte> outline, int block) => (outline[block >> 3] & (1 << (block & 7))) is not 0;
 
-    /// <summary>
-    /// The seconds of one recording inside what the catalog heard as a break and the rest of its seconds, each with
-    /// how many of them show a shape.
-    /// </summary>
     private readonly record struct Tally(int Breaks, int SeenInBreaks, int Rest, int SeenInRest);
 
-    /// <summary>
-    /// The steady blocks of one recording, with the broadcast it is of; a recording whose steady blocks cover
-    /// too much of the corners carries a still picture. How much of a corner they cover is counted among the
-    /// blocks off the edge of the picture, the only ones that can be steady.
-    /// </summary>
     private sealed record SteadyBlocks(SeriesEpisode Episode, bool[] Blocks, int Count)
     {
         public bool IsStill => CoversTooMuch(Count);

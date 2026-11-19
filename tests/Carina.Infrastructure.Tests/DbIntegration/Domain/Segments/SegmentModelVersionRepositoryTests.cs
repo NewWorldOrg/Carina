@@ -377,11 +377,6 @@ public sealed class SegmentModelVersionRepositoryTests(MigratedRepositoryDatabas
         Assert.Contains($"{Latest}:Candidate", await StatesAsync(), StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// Lays the built-in version in use, a version used before, a candidate built in, and candidates learning made,
-    /// each named by one of the rows that remember versions or by none, the one just before the latest and the latest
-    /// named by none; answers each number and whether something names it.
-    /// </summary>
     private async Task<IReadOnlyDictionary<int, bool>> LaidAsync()
     {
         await KeepBuiltInAsync(FirstStarted);
@@ -518,7 +513,6 @@ public sealed class SegmentModelVersionRepositoryTests(MigratedRepositoryDatabas
         return await Versions(scope).ChangeAsync(change, at, Cancel);
     }
 
-    /// <summary>The first version alone in use with the first model, as the tests of what a change does start from.</summary>
     private async Task KeepFirstInUseAsync()
         => await AddAsync(SegmentModelVersion.Rehydrate(SegmentModelVersion.FirstNumber, SegmentModelVersionState.Active, false, HandMadeModels.First, Installed, Installed, null, null, null));
 

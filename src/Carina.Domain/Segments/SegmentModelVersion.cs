@@ -2,10 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Where a version of the model stands: made by learning and not put in use, the one in use, or one used
-/// before.
-/// </summary>
 public enum SegmentModelVersionState
 {
     Candidate = 1,
@@ -15,19 +11,6 @@ public enum SegmentModelVersionState
     Retired = 3,
 }
 
-/// <summary>
-/// One version of the model segments are detected with: its number, counted from <see cref="FirstNumber"/>;
-/// where it stands; whether it was chosen by hand, which only the version in use can be; whether it is built in,
-/// made by hand and shipped with a release rather than learned, which is never evaluated; its parameters and the
-/// number of kinds they tell apart; how it did when it was evaluated, if it was; when it was made, put in use,
-/// chosen by hand, taken out of use and rolled back from, and what the rollback measured. Only a candidate has
-/// never been put in use, and only a version used before has been taken out of use or rolled back from. Exactly
-/// one version is in use at a time, which the store holds. The built-in version of a release
-/// (<see cref="SegmentModel.BuiltIn"/>) is kept through <see cref="KeepBuiltIn"/>; the version in use changes
-/// only through <see cref="Change"/> and that. A number is given once: a version keeps its number for good, and a
-/// new one is numbered after every number given before (<see cref="NumberAfter"/>), those of versions let go since
-/// included (<see cref="LetGoBefore"/>).
-/// </summary>
 public sealed class SegmentModelVersion
 {
     public const int FirstNumber = 1;
@@ -82,13 +65,6 @@ public sealed class SegmentModelVersion
 
     private bool NeverUsed => State is SegmentModelVersionState.Candidate && AdoptedAt is null && ChosenByHandAt is null;
 
-    /// <summary>
-    /// Whether learning lets go of this version once it has kept the candidate numbered <paramref name="latest"/>: a
-    /// candidate numbered before it that learning made, never put in use nor chosen by hand, and that nothing that
-    /// remembers versions names (<paramref name="named"/>). The latest candidate stays until the next one is kept, so
-    /// that it can still be chosen by hand; a version built in, the version in use and the versions used before always
-    /// stay.
-    /// </summary>
     public bool IsLetGoBefore(int latest, bool named) => Number < latest && NeverUsed && !BuiltIn && !named;
 
     public static SegmentModelVersion Rehydrate(
@@ -152,10 +128,6 @@ public sealed class SegmentModelVersion
         };
     }
 
-    /// <summary>
-    /// The candidate learning made at <paramref name="trainedAt"/> with <paramref name="model"/>, numbered
-    /// <paramref name="number"/>, as <paramref name="evaluation"/> judged it.
-    /// </summary>
     public static SegmentModelVersion Learned(int number, SegmentModel model, SegmentEvaluation evaluation, DateTime trainedAt)
     {
         ArgumentNullException.ThrowIfNull(evaluation);
@@ -163,10 +135,6 @@ public sealed class SegmentModelVersion
         return Rehydrate(number, SegmentModelVersionState.Candidate, false, model, trainedAt, null, null, null, null, evaluation);
     }
 
-    /// <summary>
-    /// The number a new version is given when <paramref name="highestGiven"/> is the highest number given so far, to a
-    /// version kept or to one let go since, and 0 when none has been: the one after it.
-    /// </summary>
     public static int NumberAfter(int highestGiven)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(highestGiven);
@@ -174,20 +142,9 @@ public sealed class SegmentModelVersion
         return Math.Max(highestGiven + 1, FirstNumber);
     }
 
-    /// <summary>
-    /// The numbers of the versions among <paramref name="kept"/> learning lets go of once it has kept the candidate
-    /// numbered <paramref name="latest"/>, before asking what else names them: every candidate numbered before it that
-    /// learning made and that was never put in use nor chosen by hand (<see cref="IsLetGoBefore"/>).
-    /// </summary>
     public static IReadOnlyList<int> LetGoBefore(IReadOnlyList<SegmentModelVersion> kept, int latest)
         => LetGoBefore(kept, latest, new HashSet<int>());
 
-    /// <summary>
-    /// The numbers of the versions among <paramref name="kept"/> learning lets go of once it has kept the candidate
-    /// numbered <paramref name="latest"/>, the lowest first, when the numbers in <paramref name="named"/> are those a
-    /// detection, a viewer's skip, the chapters of an encode or a round of learning measuring the version in use names
-    /// (<see cref="IsLetGoBefore"/>).
-    /// </summary>
     public static IReadOnlyList<int> LetGoBefore(IReadOnlyList<SegmentModelVersion> kept, int latest, IReadOnlySet<int> named)
     {
         ArgumentNullException.ThrowIfNull(kept);
@@ -202,15 +159,6 @@ public sealed class SegmentModelVersion
         ];
     }
 
-    /// <summary>
-    /// What keeping <paramref name="builtIn"/>, the built-in version of a release, at <paramref name="at"/> among the
-    /// versions <paramref name="kept"/> writes; nothing when a built-in version already holds the same parameters,
-    /// whatever its state. Otherwise the version holding it is numbered after the highest number given, of the
-    /// versions kept and <paramref name="highestGiven"/>, which says what else has been given, and made at
-    /// <paramref name="at"/>. With no version in use it is put in use. It takes the place of the version in use when
-    /// that one is built in and not chosen by hand, which is taken out of use; beside a version chosen by hand or
-    /// learned it is kept as a candidate, and the version in use stays.
-    /// </summary>
     public static SegmentBuiltInKept? KeepBuiltIn(IReadOnlyList<SegmentModelVersion> kept, SegmentModel builtIn, DateTime at, int highestGiven = 0)
     {
         ArgumentNullException.ThrowIfNull(kept);
@@ -242,16 +190,6 @@ public sealed class SegmentModelVersion
         return new SegmentBuiltInKept(changed.Active, [.. changed.Written.Where(version => version.Number != number)], changed.Active);
     }
 
-    /// <summary>
-    /// The versions <paramref name="change"/> moves when it is made at <paramref name="at"/> to the versions
-    /// <paramref name="kept"/>, the one leaving use first, and the version in use after it; none when it names
-    /// a number no version has. A version chosen by hand is put in use, or only marked chosen when it already
-    /// is; the one it takes the place of is taken out of use and no longer chosen. Leaving the choice to
-    /// learning keeps the version in use and no longer marks it chosen. Learning puts only a candidate in use
-    /// and goes back only to a version used before, and never moves a version chosen by hand; a rollback is
-    /// kept on the version it leaves. A version put in use again sheds what an earlier rollback from it
-    /// measured. A change that moves nothing writes nothing.
-    /// </summary>
     public static SegmentVersionChanged? Change(IReadOnlyList<SegmentModelVersion> kept, SegmentVersionChange change, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(kept);
@@ -366,13 +304,6 @@ public sealed class SegmentModelVersion
         => Rehydrate(Number, state, byHand, Model, TrainedAt, adoptedAt, retiredAt, chosenByHandAt, rolledBackAt, Evaluation, rollback, BuiltIn);
 }
 
-/// <summary>
-/// A change to which version of the model is in use, or to how it came to be: learning putting a candidate in
-/// use, a rollback going back to the version before, a version chosen by hand, or the choice left to learning
-/// again.
-/// <see cref="To"/> is the version moved to, none when the version in use stays or is worked out from the
-/// versions kept.
-/// </summary>
 public sealed record SegmentVersionChange
 {
     private SegmentVersionChange(int? to, bool byHand, SegmentRollback? rollback)
@@ -402,14 +333,6 @@ public sealed record SegmentVersionChange
     public static SegmentVersionChange ChosenByHand(int number) => new(number, true, null);
 }
 
-/// <summary>
-/// What a change to the version in use moved: the versions to write, the one leaving use first, and the version
-/// in use after it.
-/// </summary>
 public sealed record SegmentVersionChanged(IReadOnlyList<SegmentModelVersion> Written, SegmentModelVersion Active);
 
-/// <summary>
-/// What keeping the built-in version of a release wrote: the version added, as it stands; the version it took the
-/// place of in use, if it did, to be written before it; and the version in use after it.
-/// </summary>
 public sealed record SegmentBuiltInKept(SegmentModelVersion Added, IReadOnlyList<SegmentModelVersion> Moved, SegmentModelVersion Active);

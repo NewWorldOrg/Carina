@@ -5,20 +5,6 @@ namespace Carina.Domain.Quality;
 
 public sealed record LayerErrorPeak(int Layer, double Highest);
 
-/// <summary>
-/// What was measured of one service on one tuner over one stretch of time.
-/// </summary>
-/// <param name="PhysicalChannel">
-/// The one physical channel everything in the window was taken on, or null when it was not all taken
-/// on one, does not say, or the window was folded from several.
-/// </param>
-/// <param name="CarrierToNoiseAverage">
-/// The average carrier to noise figure over the window, or null when it read none or was folded from several.
-/// </param>
-/// <param name="BitErrorRateAverage">
-/// The average bit error rate of the layer that averaged worst over the window, or null when it read none or was
-/// folded from several.
-/// </param>
 public sealed record QualitySignalWindow(
     DateTime Start,
     TunerDeviceId Tuner,
@@ -36,9 +22,6 @@ public sealed record QualitySignalWindow(
     double? CarrierToNoiseAverage = null,
     double? BitErrorRateAverage = null)
 {
-    /// <summary>
-    /// How many of the samples in the window carried a figure.
-    /// </summary>
     public long Carried => Samples - Unmeasured - Unreachable;
 
     public static QualitySignalWindow Of(QualitySignalRollup rollup)

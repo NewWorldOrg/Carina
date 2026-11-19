@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class AJobMakesAnArtefactLargerThanItsRecordingAgain : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.AddColumn<string>(
@@ -23,7 +21,6 @@ public partial class AJobMakesAnArtefactLargerThanItsRecordingAgain : Migration
             sql: "remade IS NULL OR (remade IN ('LargerThanTheSource', 'StillLargerThanTheSource', 'NoSmallerTheSecondTime') AND status <> 'Queued')");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(

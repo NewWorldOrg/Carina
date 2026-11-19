@@ -1,8 +1,5 @@
 namespace Carina.Domain.Auth;
 
-/// <summary>
-/// A password changed, with the sessions it ended to be written, or why it was not changed.
-/// </summary>
 public sealed record PasswordChangeOutcome(
     PasswordChangeRefusal? Refusal,
     LocalAccount? Changed,
@@ -13,21 +10,12 @@ public sealed record PasswordChangeOutcome(
     public static PasswordChangeOutcome Made(LocalAccount changed, IReadOnlyList<AuthSession> ended) => new(null, changed, ended);
 }
 
-/// <summary>
-/// Changes the password of the local account and ends every session of the one who changed it except the one that
-/// asked, looking the account and the sessions up.
-/// </summary>
 public sealed class PasswordChangeDomainService(
     ILocalAccountRepository accounts,
     IAuthSessionRepository sessions,
     IPasswordHasher hasher,
     TimeProvider clock)
 {
-    /// <summary>
-    /// Changes the password from <paramref name="current"/> to <paramref name="replacement"/>, and revokes every
-    /// session <paramref name="subject"/> holds but <paramref name="keep"/>. Nothing is written here; the account and
-    /// the sessions ended are handed back to be.
-    /// </summary>
     public async Task<PasswordChangeOutcome> ChangeAsync(
         Subject subject,
         SessionHandle keep,

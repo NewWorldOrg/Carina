@@ -11,10 +11,6 @@ public sealed record ProgrammeWatchAsked(
     int? LeadMinutes,
     IReadOnlyList<Guid>? Destinations);
 
-/// <summary>
-/// Lists the programmes asked to be told of, asks for one and withdraws one. Asking and withdrawing take the
-/// turn the writers of the destinations take, so neither crosses a destination being removed or a notice being sent.
-/// </summary>
 public sealed class NotificationWatchService(
     IProgrammeWatchRepository watches,
     ProgrammeWatchDomainService watching,

@@ -6,9 +6,6 @@ using Carina.Domain.Notifications;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// The body of the request that tells a webhook of a notice, in the shape its kind takes.
-/// </summary>
 public static class NoticePayload
 {
     private static readonly JsonSerializerOptions Written = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };

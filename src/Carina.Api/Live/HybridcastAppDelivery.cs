@@ -10,18 +10,6 @@ using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Live;
 
-/// <summary>
-/// Hands a Hybridcast application's frame the documents and resources it asks for, and the answers to what it posts,
-/// through the relay. The frame has no cookie, so the ticket the application was started with travels in the path,
-/// and a ticket opens only the application it started, on its own channel, for the viewer who started it. A post is
-/// read no further than one byte past the most the relay sends, and carries its media type and nothing else of the
-/// request. An address outside the application's boundary is refused 403 and asked of nobody. A document has every
-/// address in its markup and style sheets pointed back at this path, and the receiver script put first into its
-/// head when it is loaded as a page into the frame rather than fetched as markup by a script; a style sheet has its
-/// addresses pointed back too, and a script, in the document or on its own, reads the receiver script's stand-in for
-/// its location. Everything handed over is sandboxed by its own policy, so a page opened here outside the frame still
-/// runs with no origin of its own, and may load from and connect to nothing but this application's relay.
-/// </summary>
 public static class HybridcastAppDelivery
 {
     public const string Path = "/api/live/{networkId:int}-{serviceId:int}/data-broadcast/app/{ticket:length(43)}";
@@ -146,11 +134,6 @@ public static class HybridcastAppDelivery
     }
 }
 
-/// <summary>
-/// The relay a started application's frame is on: where its documents and resources and its WebSockets are asked
-/// for, what its documents, scripts and style sheets are turned into, and the policy everything handed to it is given.
-/// Only a document loaded as a page is given the receiver script.
-/// </summary>
 public sealed record HybridcastFrame(LiveDataBroadcastChannel Channel, string Ticket, HybridcastLaunch Launch)
 {
     public string Relay => HybridcastAppDelivery.RelayOf(Channel.Network.Value, Channel.Service.Value, Ticket);

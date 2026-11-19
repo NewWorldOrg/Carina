@@ -18,22 +18,11 @@ public sealed record ProgrammeSaid(int? ExitCode, ProgrammeFault? Fault, string 
     public bool Ran => Fault is null;
 }
 
-/// <summary>
-/// A programme that was asked to start: the process and how the operating system knows it when it
-/// started, and otherwise the reason it could not be started, with any path taken out. A programme
-/// that had already exited when it was looked at has a process and no identity.
-/// </summary>
 public sealed record ProgrammeStart(Process? Process, RunningProgramme? Began, string Complained)
 {
     public bool Started => Process is not null;
 }
 
-/// <summary>
-/// Starts another programme. The arguments go over as an array with no shell, the environment is
-/// built here rather than inherited, and a programme named without a path is looked for in the
-/// search path written here rather than the one this process inherited. A programme started yielding
-/// runs under <c>nice</c> at the lowest scheduling priority.
-/// </summary>
 public static class AnotherProgramme
 {
     public const string SearchedIn = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
@@ -84,15 +73,9 @@ public static class AnotherProgramme
     public static ProgrammeStart Start(string programme, IReadOnlyList<string> arguments, ProgrammePriority priority)
         => Start(programme, priority, () => Describe(programme, arguments, priority));
 
-    /// <summary>
-    /// Starts a programme the caller goes on to write to on its standard input.
-    /// </summary>
     public static ProgrammeStart StartFed(string programme, IReadOnlyList<string> arguments)
         => StartFed(programme, arguments, ProgrammePriority.Ordinary);
 
-    /// <summary>
-    /// Starts a programme the caller goes on to write to on its standard input, at the priority given.
-    /// </summary>
     public static ProgrammeStart StartFed(string programme, IReadOnlyList<string> arguments, ProgrammePriority priority)
         => Start(programme, priority, () => Fed(Describe(programme, arguments, priority)));
 
@@ -170,16 +153,8 @@ public static class AnotherProgramme
         return new ProgrammeSaid(running.ExitCode, null, await answer, ProgrammeNote.Of(await complaint, ProgrammeNote.Longest));
     }
 
-    /// <summary>
-    /// Whether the programme is found as the path it is, or by name in the search path a started
-    /// programme is given.
-    /// </summary>
     public static bool IsOnThisMachine(string programme) => Located(programme) is not null;
 
-    /// <summary>
-    /// The file a programme is started from: the path it is, or the first file of that name in the
-    /// search path a started programme is given. Null when there is none.
-    /// </summary>
     public static string? Located(string programme)
     {
         ArgumentException.ThrowIfNullOrEmpty(programme);

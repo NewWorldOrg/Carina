@@ -1,10 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// One kind of the learning data of one chunk: the readings of <see cref="Kind"/> alone, the
-/// others empty. Only the frame lights carry the <see cref="Clock"/> their frames fall on. Whether
-/// captions are shown is not cut from a chunk, and is made with <see cref="OfCaptions"/>.
-/// </summary>
 public sealed class LearningDataPart
 {
     private readonly uint[] fingerprints;
@@ -86,10 +81,6 @@ public sealed class LearningDataPart
         };
     }
 
-    /// <summary>
-    /// Whether captions are shown in each second of the chunk, from its start: <see cref="CaptionPresence.Shown"/>
-    /// or <see cref="CaptionPresence.Hidden"/>.
-    /// </summary>
     public static LearningDataPart OfCaptions(int index, ReadOnlySpan<byte> seconds)
     {
         string? fault = CaptionsFault(index, seconds);

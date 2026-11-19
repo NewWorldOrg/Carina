@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class SignalSamplesThatCouldNotBeTaken : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.AddColumn<string>(
@@ -23,7 +21,6 @@ public partial class SignalSamplesThatCouldNotBeTaken : Migration
             sql: "(not_taken_because IS NULL OR not_taken_because IN ('DriverUnreachable', 'NothingReported', 'NoTimeGiven', 'FiguresRefused'))\nAND (\n    not_taken_because IS NULL\n    OR (\n        NOT locked\n        AND cnr_milli_decibels IS NULL\n        AND bit_errors = '[]'::jsonb\n        AND metrics_not_read = '[]'::jsonb\n    )\n)");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(

@@ -7,10 +7,6 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 public sealed class SkipEventRepository(CarinaDbContext context) : ISkipEventRepository
 {
-    /// <summary>
-    /// Inserts the event only while the events of its recording that happened within the hour before it number
-    /// fewer than the most taken, counted and written in a single statement.
-    /// </summary>
     public async Task<bool> TakeAsync(SkipEvent skip, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(skip);

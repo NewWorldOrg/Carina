@@ -172,10 +172,6 @@ public static partial class StreamingRules
         ];
     }
 
-    /// <summary>
-    /// The places in the feature that hand <c>WaitAsync</c> a timeout rather than holding the deadline
-    /// in a <c>using CancellationTokenSource</c>.
-    /// </summary>
     public static IReadOnlyList<string> WhatHandsAWaitADeadlineItCannotLetGoOfInsideTheFeature(string directory)
         => Feature(directory)
             .SelectMany(file => WhatHandsAWaitADeadlineItCannotLetGoOfIn(file.Source).Select(way => $"{file.Relative} {way}"))

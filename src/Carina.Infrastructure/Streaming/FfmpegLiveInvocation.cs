@@ -14,10 +14,6 @@ public static class FfmpegLiveInvocation
 
     public const string Output = "pipe:1";
 
-    /// <summary>
-    /// The faces the captions are drawn with, in the order the decoder tries them: Denpa Font, which keeps
-    /// every character of a caption to half or the whole of its em, and Noto for what it does not have.
-    /// </summary>
     public const string Font = "Denpa Font,Noto Sans CJK JP";
 
     public const string DrawnCaptions = "[c]";
@@ -34,19 +30,8 @@ public static class FfmpegLiveInvocation
 
     private const string RecordedFragmentMicroseconds = "200000";
 
-    /// <summary>
-    /// How much of the broadcast is read before decoding starts. Every service's map is repeated at least every
-    /// tenth of a second, so a quarter of a second holds the map of the service asked for after the first map of
-    /// any service in the multiplex.
-    /// </summary>
     private const string ProbedMicroseconds = "250000";
 
-    /// <summary>
-    /// The most that is read before decoding starts. ffmpeg ends the quarter of a second only once one stream has
-    /// told it that much of its own length, and the data streams of the other services can take several times as
-    /// long, so this is what usually ends the reading. It still reaches past the service's map in a multiplex sent
-    /// at twice the terrestrial rate.
-    /// </summary>
     private const string ProbedBytes = "500000";
 
     private static readonly SoundPlacement TheWholeFirstSound = SoundPlacement.WholeStream(0);
@@ -140,10 +125,6 @@ public static class FfmpegLiveInvocation
     internal static IReadOnlyList<string> CaptionOutput(ServiceId service, string target)
         => CaptionOutput(service, target, []);
 
-    /// <summary>
-    /// The caption output, with <paramref name="alongside"/> mapped into the same container after the
-    /// pictures.
-    /// </summary>
     internal static IReadOnlyList<string> CaptionOutput(ServiceId service, string target, IReadOnlyList<string> alongside)
         =>
         [
@@ -169,10 +150,6 @@ public static class FfmpegLiveInvocation
             target,
         ];
 
-    /// <summary>
-    /// What opens the card, before the input: a VAAPI card through the render node, an NVIDIA card as the CUDA
-    /// device, and nothing for the processor.
-    /// </summary>
     internal static IReadOnlyList<string> Device(LiveEncoder encoder, string renderNode)
         => LiveEncoders.Named(encoder) switch
         {
@@ -242,10 +219,6 @@ public static class FfmpegLiveInvocation
         return string.Join(',', steps);
     }
 
-    /// <summary>
-    /// The rate the picture is written at. A probe this short can end before the stream has said its own rate,
-    /// and a rate guessed from the clock's ticks would have every frame repeated thousands of times a second.
-    /// </summary>
     internal static string Pace(LiveProfile profile)
     {
         FrameRate rate = profile.Rate;
@@ -253,10 +226,6 @@ public static class FfmpegLiveInvocation
         return string.Create(CultureInfo.InvariantCulture, $"{rate.Numerator}/{rate.Denominator}");
     }
 
-    /// <summary>
-    /// The picture encoded in <paramref name="format"/>. The processor encodes H.264 alone, so another format is
-    /// asked of the card or of nothing.
-    /// </summary>
     internal static IReadOnlyList<string> Encoding(LiveProfile profile, LiveEncoder encoder, VideoCodec format)
     {
         VideoCodec asked = VideoCodecs.Named(format);
@@ -336,10 +305,6 @@ public static class FfmpegLiveInvocation
         _ => "h264_nvenc",
     };
 
-    /// <summary>
-    /// What the card is handed for the format: H.264 and H.265 a quantiser, AV1 the index it quantises by, which
-    /// is the only quality its encoder takes. H.265 is tagged hvc1, the tag Safari plays.
-    /// </summary>
     private static IReadOnlyList<string> Quality(CardRateControl handed, VideoCodec format) => format switch
     {
         VideoCodec.H265 => ["-qp", Number(handed.H265.Quantiser), "-tag:v", ArtefactCodecReading.TagSafariPlays],
@@ -347,11 +312,6 @@ public static class FfmpegLiveInvocation
         _ => ["-qp", Number(handed.H264.Quantiser)],
     };
 
-    /// <summary>
-    /// What an NVIDIA card is handed for the format, on the same scale as the VAAPI card: a quantiser for H.264 and
-    /// H.265, and for AV1 the index it quantises by, which its encoder takes through the same option. H.265 is
-    /// tagged hvc1, the tag Safari plays.
-    /// </summary>
     private static IReadOnlyList<string> NvencQuality(CardRateControl handed, VideoCodec format) => format switch
     {
         VideoCodec.H265 => ["-qp", Number(handed.H265.Quantiser), "-tag:v", ArtefactCodecReading.TagSafariPlays],

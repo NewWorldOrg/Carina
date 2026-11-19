@@ -2,7 +2,6 @@ using Carina.Domain.Auth;
 
 namespace Carina.Api.Authentication;
 
-/// <summary>What a way in did with the request it answered, left on the request for the gate to write down.</summary>
 public sealed record SignInHappening(
     SignInMoment Moment,
     AuthMethod? Method,

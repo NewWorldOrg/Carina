@@ -3,10 +3,6 @@ using System.Text;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// Where a fragment says whether a sample is a keyframe: in the run, for its first sample alone or for every sample,
-/// as a default of the fragment, or as a default of the track the initialisation declares.
-/// </summary>
 public enum SampleFlagsCarried
 {
     FirstInTheRun = 1,
@@ -18,10 +14,6 @@ public enum SampleFlagsCarried
     DefaultOfTheTrack = 4,
 }
 
-/// <summary>
-/// Where a fragment says how long its samples last: for every sample in the run, as a default of the fragment, or as a
-/// default of the track the initialisation declares.
-/// </summary>
 public enum SampleDurationsCarried
 {
     EveryInTheRun = 1,
@@ -31,10 +23,6 @@ public enum SampleDurationsCarried
     DefaultOfTheTrack = 3,
 }
 
-/// <summary>
-/// Fragmented MP4 the way the live transcoder writes it: an initialisation declaring a picture track and a sound
-/// track, and fragments of a movie fragment box and its media, with only the boxes a reader of either looks at.
-/// </summary>
 public static class Fmp4Media
 {
     public const uint PictureTrack = 1;
@@ -97,9 +85,6 @@ public static class Fmp4Media
         return Fmp4.Joined(Moof(length + 8), Box("mdat", Media(2, 0)));
     }
 
-    /// <summary>
-    /// The bytes of a picture sample, each sample's own, so that a fragment cut in two can be told apart.
-    /// </summary>
     public static byte[] PictureSample(int sample) => [.. Enumerable.Repeat((byte)(0x80 + (sample % 64)), SampleLength)];
 
     public static byte[] SoundSample() => [.. Enumerable.Repeat((byte)0x11, SampleLength)];

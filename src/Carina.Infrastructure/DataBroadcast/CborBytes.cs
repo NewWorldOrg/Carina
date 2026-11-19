@@ -3,10 +3,6 @@ using System.Text;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// The few CBOR items (RFC 8949) the catalog of a data broadcast is written in: unsigned integers, text,
-/// booleans, and maps and arrays of a length told up front.
-/// </summary>
 internal sealed class CborBytes
 {
     private const byte UnsignedMajor = 0;

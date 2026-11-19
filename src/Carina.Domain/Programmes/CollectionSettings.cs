@@ -6,10 +6,6 @@ public sealed record CollectionSettings
 {
     public TimeSpan BetweenSweeps { get; init; } = TimeSpan.FromMinutes(30);
 
-    /// <summary>
-    /// How long after a sweep no other is started ahead of its time, and the closest together two looks at
-    /// whether one should be.
-    /// </summary>
     public TimeSpan SoonestAfterASweep { get; init; } = TimeSpan.FromMinutes(5);
 
     public TimeSpan WantedCoverage { get; init; } = TimeSpan.FromDays(8);
@@ -41,11 +37,6 @@ public sealed record CollectionSettings
     public RotationBackoff WhenTunersAreFull { get; init; } =
         new(TimeSpan.FromSeconds(30), 2, TimeSpan.FromMinutes(5), 4);
 
-    /// <summary>
-    /// The longest a collector that is running goes from one attempt to the next while a visit is due: the wait
-    /// between sweeps, the waits a sweep spends on full tuners before it gives up, and one visit that listens
-    /// for as long as it may and writes for as long again.
-    /// </summary>
     public TimeSpan LongestBetweenAttempts()
         => BetweenSweeps + WhenTunersAreFull.WaitBeforeTheCeiling() + (LongestVisit * 2);
 }

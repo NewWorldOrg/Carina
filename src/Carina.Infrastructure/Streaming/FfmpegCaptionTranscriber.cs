@@ -10,11 +10,6 @@ using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// Takes the captions out of a recorded file with the drawing live viewing uses, run on its own with no
-/// picture decoded, at the lowest scheduling priority, and keeps every change in memory, of the pictures
-/// and of the text read from the caption stream carried beside them.
-/// </summary>
 public sealed class FfmpegCaptionTranscriber(
     MachineSettings machine,
     CaptionSettings settings,

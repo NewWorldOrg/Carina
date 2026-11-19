@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class WhatACandidateWasMeasuredToBe : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.AddColumn<double>(
@@ -60,7 +58,6 @@ public partial class WhatACandidateWasMeasuredToBe : Migration
             sql: "(score_evaluated_at IS NULL) = (score_lock_rate IS NULL)\nAND (score_evaluated_at IS NULL) = (score_samples IS NULL)\nAND (score_evaluated_at IS NULL) = (score_measured_from IS NULL)\nAND (score_evaluated_at IS NULL) = (score_measured_until IS NULL)\nAND (score_lock_rate > 0\n     OR (score_cnr_lowest_milli_decibels IS NULL AND score_bit_error_rate_highest IS NULL))\nAND (score_evaluated_at IS NULL\n     OR (score_samples > 0\n         AND score_lock_rate >= 0\n         AND score_lock_rate <= 1\n         AND score_measured_from < score_measured_until\n         AND score_measured_until <= score_evaluated_at))\nAND (score_bit_error_rate_highest IS NULL OR score_bit_error_rate_highest >= 0)");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(

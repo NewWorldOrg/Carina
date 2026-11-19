@@ -5,13 +5,6 @@ using Carina.Domain.Captions;
 
 namespace Carina.Infrastructure.Captions;
 
-/// <summary>
-/// How a <see cref="CaptionRecord"/> is laid out on disk: a header naming the format, the canvas and where
-/// the file's clock begins, then each change as its 90 kHz moment, its placement and its palette PNG, with
-/// an empty placement and no PNG for a screen cleared, and then the count of text changes and each as its
-/// 90 kHz moment and its UTF-8 text, with no text for a screen cleared. A record with no text is written in
-/// <see cref="TextlessVersion"/>, which ends after the pictures. Every number is big-endian.
-/// </summary>
 public static class CaptionRecordFormat
 {
     public const byte Version = 2;
@@ -67,9 +60,6 @@ public static class CaptionRecordFormat
         return written;
     }
 
-    /// <summary>
-    /// Reads a record back, or answers null when the bytes are not one this format wrote.
-    /// </summary>
     public static CaptionRecord? Read(ReadOnlySpan<byte> bytes)
     {
         if (VersionOf(bytes) is not { } version)
@@ -111,16 +101,8 @@ public static class CaptionRecordFormat
             : null;
     }
 
-    /// <summary>
-    /// Whether the head of a record says the record carries the text of its captions; false for a record kept
-    /// before the text was taken and for a head this format did not write.
-    /// </summary>
     public static bool CarriesText(ReadOnlySpan<byte> head) => VersionOf(head) == Version;
 
-    /// <summary>
-    /// Reads where the file's clock began from the head of a record alone, or answers null when the head is
-    /// not one this format wrote.
-    /// </summary>
     public static TimeSpan? StartOf(ReadOnlySpan<byte> head)
     {
         if (VersionOf(head) is null)

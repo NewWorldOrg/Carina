@@ -7,18 +7,6 @@ using System.Text.Unicode;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// Turns a Hybridcast application's document, style sheets and scripts into ones that are read through the relay.
-/// Every address the markup and the style sheets name — from the root, relative or whole — is resolved against where
-/// the document was taken from and pointed at the relay, so it reaches the same server it would have reached had the
-/// application been opened there. A script, whether handed over on its own, written into the document or written into
-/// an event handler, has its location pointed at the receiver script's stand-in (<see cref="HybridcastScripts"/>)
-/// and is otherwise left alone; what it asks for at run time is the receiver script's to point. An object element of
-/// the broadcast video type keeps its type under data-hybridcast-type instead, so the browser does not try to load
-/// it as a plug-in and the receiver script can find it. The receiver script is put into the head once, as its first
-/// element, and where there is no head, before the first thing the document shows. The bytes are read one to one as
-/// Latin-1, so a document in any character set built on ASCII passes through unchanged except where it is rewritten.
-/// </summary>
 public static partial class HybridcastPages
 {
     private const string Bom = "ï»¿";

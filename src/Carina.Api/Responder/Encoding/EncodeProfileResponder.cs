@@ -30,9 +30,6 @@ public sealed record EncodeProfileResponder(
     }
 }
 
-/// <summary>
-/// What a new profile starts from on this machine: every field a profile is defined by but its label.
-/// </summary>
 public sealed record EncodeProfileDefaultsResponder(
     EncodeCodec Codec,
     EncodeResolution Resolution,

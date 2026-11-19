@@ -13,10 +13,6 @@ using Puppis.Contracts;
 
 namespace Carina.Api.Tests.Support;
 
-/// <summary>
-/// Hands out a first device that ends its stream on its own once it has given what it was told to;
-/// every device after it streams on.
-/// </summary>
 [SupportedOSPlatform("linux")]
 internal sealed class StreamThatEndsItselfOnce(long after) : ITunerDeviceFactory
 {

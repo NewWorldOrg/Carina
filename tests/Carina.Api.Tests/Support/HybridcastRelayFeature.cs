@@ -20,10 +20,6 @@ using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.Support;
 
-/// <summary>
-/// The Hybridcast relay as the HTTP surface sees it: it keeps what it was asked, answers what it is told to, and
-/// carries a WebSocket by echoing what the application sends until the application closes.
-/// </summary>
 internal sealed class ScriptedHybridcastRelay : IHybridcastRelay
 {
     public ConcurrentQueue<string> Asked { get; } = new();

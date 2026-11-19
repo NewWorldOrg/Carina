@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class OnlyAVisitThatHeardNothingWaitsLonger : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -37,7 +35,6 @@ public partial class OnlyAVisitThatHeardNothingWaitsLonger : Migration
             sql: "consecutive_unheard >= 0 AND consecutive_unheard <= consecutive_incomplete");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

@@ -6,12 +6,6 @@ using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Integrity;
 
-/// <summary>
-/// Throws away a file no ledger claims from a place this process writes into itself, after reading
-/// the place and the file again: it refuses a path that leaves the place or passes through a link, a
-/// place that cannot be read or holds nothing, and a file that is gone or has changed since it was
-/// found.
-/// </summary>
 public sealed class LocalStrayFileEraser(
     LocalWrittenFileSurvey places,
     ILogger<LocalStrayFileEraser> logger) : IStrayFileEraser
@@ -88,10 +82,6 @@ public sealed class LocalStrayFileEraser(
         return StrayFileErasure.Erased(true);
     }
 
-    /// <summary>
-    /// The full path <paramref name="path"/> names inside <paramref name="room"/>, or nothing when it is
-    /// empty, rooted, holds a separator or a character no name holds, or climbs out.
-    /// </summary>
     public static string? PlaceUnder(string room, string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(room);

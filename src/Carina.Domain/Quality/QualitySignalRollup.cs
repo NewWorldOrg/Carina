@@ -36,10 +36,6 @@ public sealed class QualitySignalRollup
 
     public IReadOnlyList<LayerErrorRate> BitErrors { get; private set; } = [];
 
-    /// <summary>
-    /// The one physical channel every sample in the window was taken on, or null when they were not
-    /// all taken on one or any of them does not say.
-    /// </summary>
     public int? PhysicalChannel { get; private set; }
 
     public double? LockRate => Samples is 0 ? null : (double)Locked / Samples;

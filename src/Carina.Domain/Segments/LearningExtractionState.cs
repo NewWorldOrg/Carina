@@ -1,8 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Where taking the learning data out of a recording stands.
-/// </summary>
 public enum LearningExtractionState
 {
     Following = 1,

@@ -7,12 +7,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Recordings;
 
-/// <summary>
-/// The ledger's half of trying a failed start again. It reads what the ledger holds about one
-/// reservation's starts, sets that beside the guide, the disk and the channel's rotation, asks the
-/// decision, and writes down every attempt and the giving up. It starts nothing; an attempt is the
-/// tick's ordinary start.
-/// </summary>
 public sealed class RecordingRetries(
     IReservationRepository reservations,
     IReservationOutcomeRepository outcomes,
@@ -127,9 +121,6 @@ public sealed class RecordingRetries(
             structural);
     }
 
-    /// <summary>
-    /// What the guide says about the programme. A guide that cannot be read says nothing about it.
-    /// </summary>
     private async Task<GuideStanding> GuideSaysAsync(RecordingTick due, CancellationToken cancellationToken)
     {
         try
@@ -149,9 +140,6 @@ public sealed class RecordingRetries(
         }
     }
 
-    /// <summary>
-    /// Whether the disk was found to have no room. A disk that cannot be weighed is not.
-    /// </summary>
     private async Task<bool> FoundNoRoomAsync(
         RecordingTick due,
         TuningParameters tuning,

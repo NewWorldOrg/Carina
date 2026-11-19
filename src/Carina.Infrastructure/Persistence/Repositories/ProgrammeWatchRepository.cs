@@ -5,10 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// Reads the programmes asked to be told of as copies and keeps none of them tracked, so a row a failed write
-/// left changed is not written by a later save.
-/// </summary>
 public sealed class ProgrammeWatchRepository(CarinaDbContext context) : IProgrammeWatchRepository
 {
     public async Task<ProgrammeWatch?> FindAsync(ProgrammeWatchId id, CancellationToken cancellationToken)

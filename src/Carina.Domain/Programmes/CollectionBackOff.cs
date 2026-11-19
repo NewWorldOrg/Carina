@@ -9,11 +9,6 @@ public enum TunerReport
     Reached = 3,
 }
 
-/// <summary>
-/// When a stream is next worth visiting: the ordinary wait after a settled visit or after one that heard
-/// part of the schedule once every service reached the wanted coverage, the retry time after one that
-/// heard part of it while some service was still short, and a doubling wait while visits hear none of it.
-/// </summary>
 public static class CollectionBackOff
 {
     public static DateTime? NotBefore(StreamVisit visit, CollectionSettings settings)
@@ -42,10 +37,6 @@ public static class CollectionBackOff
             + (doubled > settings.LongestBackOff ? settings.LongestBackOff : doubled);
     }
 
-    /// <summary>
-    /// Whether a stream may be visited at <paramref name="now"/>: it was never visited, its last visit
-    /// was interrupted, or its wait is over.
-    /// </summary>
     public static bool IsDue(StreamVisit? visit, DateTime now, CollectionSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -56,10 +47,6 @@ public static class CollectionBackOff
     public static bool IsWorthReportingToTheTuner(VisitOutcome outcome)
         => outcome is VisitOutcome.NoLock or VisitOutcome.NoBytes;
 
-    /// <summary>
-    /// What a visit tells the candidate it tuned with: one that could not tune is a failure, an interruption says
-    /// nothing of reception, and any other reached it.
-    /// </summary>
     public static TunerReport ReportToTheTuner(VisitOutcome outcome)
     {
         if (IsWorthReportingToTheTuner(outcome))

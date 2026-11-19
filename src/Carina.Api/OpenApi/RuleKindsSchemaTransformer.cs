@@ -10,10 +10,6 @@ using Microsoft.OpenApi;
 
 namespace Carina.Api.OpenApi;
 
-/// <summary>
-/// Lists, for the events of a set of rules, the kinds rules choose among rather than every kind a notice can be,
-/// so that the generated client offers no kind a set of rules is refused for.
-/// </summary>
 public sealed class RuleKindsSchemaTransformer : IOpenApiSchemaTransformer
 {
     private const string Events = "events";

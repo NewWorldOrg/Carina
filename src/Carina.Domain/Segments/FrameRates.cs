@@ -1,10 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The rate a picture stream is placed at, from how long one of its frames lasts: the nearest standard
-/// rate when its frame lasts within <see cref="Closeness"/> of that length, and otherwise that length
-/// as it is.
-/// </summary>
 public static class FrameRates
 {
     public const double Closeness = 0.01;

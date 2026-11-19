@@ -1,8 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// What marks a place as a boundary candidate. A silent cut is a silence the picture corroborates.
-/// </summary>
 [Flags]
 public enum BoundaryCue
 {
@@ -23,12 +20,6 @@ public enum BoundaryCue
     RecordingEdge = 64,
 }
 
-/// <summary>
-/// A boundary candidate after the candidates near one another are merged: the second of the strongest
-/// of them, every cue they carried, the earliest and latest of their silent cuts, catalog edges and
-/// recording ends (its own second when it took in none), and the depth below the threshold, in decibels,
-/// and the length of the longest silence among them.
-/// </summary>
 public sealed record BoundaryCandidate(
     TimeSpan At,
     TimeSpan Earliest,
@@ -41,14 +32,8 @@ public sealed record BoundaryCandidate(
 
     public bool IsRecordingEdge => Cues.HasFlag(BoundaryCue.RecordingEdge);
 
-    /// <summary>
-    /// How strongly the cues say a segment starts or ends here, as merging weighs them.
-    /// </summary>
     public int Strength => StrengthOf(Cues);
 
-    /// <summary>
-    /// A recording end is the strongest, then a silent cut, a catalog edge, a silence or black, and the rest.
-    /// </summary>
     public static int StrengthOf(BoundaryCue cues) => cues switch
     {
         _ when cues.HasFlag(BoundaryCue.RecordingEdge) => 5,

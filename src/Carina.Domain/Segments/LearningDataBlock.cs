@@ -5,11 +5,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// One kind of the learning data of one chunk of one recording, kept as the bytes
-/// <see cref="LearningDataFormat"/> writes, with the version that made it. It names the recording
-/// by value.
-/// </summary>
 public sealed class LearningDataBlock
 {
     private LearningDataBlock()

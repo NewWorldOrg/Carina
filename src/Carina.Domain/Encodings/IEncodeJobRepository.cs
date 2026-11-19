@@ -10,11 +10,6 @@ public enum ArtefactClaim
     TakenByAnother = 2,
 }
 
-/// <summary>
-/// How an attempt to start the next job ended. <see cref="AViewerHoldsTheCard"/> means the ledger
-/// was not asked because the card was making a picture for someone watching; the others are the
-/// ledger's answer to a claim.
-/// </summary>
 public enum EncodeClaimStanding
 {
     Claimed = 1,
@@ -28,10 +23,6 @@ public enum EncodeClaimStanding
     AViewerHoldsTheCard = 5,
 }
 
-/// <summary>
-/// What a look at the queue came back with. The job is there only when this caller now holds it as
-/// running; the other answers say why not.
-/// </summary>
 public sealed record EncodeClaim
 {
     private EncodeClaim(EncodeJob? job, EncodeClaimStanding standing)
@@ -71,57 +62,24 @@ public interface IEncodeJobRepository
 
     Task AddAsync(EncodeJob job, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Writes the job as it stands.
-    /// </summary>
-    /// <exception cref="EncodeJobMovedMeanwhileException">The row changed since it was read.</exception>
     Task SaveAsync(EncodeJob job, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Writes a job that has ended over its row, without having read that row, when the ledger still
-    /// holds it as running on the same attempt.
-    /// </summary>
-    /// <returns><see langword="false"/> when the row has moved on and was left as it was.</returns>
     Task<bool> WriteTheEndingAsync(EncodeJob job, CancellationToken cancellationToken);
 
     Task<PaginatedList<EncodeJob>> ListAsync(EncodeJobQuery query, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<EncodeJob>> ListForRecordingAsync(RecordingId recordingId, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Moves the oldest waiting job to running by a conditional update, and hands it back only when
-    /// that update changed one row. The ledger holds at most one running job, so a second claim while
-    /// one runs is refused by the ledger.
-    /// </summary>
     Task<EncodeClaim> ClaimNextAsync(DateTime at, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<EncodeJob>> ListRunningAsync(CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Writes the job's artefact name, and nothing else, into its running row before anything is
-    /// renamed. The ledger holds one owner per name under a root; a refusal leaves the job as it was.
-    /// </summary>
-    /// <returns>The claim, or that another job already holds the name.</returns>
     Task<ArtefactClaim> ClaimArtefactAsync(EncodeJob job, EncodeFileName name, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Takes the artefact name over from whichever earlier job still holds it under this root, for a job
-    /// asked to make the artefact again. The earlier row keeps what it made and is marked as having
-    /// given the name up; a job not asked to make it again is refused.
-    /// </summary>
-    /// <returns>How many rows gave the name up.</returns>
     Task<int> TakeTheNameOverAsync(EncodeJob job, EncodeFileName name, DateTime at, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// The recordings that more than one job completed for, whether or not the earlier artefacts have
-    /// been replaced yet.
-    /// </summary>
     Task<IReadOnlyList<RecordingId>> ListRecordingsMadeMoreThanOnceAsync(CancellationToken cancellationToken);
 
-    /// <summary>
-    /// How long the last jobs that completed took, at most <paramref name="most"/> of them, newest
-    /// first. Jobs that failed or were called off are not counted.
-    /// </summary>
     Task<IReadOnlyList<EncodeSpell>> RecentSpellsAsync(int most, CancellationToken cancellationToken);
 
     Task<EncodeHold> HoldOnProfileAsync(EncodeProfileId profileId, CancellationToken cancellationToken);

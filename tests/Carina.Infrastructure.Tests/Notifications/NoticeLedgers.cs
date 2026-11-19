@@ -15,9 +15,6 @@ using Npgsql;
 
 namespace Carina.Infrastructure.Tests.Notifications;
 
-/// <summary>
-/// Writes rows of the ledgers a notice is taken from into the scratch database, and looks at them as the loop does.
-/// </summary>
 internal sealed class NoticeLedgers(RepositoryDatabase database)
 {
     public const string ProgrammeName = "A made-up programme";

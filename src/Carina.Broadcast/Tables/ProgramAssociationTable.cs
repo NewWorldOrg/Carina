@@ -2,9 +2,6 @@ using Carina.Broadcast.Sections;
 
 namespace Carina.Broadcast.Tables;
 
-/// <summary>
-/// The programme association table: which pid carries the programme map of each programme of the stream.
-/// </summary>
 public sealed class ProgramAssociationTable
 {
     public const int Pid = 0x0000;
@@ -63,7 +60,4 @@ public sealed class ProgramAssociationTable
     }
 }
 
-/// <summary>
-/// One programme of the association table and the pid its programme map is carried on.
-/// </summary>
 public sealed record AssociatedProgram(int ProgramNumber, int MapPid);

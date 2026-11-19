@@ -37,9 +37,6 @@ public enum NoticeKind
 
 public static class NoticeKinds
 {
-    /// <summary>
-    /// The kinds told of one programme somebody asked to be told of, to the destinations asked for with it.
-    /// </summary>
     public static IReadOnlyList<NoticeKind> OfAWatchedProgramme { get; } =
     [
         NoticeKind.ProgrammeStarting,
@@ -47,9 +44,6 @@ public static class NoticeKinds
         NoticeKind.WatchedProgrammeGone,
     ];
 
-    /// <summary>
-    /// The kinds a set of rules may list.
-    /// </summary>
     public static IReadOnlyList<NoticeKind> ChosenByRules { get; } =
     [
         .. Enum.GetValues<NoticeKind>().Except(OfAWatchedProgramme),

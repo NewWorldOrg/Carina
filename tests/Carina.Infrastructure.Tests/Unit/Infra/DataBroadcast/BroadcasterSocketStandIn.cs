@@ -7,11 +7,6 @@ using System.Text;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.DataBroadcast;
 
-/// <summary>
-/// A broadcaster's WebSocket server on the loopback interface: it upgrades every request it is sent, choosing the
-/// first subprotocol it is offered, keeps the head of each request, and hands the socket to what the test says to do
-/// with it.
-/// </summary>
 internal sealed class BroadcasterSocketStandIn : IAsyncDisposable
 {
     private const string Guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -129,9 +124,6 @@ internal sealed class BroadcasterSocketStandIn : IAsyncDisposable
     }
 }
 
-/// <summary>
-/// Two ends of one connection on the loopback interface, for a WebSocket on each end.
-/// </summary>
 internal static class DuplexPipe
 {
     public static (Stream One, Stream Other) Pair()

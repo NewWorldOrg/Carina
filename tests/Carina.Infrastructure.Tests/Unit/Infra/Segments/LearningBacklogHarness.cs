@@ -19,9 +19,6 @@ using static Carina.Infrastructure.Tests.Unit.Infra.Segments.LearningFollowHarne
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
-/// <summary>
-/// The recordings that have ended and their records, read the way the store reads them, held in memory.
-/// </summary>
 internal sealed class HeldLearningBacklog(
     HeldLearningWorklist worklist,
     HeldLearningExtractions records,
@@ -62,11 +59,6 @@ internal sealed class HeldLearningBacklog(
                                                     && block.WrittenAt >= record.UpdatedAt);
 }
 
-/// <summary>
-/// A reader that reads nothing: it remembers what it was asked to read and how far it got, and a reading
-/// lasts until it is released, stopped or told its recording went, when it settles the record as read to
-/// the end or as far as it got.
-/// </summary>
 internal sealed class HeldReader(LearningRecords records, DateTime at) : ILearningFollower
 {
     public static readonly TimeSpan ReadsAtOnce = TimeSpan.FromSeconds(30);
@@ -77,9 +69,6 @@ internal sealed class HeldReader(LearningRecords records, DateTime at) : ILearni
 
     public ConcurrentQueue<RecordingId> Stopped { get; } = new();
 
-    /// <summary>
-    /// Each record as the reading found it, before the reading wrote anything to it.
-    /// </summary>
     public ConcurrentDictionary<RecordingId, (LearningExtractionState State, TimeSpan ReadThrough, int Gaps)> Found { get; } = new();
 
     public bool LeavesItsRecord { get; set; }
@@ -147,10 +136,6 @@ internal sealed class HeldReader(LearningRecords records, DateTime at) : ILearni
         => released.GetOrAdd(id, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
 }
 
-/// <summary>
-/// An importer that reads nothing: it remembers the copies it was asked to import, and an import lasts until
-/// it is released or stopped, when it settles the record as read to the end, or as failed when asked to.
-/// </summary>
 internal sealed class HeldImporter(LearningRecords records, DateTime at) : IReducedCopyImporter
 {
     public static readonly TimeSpan ImportsAtOnce = TimeSpan.FromMinutes(25);
@@ -214,9 +199,6 @@ internal sealed class HeldWatching : IWatching
     public bool Anyone { get; set; }
 }
 
-/// <summary>
-/// The recordings the worklist holds, read as the ledger.
-/// </summary>
 internal sealed class WorklistRecordings(HeldLearningWorklist worklist) : IRecordingRepository
 {
     public Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken)
@@ -311,10 +293,6 @@ internal sealed class LearningBacklogHarness : IDisposable
             new StillClock(Now),
             NullLogger<LearningBacklogJob>.Instance);
 
-    /// <summary>
-    /// A recording that ended <paramref name="startedMinutesAgo"/> minutes after it started, with its file
-    /// unless asked otherwise.
-    /// </summary>
     public Recording Ended(int startedMinutesAgo, int eventId, bool withAFile = true, OutputRoot? root = null, bool failed = false)
     {
         Recording recording = Made(root ?? Mounted, eventId, Now.AddMinutes(-startedMinutesAgo));
@@ -352,9 +330,6 @@ internal sealed class LearningBacklogHarness : IDisposable
 
     public string Source(Recording recording) => tree.Under(recording.FileName.Value);
 
-    /// <summary>
-    /// A reduced copy on the shelf the import reads, of the recording given or of one with no row.
-    /// </summary>
     public CopyDescription Copied(string name, Recording? of = null, params string[] leftOut)
     {
         CopyDescription description = of is null ? new CopyDescription() : new CopyDescription { Id = of.Id };

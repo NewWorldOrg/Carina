@@ -2,11 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// The one row of the data broadcast settings changed from a screen: where the receiver is, as a postal code and a
-/// prefecture, each of which may be left unregistered, with when they last changed. No row is held until somebody
-/// changes them.
-/// </summary>
 public sealed class DataBroadcastSettings
 {
     public const int TheOnlyRow = 1;
@@ -45,12 +40,6 @@ public sealed class DataBroadcastSettings
     }
 }
 
-/// <summary>
-/// Where the receiver is as the settings stand: a postal code of seven digits and a prefecture, either of them none
-/// while it is not registered, and when they last changed. The prefecture is its place in the prefecture designation
-/// of ARIB STD-B10 annex G, table G-2, counted from 0: 0 and 1 are the east and the west of Hokkaido, 2 to 47 the
-/// prefectures from Aomori to Okinawa in the order of their codes, 48 the islands of Tokyo and 49 those of Kagoshima.
-/// </summary>
 public sealed record DataBroadcastSettingsStanding
 {
     public const int PostalCodeLength = 7;
@@ -84,16 +73,8 @@ public sealed record DataBroadcastSettingsStanding
         return asked.Length == PostalCodeLength && asked.All(char.IsAsciiDigit);
     }
 
-    /// <summary>
-    /// Whether <paramref name="asked"/> is a postal code a change takes: seven digits, or empty or none for one not
-    /// registered.
-    /// </summary>
     public static bool TakesPostalCode(string? asked) => string.IsNullOrEmpty(asked) || IsPostalCode(asked);
 
-    /// <summary>
-    /// The postal code <paramref name="asked"/> registers, none for an empty one. It is one
-    /// <see cref="TakesPostalCode"/> takes.
-    /// </summary>
     public static string? PostalCodeOf(string? asked)
     {
         if (!TakesPostalCode(asked))
@@ -104,17 +85,8 @@ public sealed record DataBroadcastSettingsStanding
         return string.IsNullOrEmpty(asked) ? null : asked;
     }
 
-    /// <summary>
-    /// Whether <paramref name="asked"/> is a prefecture a change takes: from <see cref="FirstPrefecture"/> to
-    /// <see cref="LastPrefecture"/>, or none for one not registered.
-    /// </summary>
     public static bool TakesPrefecture(int? asked) => asked is null or (>= FirstPrefecture and <= LastPrefecture);
 
-    /// <summary>
-    /// The row once the postal code and the prefecture are set to <paramref name="postalCode"/> and
-    /// <paramref name="prefecture"/> at <paramref name="at"/>; none when neither moves. An empty postal code is one not
-    /// registered.
-    /// </summary>
     public DataBroadcastSettings? Set(string? postalCode, int? prefecture, DateTime at)
     {
         string? registered = PostalCodeOf(postalCode);

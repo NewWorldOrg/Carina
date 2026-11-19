@@ -18,9 +18,6 @@ public sealed class DriverIpcClient : IDriverClient, IConditionalAccessCardReade
 {
     public static readonly TimeSpan RequestPatience = TimeSpan.FromSeconds(10);
 
-    /// <summary>
-    /// How long the answer to a session start is waited for.
-    /// </summary>
     public static readonly TimeSpan SessionStartPatience = TimeSpan.FromSeconds(30);
 
     private readonly HttpClient http;

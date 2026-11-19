@@ -115,11 +115,6 @@ public sealed record PlaybackPlan
             : Refused(standing, PlaybackRefusal.NothingWasWritten, fellBack, alternative);
     }
 
-    /// <summary>
-    /// What can be handed over as it is to the one the subject's artefacts were judged for, in the order
-    /// the sources are named: an artefact on the disk holding anything, and the recording itself where it
-    /// holds anything. A recording still being written hands over neither.
-    /// </summary>
     public static IReadOnlyList<PlaybackSource> SourcesHandedOver(PlaybackSubject subject)
     {
         ArgumentNullException.ThrowIfNull(subject);

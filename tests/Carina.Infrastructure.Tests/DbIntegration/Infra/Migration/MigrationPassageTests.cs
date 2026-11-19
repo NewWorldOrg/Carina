@@ -256,11 +256,6 @@ public sealed class MigrationPassageTests : IDisposable
         Assert.Equal(Shelf, recordings.Carried);
     }
 
-    /// <summary>
-    /// A run for real over <paramref name="source"/>, put together over the container the infrastructure builds as
-    /// the migration command puts it together: the carrier links from the source folder into the new root, and the
-    /// ledgers are the real ones.
-    /// </summary>
     private async Task<MigrationRunId> CarryAsync<TSource>(TSource source, IReadOnlyList<RescannedService> rescanned)
         where TSource : class, IMigrationSourceLedger, IMigrationSourceDirectory
     {

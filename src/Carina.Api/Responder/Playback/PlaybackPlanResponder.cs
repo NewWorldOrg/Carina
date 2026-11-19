@@ -11,10 +11,6 @@ using PlaybackFileClock = Carina.Domain.Segments.PlaybackFileClock;
 
 namespace Carina.Api.Responder.Playback;
 
-/// <summary>
-/// A chapter of the file a plan hands over, on that file's clock to the hundredth of a second, what it is, and
-/// whether a button offers to skip it.
-/// </summary>
 public sealed record PlaybackChapterResponder(double StartsAtSec, double EndsAtSec, ChapterKind Kind, bool Skippable)
 {
     public static IReadOnlyList<PlaybackChapterResponder> Of(IReadOnlyList<PlaybackChapter> chapters)

@@ -2,10 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// What a viewer's seek was: forward past a stretch, or back into a stretch a forward seek passed moments before
-/// and watched on from there.
-/// </summary>
 public enum SeekAction
 {
     Forward = 1,
@@ -13,10 +9,6 @@ public enum SeekAction
     Returned = 2,
 }
 
-/// <summary>
-/// How a viewer sought: by the seek bar, by the buttons and taps that step ten seconds, by the button to the next
-/// chapter, or by the keys that step ten seconds.
-/// </summary>
 public enum SeekMeans
 {
     Bar = 1,
@@ -28,12 +20,6 @@ public enum SeekMeans
     Key = 4,
 }
 
-/// <summary>
-/// One seek a viewer made in one recording: when it was taken in, whether it went forward or came back, how it was
-/// made, and the two moments in the recording's own time it names. A forward seek names where the viewer was and
-/// where they landed, later; steps made one after another are one seek. Coming back names where the viewer was and
-/// where they came back to, earlier.
-/// </summary>
 public sealed record ViewerSeek
 {
     public ViewerSeek(DateTime happenedAt, SeekAction action, SeekMeans means, TimeSpan from, TimeSpan to)
@@ -75,9 +61,5 @@ public sealed record ViewerSeek
 
     public TimeSpan To { get; }
 
-    /// <summary>
-    /// Whether a seek <paramref name="action"/> from <paramref name="from"/> to <paramref name="to"/> goes its way:
-    /// later going forward, earlier coming back.
-    /// </summary>
     public static bool GoesItsWay(SeekAction action, TimeSpan from, TimeSpan to) => action is SeekAction.Forward ? to > from : to < from;
 }

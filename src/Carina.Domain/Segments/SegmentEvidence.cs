@@ -1,17 +1,7 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The light of a frame and where it falls in the recording's own time.
-/// </summary>
 public readonly record struct PlacedFrame(TimeSpan At, FrameLight Light);
 
-/// <summary>
-/// The readings of one recording a detection reads, all in the recording's own time from zero: the
-/// loudness every <see cref="LoudnessStep"/>, how the channels differ every <see cref="ChannelStep"/>,
-/// the light of every frame in order, the corner outline of every second, and, when the recording's
-/// captions were read, whether each second shows captions. Readings may reach past
-/// <see cref="Length"/>; what lies past it is no candidate.
-/// </summary>
 public sealed class SegmentEvidence
 {
     public static readonly TimeSpan LoudnessStep = TimeSpan.FromTicks(TimeSpan.TicksPerSecond * SoundLoudness.Hop / SoundReader.SampleRate);
@@ -84,11 +74,6 @@ public sealed class SegmentEvidence
         return new SegmentEvidence(length, loudness.ToArray(), channels.ToArray(), [.. frames], outlines.ToArray(), captions is null ? null : [.. captions]);
     }
 
-    /// <summary>
-    /// The readings <paramref name="parts"/> hold, each part placed at its chunk's own time. A chunk
-    /// missing from the loudness is heard as silence, one missing from the channels as unmeasured, and one
-    /// missing from the corners as empty corners. The captions are read when any part holds them.
-    /// </summary>
     public static SegmentEvidence Of(IEnumerable<LearningDataPart> parts, TimeSpan length)
     {
         ArgumentNullException.ThrowIfNull(parts);

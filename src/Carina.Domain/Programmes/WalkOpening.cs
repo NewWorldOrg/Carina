@@ -4,15 +4,8 @@ using Puppis.Contracts;
 
 namespace Carina.Domain.Programmes;
 
-/// <summary>
-/// Whether a walk started now would have somewhere to go: a stream whose visit is due, and a tuner
-/// that receives it and holds no session.
-/// </summary>
 public static class WalkOpening
 {
-    /// <summary>
-    /// The kinds of broadcast carried by the streams whose visit is due, each named once.
-    /// </summary>
     public static IReadOnlyList<TuneSystem> Awaited(
         IReadOnlyList<BroadcastStream> streams,
         IReadOnlyList<StreamVisit> visits,

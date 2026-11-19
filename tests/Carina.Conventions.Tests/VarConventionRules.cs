@@ -2,11 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace Carina.Conventions.Tests;
 
-/// <summary>
-/// Reads production source for a local declared <c>var</c> whose initializer is not an object,
-/// array or collection creation, or a cast. A declaration whose statement holds an anonymous type
-/// is left alone. It reads source text, so it sees the ordinary spellings and no others.
-/// </summary>
 public static partial class VarConventionRules
 {
     public static IReadOnlyList<string> NonApparentVarDeclarations(string directory)
@@ -34,8 +29,6 @@ public static partial class VarConventionRules
     {
         string trimmed = statement.TrimStart();
 
-        // An anonymous type, anywhere the statement projects into one, is the one shape a
-        // declaration can never spell out.
         return AnonymousType().IsMatch(statement)
                || NamedConstruction().IsMatch(trimmed)
                || ImplicitArray().IsMatch(trimmed)

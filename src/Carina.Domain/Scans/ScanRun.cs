@@ -24,10 +24,6 @@ public sealed class ScanRun
 
     public bool IsRunning => State is ScanRunState.Running;
 
-    /// <summary>
-    /// Only a scan that walked every target to the end proposes a difference; one that ended any other way writes
-    /// nothing.
-    /// </summary>
     public bool ProposesADifference => State is ScanRunState.Completed;
 
     public ScanApplyRefusal? RefusalToApply()

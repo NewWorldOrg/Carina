@@ -6,11 +6,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// The frames of the data broadcast side channel: the catalog in CBOR, a module with its resources, an event
-/// message with the tag of the stream it came on, word that the service carries no data broadcast, and a data
-/// stream's reference of the programme time, each opened by the byte that says which.
-/// </summary>
 public static class DataBroadcastFrames
 {
     public const byte CatalogKind = 0x01;
@@ -86,11 +81,6 @@ public static class DataBroadcastFrames
         return Frame(at, payload);
     }
 
-    /// <summary>
-    /// An event message as the side channel carries it, opened by its kind, with the moment it fires written as
-    /// <paramref name="firesAt"/> and closed by the tag of its stream when that is known, into
-    /// <paramref name="into"/>, answering how many bytes that took.
-    /// </summary>
     public static int WriteEvent(EventMessage message, long firesAt, Span<byte> into)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -118,10 +108,6 @@ public static class DataBroadcastFrames
 
     public static LiveFrame Absent(long at) => Frame(at, [AbsentKind]);
 
-    /// <summary>
-    /// A data stream's reference of the programme time: its tag, the moment of the clock the reference names on
-    /// the same clock as the frames, the programme time at that moment, and the scale's numerator and denominator.
-    /// </summary>
     public static LiveFrame NptReference(NptReference reference, long at)
     {
         ArgumentNullException.ThrowIfNull(reference);
@@ -138,11 +124,6 @@ public static class DataBroadcastFrames
         return Frame(at, payload);
     }
 
-    /// <summary>
-    /// The frame told on a clock <paramref name="by"/> ticks behind: its moment, the moment an event message
-    /// fires and the moment a reference of the programme time names, moved back by that much and held at the
-    /// clock's start.
-    /// </summary>
     public static LiveFrame Shifted(LiveFrame frame, long by)
     {
         ArgumentNullException.ThrowIfNull(frame);
@@ -176,10 +157,6 @@ public static class DataBroadcastFrames
             _ => null,
         };
 
-    /// <summary>
-    /// A module as the side channel carries it: its tag, id and version, then each resource with its path, its
-    /// kind and its bytes, to the end.
-    /// </summary>
     public static byte[] ModulePayload(ModuleVersion module)
     {
         ArgumentNullException.ThrowIfNull(module);
@@ -196,10 +173,6 @@ public static class DataBroadcastFrames
         return payload;
     }
 
-    /// <summary>
-    /// Each resource with its path, its kind and its bytes, one after another, into <paramref name="into"/>,
-    /// answering how many bytes that took.
-    /// </summary>
     public static int WriteResources(IReadOnlyList<CarouselResource> resources, Span<byte> into)
     {
         ArgumentNullException.ThrowIfNull(resources);
@@ -214,10 +187,6 @@ public static class DataBroadcastFrames
         return at;
     }
 
-    /// <summary>
-    /// The resources written one after another to the end of <paramref name="bytes"/>, each with the media type and
-    /// the form its kind stands for, or null when the bytes are not a list of at least one resource.
-    /// </summary>
     public static IReadOnlyList<CarouselResource>? ReadResources(ReadOnlyMemory<byte> bytes)
     {
         List<CarouselResource> resources = [];
@@ -237,9 +206,6 @@ public static class DataBroadcastFrames
         return resources.Count is 0 ? null : resources;
     }
 
-    /// <summary>
-    /// The media type a resource of <paramref name="kind"/> is read back as.
-    /// </summary>
     public static string MediaTypeOf(DataBroadcastResourceKind kind) => Representatives[kind].MediaType;
 
     public static DataBroadcastResourceKind KindOf(CarouselResource resource)

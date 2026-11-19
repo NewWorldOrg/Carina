@@ -145,10 +145,6 @@ public sealed class LiveFanout(
         }
     }
 
-    /// <summary>
-    /// Hands the frame to every viewer and keeps <paramref name="standing"/>, all of it on the frame's channel
-    /// and in the order given, as what a viewer joining later is handed of that channel.
-    /// </summary>
     public void Publish(LiveFrame frame, IReadOnlyList<LiveFrame> standing)
     {
         ArgumentNullException.ThrowIfNull(frame);
@@ -156,10 +152,6 @@ public sealed class LiveFanout(
         Publish([frame], standing);
     }
 
-    /// <summary>
-    /// Keeps <paramref name="standing"/> as what a viewer joining later is handed of the channel, and then hands
-    /// every frame to every viewer in turn, at one go, so that no viewer joins part way through.
-    /// </summary>
     public void Publish(IReadOnlyList<LiveFrame> frames, IReadOnlyList<LiveFrame> standing)
     {
         ArgumentNullException.ThrowIfNull(frames);

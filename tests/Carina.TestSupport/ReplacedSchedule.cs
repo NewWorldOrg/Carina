@@ -4,11 +4,6 @@ using Carina.Domain.Programmes;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// One service's afternoon as the guide holds it after the station replaced it: nine programmes of the schedule
-/// heard the day before, the replacement that covers them and runs ten minutes over, heard today, the programme
-/// announced to follow it, and the one before, which aired before anything changed.
-/// </summary>
 public static class ReplacedSchedule
 {
     public const int Before = 1;

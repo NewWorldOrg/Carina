@@ -53,9 +53,6 @@ public sealed record LiveSessionKey
 
     public SoundPlacement Placement { get; }
 
-    /// <summary>
-    /// The same channel, profile, format and sound, with the sound taken from where the broadcast on air carries it.
-    /// </summary>
     public LiveSessionKey Taking(SoundPlacement placement)
     {
         ArgumentNullException.ThrowIfNull(placement);

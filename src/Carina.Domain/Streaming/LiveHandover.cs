@@ -1,21 +1,11 @@
 namespace Carina.Domain.Streaming;
 
-/// <summary>
-/// One reader of a channel as it is received, taking neither a transcoder nor a transcoding seat.
-/// </summary>
-/// <remarks>
-/// A reader that stops taking bytes is not waited for: what it cannot hold is dropped oldest first,
-/// and what was dropped is counted here rather than against a session.
-/// </remarks>
 public interface ILiveHandedOver : IAsyncDisposable
 {
     Stream Bytes { get; }
 
     long ChunksDroppedSinceTheSupplyOpened { get; }
 
-    /// <summary>
-    /// Waits for the first bytes of the channel to arrive.
-    /// </summary>
     ValueTask<bool> ReachedAsync(CancellationToken cancellationToken);
 }
 

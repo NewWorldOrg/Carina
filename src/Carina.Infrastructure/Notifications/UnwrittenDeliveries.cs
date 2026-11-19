@@ -4,9 +4,6 @@ using Carina.Domain.Notifications;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// The deliveries the other end took whose rows could not be written as sent, held for as long as the process lives.
-/// </summary>
 public sealed class UnwrittenDeliveries
 {
     private readonly ConcurrentDictionary<NotificationDeliveryId, DateTime> taken = new();

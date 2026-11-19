@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class ARunCountsTheRulesWhoseMarkWordsBecameMarks : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(
@@ -20,7 +18,6 @@ public partial class ARunCountsTheRulesWhoseMarkWordsBecameMarks : Migration
             sql: "subject IN ('DuplicateAvoidance', 'EnclosedCharacters', 'DayBoundary', 'MarkWords')");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(

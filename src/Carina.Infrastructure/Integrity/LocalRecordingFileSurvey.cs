@@ -48,10 +48,6 @@ public sealed class LocalRecordingFileSurvey(
     private RootListing Walked(OutputRoot root, string path, CancellationToken cancellationToken)
         => Walk(root, path, StoragePlace.Recordings, logger, cancellationToken);
 
-    /// <summary>
-    /// Lists every file under <paramref name="path"/> without following a link, or says the place is out
-    /// of reach when it is not there or cannot be read.
-    /// </summary>
     public static RootListing Walk(
         OutputRoot root,
         string path,

@@ -104,10 +104,6 @@ public sealed class LiveTranscoder : ILiveTranscoder
         running.Dispose();
     }
 
-    /// <summary>
-    /// Shows the captions until the transcoder is called off, then goes on reading what it writes and drops it,
-    /// because a programme flushing its last pictures into a pipe nobody reads cannot exit.
-    /// </summary>
     private async Task<CaptionFlowFault?> DrawnAsync(CaptionPipe pipe)
     {
         try
@@ -201,10 +197,6 @@ public sealed class LiveTranscoder : ILiveTranscoder
     private TranscoderExit Exited()
         => running.ExitCode is 0 ? TranscoderExit.Finished() : TranscoderExit.Refused(running.ExitCode, Complaint);
 
-    /// <summary>
-    /// Waits for the programme's output to be read to its end after the programme exits, for no longer
-    /// than the stop grace.
-    /// </summary>
     private async Task DrawnToTheEndAsync()
     {
         using CancellationTokenSource deadline = new(stopGrace, clock);
@@ -232,11 +224,6 @@ public sealed class LiveTranscoder : ILiveTranscoder
         }
     }
 
-    /// <summary>
-    /// Asks the programme to stop by ending its input, kills it when it has not stopped within the grace, and says
-    /// whether it had to be killed. A programme that stopped without being killed and exited other than 0 ended of
-    /// its own accord, whether before it was asked or while it was, and its exit is its own answer.
-    /// </summary>
     private async Task<bool> GiveUpAsync()
     {
         Hush();

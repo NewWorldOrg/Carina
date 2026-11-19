@@ -2,9 +2,6 @@ using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Reservations;
 
-/// <summary>
-/// Why a programme a reservation or a rule reached for is not itself the one to reserve.
-/// </summary>
 public enum BroadcastExclusion
 {
     None = 0,
@@ -14,38 +11,16 @@ public enum BroadcastExclusion
     Moved = 2,
 }
 
-/// <summary>
-/// A programme to reserve, with the broadcast it belongs to and the part it plays there.
-/// </summary>
 public sealed record BroadcastTarget(Programme Programme, BroadcastGroupKey? Key, BroadcastGroupRole Role)
 {
     public ProgrammeRef Reference
         => new(Programme.NetworkId, Programme.ServiceId, Programme.EventId, Programme.StartsAt);
 }
 
-/// <summary>
-/// The programmes that stand for one programme asked for: none for a shadow, the primary of a moved
-/// broadcast in place of a listing it suppresses, and every segment still to come of a relayed one.
-/// </summary>
 public sealed record BroadcastResolution(IReadOnlyList<BroadcastTarget> Targets, BroadcastExclusion Exclusion);
 
-/// <summary>
-/// Where a reservation already standing belongs: the programme it should be on, and the other
-/// programmes of the same broadcast that should be reserved beside it.
-/// </summary>
 public sealed record BroadcastPlacement(BroadcastTarget Own, IReadOnlyList<BroadcastTarget> Alongside);
 
-/// <summary>
-/// Groups the programmes the guide links as relayed or moved, and the programmes several services of
-/// one broadcaster carry as the same broadcast at the same time, and answers which of them to reserve.
-/// A group is the set of programmes the links join, whichever side carries the link, and a programme
-/// that is named but not in the guide stays in the group as an absent member.
-/// </summary>
-/// <remarks>
-/// The same broadcast on several services is told by event sharing between programmes that both carry
-/// a name, or, where no link says so, by one transport stream carrying the same name from the same start
-/// to the same end on more than one service.
-/// </remarks>
 public sealed class BroadcastGroupResolver
 {
     private const string RelayPrefix = "relay";
@@ -119,9 +94,6 @@ public sealed class BroadcastGroupResolver
         return new BroadcastGroupResolver(present, relays, movements, simulcasts);
     }
 
-    /// <summary>
-    /// The programmes in the guide that share a group with any of <paramref name="ids"/>.
-    /// </summary>
     public IReadOnlyList<Programme> MembersAlongside(IEnumerable<ProgrammeId> ids)
     {
         ArgumentNullException.ThrowIfNull(ids);
@@ -164,14 +136,6 @@ public sealed class BroadcastGroupResolver
             ReferenceEquals(primary, held) ? BroadcastExclusion.None : BroadcastExclusion.Moved);
     }
 
-    /// <summary>
-    /// The programme for a rule to reserve in place of <paramref name="target"/> when other services of
-    /// the same broadcaster carry the same broadcast at the same time: the one on the service with the
-    /// smallest identifier, or the primary listing of a moved broadcast that one belongs to. A programme
-    /// among <paramref name="kept"/>, where a person changed the reservation standing on it, is
-    /// reserved instead, and is never replaced itself. Null when that comes back to
-    /// <paramref name="target"/>, or when no other service carries its broadcast.
-    /// </summary>
     public BroadcastTarget? SimulcastPrimaryOf(BroadcastTarget target, IReadOnlySet<ProgrammeRef>? kept = null)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -316,10 +280,6 @@ public sealed class BroadcastGroupResolver
         return null;
     }
 
-    /// <summary>
-    /// The listings of one group that are in the guide, gathered into runs of listings whose times
-    /// overlap, in the order they start.
-    /// </summary>
     private IReadOnlyList<IReadOnlyList<Programme>> ClustersOf(Grouping grouping, Node node)
     {
         IReadOnlySet<Node> members = grouping.MembersOf(node);
@@ -379,10 +339,6 @@ public sealed class BroadcastGroupResolver
             && present.TryGetValue(other, out Programme? sharing)
             && !sharing.IsShadow;
 
-    /// <summary>
-    /// The programmes one transport stream carries on more than one service under the same name, from
-    /// the same start to the same announced end.
-    /// </summary>
     private static IEnumerable<Node[]> Alike(IEnumerable<Programme> programmes)
         => programmes
             .Where(programme => !programme.IsShadow && programme.Name.Length > 0 && programme.EndsAt is not null)
@@ -419,9 +375,6 @@ public sealed class BroadcastGroupResolver
         public override string ToString() => $"{NetworkId}-{ServiceId}-{EventId}";
     }
 
-    /// <summary>
-    /// The programmes one kind of link joins, as sets that are closed under the links.
-    /// </summary>
     private sealed class Grouping
     {
         private static readonly IReadOnlySet<Node> Alone = new HashSet<Node>();

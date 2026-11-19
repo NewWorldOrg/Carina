@@ -98,12 +98,6 @@ public sealed record DropTimeline
         return new DropTimeline(anchorPcr, [.. buckets], [.. reanchors]);
     }
 
-    /// <summary>
-    /// This timeline carried on by a later session's. The later session's seconds are placed as far along as its
-    /// clock began after this one's; when that disagrees with <paramref name="into"/>, how far into the recording
-    /// the later session opened, by more than <see cref="SeamTolerance"/>, they are placed by
-    /// <paramref name="into"/> and the jump is kept as a re-anchor.
-    /// </summary>
     public DropTimeline Then(DropTimeline later, TimeSpan into)
     {
         ArgumentNullException.ThrowIfNull(later);

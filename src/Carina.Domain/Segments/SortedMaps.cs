@@ -2,10 +2,6 @@ using System.Collections.ObjectModel;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Copies a map into one that nothing can change and that lists its keys in order, and compares two
-/// such maps by what they hold.
-/// </summary>
 internal static class SortedMaps
 {
     public static ReadOnlyDictionary<TKey, TValue> Copied<TKey, TValue>(IReadOnlyDictionary<TKey, TValue> map, IComparer<TKey> order)

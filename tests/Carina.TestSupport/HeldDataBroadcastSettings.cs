@@ -2,9 +2,6 @@ using Carina.Domain.DataBroadcast;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// The one row of the data broadcast settings, held in memory. Absent until something changes a setting.
-/// </summary>
 public sealed class HeldDataBroadcastSettings : IDataBroadcastSettingsRepository
 {
     private DataBroadcastSettings? held;

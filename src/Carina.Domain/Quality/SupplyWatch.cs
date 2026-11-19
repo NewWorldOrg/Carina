@@ -49,9 +49,6 @@ public sealed record SupplyReading
 
     public DateTime LastHeardAt { get; }
 
-    /// <summary>
-    /// How long this supply may stay quiet when that is not the threshold every supply shares.
-    /// </summary>
     public TimeSpan? Allowed { get; }
 
     public static SupplyReading Of(
@@ -94,9 +91,6 @@ public sealed record SupplySilenceFinding
 
     public TimeSpan Quiet { get; }
 
-    /// <summary>
-    /// What the silence was held against when that was not the threshold every supply shares.
-    /// </summary>
     public TimeSpan? Allowed { get; }
 
     public double Seconds => Quiet.TotalSeconds;

@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class ASignalLevelCanStandOnAMeasurement : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.AddColumn<string>(
@@ -81,7 +79,6 @@ public partial class ASignalLevelCanStandOnAMeasurement : Migration
             sql: "(NOT by_hand OR provisional)\nAND (provisional OR current_value = measured_value)");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(

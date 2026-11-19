@@ -1,8 +1,5 @@
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// What removing a profile or a destination came to: the row deleted, the row retired, or nothing done.
-/// </summary>
 public enum EncodeDefinitionFate
 {
     Deleted = 1,
@@ -10,9 +7,6 @@ public enum EncodeDefinitionFate
     Retired = 2,
 }
 
-/// <summary>
-/// Why a profile or a destination was not removed.
-/// </summary>
 public enum EncodeDefinitionRefusal
 {
     AlreadyRetired = 1,
@@ -24,10 +18,6 @@ public enum EncodeDefinitionRefusal
     TheLastOne = 4,
 }
 
-/// <summary>
-/// The answer to removing a profile or a destination. A refusal carries the job still waiting or running with it,
-/// or the destination still encoding with the profile unless asked otherwise, where that is the reason.
-/// </summary>
 public sealed record EncodeDefinitionRemoval
 {
     private EncodeDefinitionRemoval(
@@ -69,19 +59,10 @@ public sealed record EncodeDefinitionRemoval
     }
 }
 
-/// <summary>
-/// Decides whether a profile or a destination may be changed or removed, and whether a removal deletes the row or
-/// retires it, reading the jobs that name it and the destinations defined. A definition a waiting or running job
-/// names stands still; one no job ever named is deleted, and one a job named is retired. A profile a destination
-/// not retired encodes with unless asked otherwise, and the one destination not retired, are not removed.
-/// </summary>
 public sealed class EncodeDefinitionDomainService(
     IEncodeJobRepository jobs,
     IEncodeDestinationRepository destinations)
 {
-    /// <summary>
-    /// The job waiting or running with the profile, which keeps it from being changed, or null.
-    /// </summary>
     public async Task<EncodeJob?> UnderwayWithAsync(EncodeProfileId profile, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -89,9 +70,6 @@ public sealed class EncodeDefinitionDomainService(
         return (await jobs.HoldOnProfileAsync(profile, cancellationToken)).Unfinished;
     }
 
-    /// <summary>
-    /// The job waiting or running with the destination, which keeps it from being changed, or null.
-    /// </summary>
     public async Task<EncodeJob?> UnderwayWithAsync(EncodeDestinationId destination, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(destination);
@@ -99,9 +77,6 @@ public sealed class EncodeDefinitionDomainService(
         return (await jobs.HoldOnDestinationAsync(destination, cancellationToken)).Unfinished;
     }
 
-    /// <summary>
-    /// Weighs removing the profile, retiring it at <paramref name="at"/> when a job named it.
-    /// </summary>
     public async Task<EncodeDefinitionRemoval> RemoveAsync(EncodeProfile profile, DateTime at, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -114,9 +89,6 @@ public sealed class EncodeDefinitionDomainService(
             at);
     }
 
-    /// <summary>
-    /// Weighs removing the destination, retiring it at <paramref name="at"/> when a job named it.
-    /// </summary>
     public async Task<EncodeDefinitionRemoval> RemoveAsync(
         EncodeDestination destination,
         DateTime at,

@@ -5,14 +5,6 @@ namespace Carina.Api.Authentication;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
 public sealed class OpenToTheFrameAttribute : Attribute;
 
-/// <summary>
-/// The surfaces a Hybridcast application's frame reaches. The frame is sandboxed without an origin of its own and
-/// sends no cookie, and the ticket in the path is the only credential it carries. So these surfaces, and no others,
-/// answer any origin without credentials, answer its preflight for GET and POST with the safe request headers, the
-/// content type and the X-Requested-With a script library adds, none of which is sent on to the broadcaster's
-/// server, and name no response header beyond the safe ones; a POST reaches them without naming this
-/// origin, and a WebSocket is taken from an origin of "null".
-/// </summary>
 public static class FrameSurfaces
 {
     public const string Policy = "hybridcast-frame";

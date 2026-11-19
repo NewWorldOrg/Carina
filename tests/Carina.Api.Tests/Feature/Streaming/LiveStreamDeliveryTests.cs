@@ -586,10 +586,6 @@ public sealed partial class LiveStreamDeliveryTests
             Fmp4Media.Fragment((ulong)gop * 60 * OneFrame, [.. Enumerable.Repeat(OneFrame, 60)], true));
     }
 
-    /// <summary>
-    /// Opens <paramref name="path"/> while the channel goes on carrying a keyframe every two seconds of pictures, for
-    /// as long as the answer takes.
-    /// </summary>
     private async Task<HttpResponseMessage> OpenedOnTheFanoutAsync(HttpClient client, string path)
     {
         Task<HttpResponseMessage> opening = client.GetAsync(new Uri(path, UriKind.Relative));

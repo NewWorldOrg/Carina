@@ -5,14 +5,6 @@ using System.IO.Compression;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The bytes one kind of the learning data of one chunk is kept in: the shape's
-/// <see cref="Version"/>, the kind and the chunk's index; for the frame lights alone the frame
-/// clock (numerator, denominator, first frame in ticks); then how many readings follow, how many
-/// bytes they take, and the readings compressed with Brotli. A reading of two values is kept as all
-/// the first values, then all the second. Numbers are little-endian. Bytes in any other shape, or of
-/// another kind than the one asked for, are not read.
-/// </summary>
 public static class LearningDataFormat
 {
     public const ushort Version = 1;

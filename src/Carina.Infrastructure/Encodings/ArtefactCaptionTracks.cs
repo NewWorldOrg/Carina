@@ -5,15 +5,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Puts a text track of captions into artefacts already made, one at a time, newest recording first.
-/// </summary>
-/// <remarks>
-/// An artefact somebody opened in the last <see cref="ArtefactRewriteDomainService.LeftAloneAfterAnOpening"/> is passed over, and so is a
-/// recording a job of which is waiting or running. The copy with the track put in is made beside the
-/// artefact and checked, and only then, once the artefact is seen to stand, to be the file it was and to be
-/// unopened, does the placer rename the copy over it. Whatever is not renamed is swept with the job's scratch.
-/// </remarks>
 public sealed class ArtefactCaptionTracks(
     ICaptionTrackWorklist worklist,
     IEncodeJobRepository jobs,

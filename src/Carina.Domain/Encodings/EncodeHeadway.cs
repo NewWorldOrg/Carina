@@ -2,10 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// The last thing a running job reported and when: how much of the source is done and how long
-/// the rest should take.
-/// </summary>
 public sealed record EncodeHeadway
 {
     public EncodeHeadway(double? portion, TimeSpan? left, DateTime at)

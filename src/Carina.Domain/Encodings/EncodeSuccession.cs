@@ -2,10 +2,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// Which job's artefact is a recording's one, and which completed jobs of it made an artefact that
-/// the newer one replaces. The artefact of the job that completed last stands.
-/// </summary>
 public sealed record EncodeSuccession
 {
     private EncodeSuccession(EncodeJob? standing, IReadOnlyList<EncodeJob> toReplace)

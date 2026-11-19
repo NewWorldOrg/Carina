@@ -3,10 +3,6 @@ using Carina.Domain.Quality;
 
 namespace Carina.Domain.Recordings;
 
-/// <summary>
-/// What a recording is judged against as it ends: the rate its file is weighed against and the quality levels in
-/// force.
-/// </summary>
 public sealed class RecordingSettlementDomainService(
     IServiceTuningDirectory directory,
     IQualityThresholdRepository thresholds)

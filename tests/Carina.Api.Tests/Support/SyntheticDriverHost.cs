@@ -117,10 +117,6 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
     public void WriteLedger(DriverConfiguration written)
         => File.WriteAllText(ledger, DriverConfigurationWriter.Serialize(written));
 
-    /// <summary>
-    /// Puts the driver down and raises another one on the same socket and the same output root. The new
-    /// process greets with an instance of its own and holds none of the earlier sessions.
-    /// </summary>
     public async Task RaiseAnotherDriverAsync()
     {
         await PutDownAsync();
@@ -128,10 +124,6 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         host = await RaisedAsync(configuration, ledger, reshape);
     }
 
-    /// <summary>
-    /// Asks the driver to stop the way its host is asked on SIGTERM, and hands back the stop while it
-    /// is still under way. No signal is delivered.
-    /// </summary>
     public Task BeginStop()
     {
         IHost serving = host ?? throw new InvalidOperationException("No driver is running.");
@@ -160,12 +152,6 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// Puts the driver down and starts it again from what the ledger on disk says, the way the entry
-    /// point does: the file is read, the filesystem it names is checked, and a finding stops the start
-    /// with the exit code and the report the process would give. The rules on where the socket lives
-    /// are not applied.
-    /// </summary>
     public async Task<int> RaiseFromTheLedgerAsync(TextWriter error)
     {
         await PutDownAsync();

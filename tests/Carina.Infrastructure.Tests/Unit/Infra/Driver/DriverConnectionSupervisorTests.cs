@@ -321,9 +321,6 @@ public sealed class DriverConnectionSupervisorTests
         Assert.Equal(["tuners", "sessions"], [.. received]);
     }
 
-    /// <summary>
-    /// Every event name the contract fixes reaches a subscriber. The set is read from the contract.
-    /// </summary>
     [Fact]
     public async Task EveryNameTheContractFixesReachesSubscribers()
     {

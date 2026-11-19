@@ -7,11 +7,6 @@ using Microsoft.Extensions.Options;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// The server's own key pair for Web Push (VAPID, RFC 8292). It is made once, when first needed, and kept as a file
-/// in the directory of the sealing keys, so whoever keeps that directory keeps this key with it: a browser's
-/// subscription is bound to this key, and a new key would strand every subscription made under the old one.
-/// </summary>
 public sealed class PushServerKey(IOptions<SealingKeyOptions> keys)
 {
     public const string FileName = "push-server-key.pem";

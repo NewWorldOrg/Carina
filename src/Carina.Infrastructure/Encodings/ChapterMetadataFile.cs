@@ -6,11 +6,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Writes the chapters of one artefact in the shape ffmpeg reads chapters from. Every moment goes
-/// down in whole milliseconds on the clock <see cref="ChapterClock.InTheMetadata"/> puts it on, which is
-/// the recording's own time, and every chapter is titled from the constant for its kind.
-/// </summary>
 public static class ChapterMetadataFile
 {
     public const string Header = ";FFMETADATA1";
@@ -39,9 +34,6 @@ public static class ChapterMetadataFile
             TitleOf(segment.Kind)))]);
     }
 
-    /// <summary>
-    /// The stretches of a recording as chapters, written in the recording's own time as they are.
-    /// </summary>
     public static string InRecordingTime(IReadOnlyList<SegmentSpan> stretches)
     {
         ArgumentNullException.ThrowIfNull(stretches);
@@ -86,9 +78,6 @@ public static class ChapterMetadataFile
         return written.ToString();
     }
 
-    /// <summary>
-    /// The title a chapter of <paramref name="kind"/> goes down with.
-    /// </summary>
     public static string TitleOf(ChapterKind kind) => kind switch
     {
         ChapterKind.Programme => ProgrammeTitle,

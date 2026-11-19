@@ -3,13 +3,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The detection of one recording by one version of the model, kept for good under the recording's id by
-/// value: how it ended, its stretches end to end from the recording's zero, kept even when the sequence was
-/// thrown away, the share of the length breaks take, the boundary candidates' seconds, the version of the
-/// extraction the readings were taken with, the moment up to which the catalog it read was matched, and when
-/// it was made. Detecting the recording again with the same version takes its place.
-/// </summary>
 public sealed class RecordingDetection
 {
     private RecordingDetection()
@@ -106,12 +99,6 @@ public sealed class RecordingDetection
             : throw new ArgumentException(fault);
     }
 
-    /// <summary>
-    /// Whether the recording of <paramref name="record"/> waits to be detected, given what <paramref name="kept"/>
-    /// holds of its detection by the version in use: its data was read to its end or as far as it could be,
-    /// reached past zero and has been matched against the catalog since it last changed, and no detection by that
-    /// version was made since it was matched.
-    /// </summary>
     public static bool IsAwaited(LearningExtraction record, RecordingDetection? kept)
     {
         ArgumentNullException.ThrowIfNull(record);

@@ -18,10 +18,6 @@ public sealed record PlaybackTicketPolicy
 
     public TimeSpan Lifetime { get; }
 
-    /// <summary>
-    /// Whether another ticket may be issued to <paramref name="subject"/> beside those <paramref name="held"/>: a
-    /// subject holds at most <see cref="MostHeldPerSubject"/> at once, and past that it is refused another.
-    /// </summary>
     public static bool HasRoomFor(Subject subject, IEnumerable<PlaybackTicket> held)
     {
         ArgumentNullException.ThrowIfNull(subject);

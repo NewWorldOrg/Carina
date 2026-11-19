@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class ANoticeCanBeSentToABrowser : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(
@@ -38,7 +36,6 @@ public partial class ANoticeCanBeSentToABrowser : Migration
             sql: "target IN ('Slack', 'Discord', 'Push')");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropIndex(

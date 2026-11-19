@@ -63,10 +63,6 @@ public sealed class DriverConnectionSupervisorTests
             "The file the recording was carried on into is no bigger than what the driver that went left.");
     }
 
-    /// <summary>
-    /// Nothing is writing the recording and the broadcast is over by the time this side comes back: the
-    /// recording is marked for what was left of it as left running unwatched, and keeps its file.
-    /// </summary>
     [Fact]
     public async Task ARecordingWhoseDriverWentAfterItsBroadcastEndedIsMarkedForWhatWasLeftAndKeepsItsFile()
     {

@@ -4,14 +4,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// A seat at a reading of the channel that hands the bytes on as they are, dropping what a reader
-/// too slow to take them cannot hold rather than making the reading wait.
-/// </summary>
-/// <remarks>
-/// The queue is bounded in mouthfuls, as many as the driver's own viewer subscription holds.
-/// Writing into it never blocks.
-/// </remarks>
 internal sealed class LiveHandedOverReading : ILiveHandedOver
 {
     internal const int MouthfulsHeldForTheReader = 64;

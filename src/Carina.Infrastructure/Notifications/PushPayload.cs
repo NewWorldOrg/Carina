@@ -6,11 +6,6 @@ using Carina.Domain.Notifications;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// What a browser is told of a notice, before it is encrypted: the title and the body as they were worded, the path
-/// of the screen to open, and the id of the notice. It is kept within what every push service carries by cutting the
-/// words, never the path or the id.
-/// </summary>
 public static class PushPayload
 {
     public const int Longest = 3000;
@@ -43,9 +38,6 @@ public static class PushPayload
         return written;
     }
 
-    /// <summary>
-    /// The path, the query and the fragment of <paramref name="link"/>, or the root where a notice has no link.
-    /// </summary>
     public static string PathOf(string? link)
     {
         if (link is null || !Uri.TryCreate(link, UriKind.Absolute, out Uri? address))

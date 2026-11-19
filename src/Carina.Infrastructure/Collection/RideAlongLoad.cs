@@ -2,10 +2,6 @@ namespace Carina.Infrastructure.Collection;
 
 public readonly record struct RideAlongMark(long At, long Allocated);
 
-/// <summary>
-/// What riding along with one session has cost the application since the ride began: the bytes read, the time
-/// spent reading them and what that allocated, and the time spent writing the guide down.
-/// </summary>
 public sealed class RideAlongLoad(TimeProvider clock)
 {
     private readonly long began = clock.GetTimestamp();

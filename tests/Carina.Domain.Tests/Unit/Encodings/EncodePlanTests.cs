@@ -8,10 +8,6 @@ public sealed class EncodePlanTests
 {
     private static readonly DateTime At = new(2026, 9, 5, 3, 0, 0, DateTimeKind.Utc);
 
-    /// <summary>
-    /// A machine whose ffmpeg is built with libx264 and VA-API and without libx265, so H.265 exists on
-    /// the card alone.
-    /// </summary>
     private static MachineCapabilities AsThisMachineIs => MachineCapabilities.Of(
         CardStanding.Usable,
         [

@@ -2,9 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Why the learning data could not be taken out of a recording.
-/// </summary>
 public enum ExtractionFailure
 {
     FfmpegMissing = 1,
@@ -16,9 +13,6 @@ public enum ExtractionFailure
     Other = 4,
 }
 
-/// <summary>
-/// The kind of a failure to take the learning data out of a recording, and a short reason.
-/// </summary>
 public sealed record ExtractionFailureDetail
 {
     public const int LongestReason = 500;

@@ -5,11 +5,6 @@ using System.Text;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// What a browser hands over to be sent notices: the endpoint of its push service and the two keys messages to it
-/// are encrypted with. All three are secrets, read in the clear through <see cref="EndpointAsWritten"/>,
-/// <see cref="KeyAsWritten"/> and <see cref="SecretAsWritten"/> only, to seal them and to send to them.
-/// </summary>
 public sealed class PushSubscription
 {
     public const int LongestEndpoint = 2048;
@@ -59,23 +54,12 @@ public sealed class PushSubscription
 
     public string SecretAsWritten { get; }
 
-    /// <summary>
-    /// The SHA-256 of the endpoint as written, in lowercase hex: what tells one browser from another without
-    /// telling where it is reached.
-    /// </summary>
     public string Fingerprint { get; }
 
     public string Tail { get; }
 
-    /// <summary>
-    /// The origin of the push service, which a message to it names as the one it is meant for.
-    /// </summary>
     public string Audience { get; }
 
-    /// <summary>
-    /// The subscription as written, or nothing where the endpoint is not an https address of a push service this
-    /// ledger sends to, the key is not an uncompressed point of P-256, or the secret is not 16 bytes.
-    /// </summary>
     public static PushSubscription? Read(string? endpoint, string? key, string? secret)
     {
         if (string.IsNullOrEmpty(endpoint)

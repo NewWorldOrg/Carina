@@ -5,10 +5,6 @@ namespace Carina.Domain.Reservations;
 
 public sealed record ReservationWindow(DateTime From, DateTime To);
 
-/// <summary>
-/// A reservation whose outcome is not written down yet, together with whether a recording came of it
-/// and whether that recording is <see cref="Recordings.Recording.LeftScrambled"/>.
-/// </summary>
 public sealed record ReservationAwaitingOutcome(Reservation Reservation, bool Recorded, bool LeftScrambled);
 
 public enum ReservationDiscard
@@ -32,10 +28,6 @@ public interface IReservationRepository
 
     Task<Reservation?> FindAsync(ReservationId id, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Finds the reservation of the broadcast: the one naming that start, or else the one of the same
-    /// event that is still waiting to be recorded, whatever start it names.
-    /// </summary>
     Task<Reservation?> FindByProgrammeAsync(ProgrammeRef programme, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Reservation>> ListPendingAsync(ReservationWindow window, CancellationToken cancellationToken);

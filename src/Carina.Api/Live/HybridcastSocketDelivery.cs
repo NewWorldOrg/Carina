@@ -9,14 +9,6 @@ using Carina.Domain.DataBroadcast;
 
 namespace Carina.Api.Live;
 
-/// <summary>
-/// Carries a Hybridcast application's WebSocket to the broadcaster's server and back, on the subprotocol the server
-/// chose, until either side closes; a close is passed on with its status and reason. The ticket the application was
-/// started with travels in the path, and opens only the application it started, on its own channel, for the viewer
-/// who started it. The frame has no origin of its own, so a WebSocket is taken from an origin of "null", from this
-/// one or from none, and refused 403 from any other. An address outside the application's boundary is refused 403
-/// and asked of nobody.
-/// </summary>
 public static class HybridcastSocketDelivery
 {
     public const string Path = "/api/live/{networkId:int}-{serviceId:int}/data-broadcast/ws/{ticket:length(43)}";

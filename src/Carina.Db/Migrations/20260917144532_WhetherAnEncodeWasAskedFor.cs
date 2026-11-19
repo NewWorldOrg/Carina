@@ -4,17 +4,12 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class WhetherAnEncodeWasAskedFor : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
 
-        // Every row that already exists was made when a recording that ended was always queued, so
-        // each of them asks for an encode. The column keeps that as its default as well, because a
-        // row written without naming it is a row from before anyone could say otherwise.
         foreach (string table in new[] { "rule", "reservation", "recording" })
         {
             migrationBuilder.AddColumn<bool>(
@@ -28,7 +23,6 @@ public partial class WhetherAnEncodeWasAskedFor : Migration
         Tick(migrationBuilder, ",\n    reservation.encode_when_recorded");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

@@ -4,11 +4,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Answers, for both the encode queue and the job list, whether the card is being used for someone
-/// watching right now, from what this machine was asked to encode on, whether the card is usable,
-/// and how many transcoders are up.
-/// </summary>
 public sealed class EncodeQueueTurn(
     EncodeSettings settings,
     ITranscodeBudget transcoders,

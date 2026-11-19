@@ -2,10 +2,6 @@ using System.Numerics;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The fingerprint of a window of sound, one every <see cref="Hop"/> samples: bit <c>n</c> is set
-/// when band <c>n</c> stands further above band <c>n + 1</c> than it did in the window before.
-/// </summary>
 public static class SoundFingerprint
 {
     public const int Hop = 128;

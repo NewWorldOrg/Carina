@@ -4,14 +4,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Carina.Conventions.Tests;
 
-/// <summary>
-/// Reads source for the ways the card could be opened somewhere other than the render node the
-/// machine is set to: the default node's constant named anywhere but as the default of the setting,
-/// a render node written out as a literal, a CUDA device written out anywhere but the one declaration
-/// that names it, and a flag that opens the card in a file other than the argument builders. It reads
-/// the syntax tree, so a node assembled from pieces or a flag held in a variable named elsewhere walks
-/// past.
-/// </summary>
 public static class RenderNodeConventionRules
 {
     public const string TheDefault = "TheRenderNode";

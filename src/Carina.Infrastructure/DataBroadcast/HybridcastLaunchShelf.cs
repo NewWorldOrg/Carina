@@ -5,11 +5,6 @@ using Carina.Domain.DataBroadcast;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// The Hybridcast applications started on live channels, held in memory under the digest of the ticket their frame
-/// carries, for as long as that ticket can still be taken and the grant it opens lasts. A bounded number is held,
-/// and the oldest goes first.
-/// </summary>
 public sealed class HybridcastLaunchShelf(TimeProvider clock, PlaybackGrantPolicy policy) : IHybridcastLaunches
 {
     public const int MostHeld = 64;

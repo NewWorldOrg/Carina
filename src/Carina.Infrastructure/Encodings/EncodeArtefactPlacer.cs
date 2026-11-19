@@ -17,16 +17,6 @@ public enum EncodePlacementOutcome
     Replaced = 5,
 }
 
-/// <summary>
-/// Turns a finished work file into the artefact.
-/// </summary>
-/// <remarks>
-/// The name is worked out and written into the ledger first, and only then is the file looked at and
-/// moved. A file already at that name is this job's own earlier success if the ledger said so before
-/// this attempt, and a collision, which fails the job, otherwise. For a job asked to make the
-/// artefact again, the earlier job gives the name up, this job claims it, and the artefact is then
-/// replaced by a single rename; nothing before the rename touches the existing artefact.
-/// </remarks>
 public sealed class EncodeArtefactPlacer(
     IEncodeJobRepository jobs,
     IEncodeScratchLedger ledger,
@@ -211,20 +201,9 @@ public sealed class EncodeArtefactPlacer(
         await ledger.SaveAsync(workFile, cancellationToken);
     }
 
-    /// <summary>
-    /// Puts a copy of a standing artefact with a text track of captions put in where the artefact stands, by a
-    /// single rename over it from where the job's work goes. The artefact's name is the job's in the ledger
-    /// already; nothing before the rename touches the artefact, and a rename that cannot be made leaves it as
-    /// it was.
-    /// </summary>
     public RenameVerdict PutCaptionedInPlace(EncodeJob job, string captioned)
         => PutInPlace(job, captioned, "has a text track put into it");
 
-    /// <summary>
-    /// Puts a copy of a standing artefact with its chapters written again where the artefact stands, the same
-    /// way as <see cref="PutCaptionedInPlace"/>, and settles the copy in the ledger as having become the
-    /// artefact once it is renamed over it.
-    /// </summary>
     public async Task<RenameVerdict> PutChapteredInPlaceAsync(
         EncodeJob job,
         EncodeFileName chaptered,

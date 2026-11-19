@@ -12,10 +12,6 @@ public sealed record CaptionCanvasResponder(int Width, int Height)
     }
 }
 
-/// <summary>
-/// A caption drawn on the canvas: where its top left corner sits, how large it is, and the palette PNG it
-/// was drawn as.
-/// </summary>
 public sealed record CaptionPictureResponder(int Left, int Top, int Width, int Height, byte[] Png)
 {
     public static CaptionPictureResponder Of(CaptionPlacement picture)
@@ -26,10 +22,6 @@ public sealed record CaptionPictureResponder(int Left, int Top, int Width, int H
     }
 }
 
-/// <summary>
-/// One change of the captions at a second of the source played, counted from its own zero: a picture
-/// shown, or the screen cleared when there is none.
-/// </summary>
 public sealed record CaptionCueResponder(double AtSec, CaptionPictureResponder? Picture)
 {
     public static CaptionCueResponder Of(PlacedCaption caption)

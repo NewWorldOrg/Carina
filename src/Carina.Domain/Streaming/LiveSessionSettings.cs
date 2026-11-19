@@ -96,31 +96,13 @@ public sealed record LiveSessionSettings
 
     public TimeSpan LongestRaise { get; }
 
-    /// <summary>
-    /// How far ahead of now the supply is asked to be held open while it is being watched. The driver
-    /// lets go of a supply this long after it was last asked to hold on to it.
-    /// </summary>
     public TimeSpan HeldAhead { get; }
 
-    /// <summary>
-    /// How often the supply is asked to be held open for longer.
-    /// </summary>
     public TimeSpan BetweenHolds { get; }
 
-    /// <summary>
-    /// How long the oldest bytes a transcoder has not taken yet may wait before the transcoder is cut
-    /// loose.
-    /// </summary>
     public TimeSpan LongestWaitToBeFed { get; }
 
-    /// <summary>
-    /// How many bytes a transcoder may have not taken yet before it is cut loose.
-    /// </summary>
     public long MostBytesWaitingToBeFed { get; }
 
-    /// <summary>
-    /// How long a viewer refused for want of a tuner waits for one that is already being let go of.
-    /// When the wait runs out, the refusal stands.
-    /// </summary>
     public TimeSpan LongestWaitForATunerToComeFree { get; }
 }

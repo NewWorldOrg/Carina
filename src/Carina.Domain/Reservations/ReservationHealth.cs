@@ -2,12 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Reservations;
 
-/// <summary>
-/// What stands in the way of the reservations still ahead, counted at one moment: the ones that
-/// lost a contest, the ones with nowhere to tune, and the ones whose programme moved or vanished
-/// from the guide and nobody has looked at yet. Reservations whose window has closed are not
-/// counted.
-/// </summary>
 public sealed record ReservationHealth(
     DateTime AsOf,
     int Contended,

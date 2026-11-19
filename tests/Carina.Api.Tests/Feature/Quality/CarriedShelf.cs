@@ -4,10 +4,6 @@ using System.Text.Json;
 
 namespace Carina.Api.Tests.Feature.Quality;
 
-/// <summary>
-/// A shelf of recordings carried over from another recorder, with nothing counted on any of them, and what every
-/// quality surface has to say of it.
-/// </summary>
 internal static class CarriedShelf
 {
     public const int Shelf = 53;
@@ -22,7 +18,6 @@ internal static class CarriedShelf
 
     private static readonly string?[] Metrics = ["packetsLost", "packetsLeftScrambled", "overflows"];
 
-    /// <summary>Records the shelf and answers the period that holds all of it, as a query string.</summary>
     public static string Shelved(QualityFeature feature)
     {
         foreach (int at in Enumerable.Range(0, Shelf))

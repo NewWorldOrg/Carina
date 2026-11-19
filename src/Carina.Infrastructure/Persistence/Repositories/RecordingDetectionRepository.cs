@@ -33,10 +33,6 @@ public sealed class RecordingDetectionRepository(CarinaDbContext context) : IRec
             .ToListAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// Inserts the detection, or writes it over the one kept for the same recording and version, in a single
-    /// statement.
-    /// </summary>
     public async Task KeepAsync(RecordingDetection detection, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(detection);

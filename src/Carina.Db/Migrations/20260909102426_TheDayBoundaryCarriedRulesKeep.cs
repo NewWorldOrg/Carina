@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class TheDayBoundaryCarriedRulesKeep : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(
@@ -20,7 +18,6 @@ public partial class TheDayBoundaryCarriedRulesKeep : Migration
             sql: "subject IN ('DuplicateAvoidance', 'EnclosedCharacters', 'DayBoundary')");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(

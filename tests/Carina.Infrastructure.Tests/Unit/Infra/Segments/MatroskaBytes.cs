@@ -3,10 +3,6 @@ using System.Text;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
-/// <summary>
-/// Writes the elements of a Matroska stream byte by byte, for the reader to be handed shapes
-/// ffmpeg writes and shapes it does not.
-/// </summary>
 internal static class MatroskaBytes
 {
     public const uint EbmlHeader = 0x1A45DFA3;

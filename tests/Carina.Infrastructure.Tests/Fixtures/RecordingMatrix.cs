@@ -12,12 +12,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Infrastructure.Tests.Fixtures.Recordings;
 
-/// <summary>
-/// A matrix of recordings in every standing of their picture, their captions and the record of their data broadcast, with captions taken on the very
-/// instant the file was descrambled and one microsecond either side of it and a record that failed on its last try and
-/// on the one before it, for the tests that hold a query of the store
-/// to the recording's own answer for the same rows.
-/// </summary>
 internal static class RecordingMatrix
 {
     public static readonly DateTime Began = new(2026, 8, 24, 12, 0, 0, DateTimeKind.Utc);
@@ -32,9 +26,6 @@ internal static class RecordingMatrix
 
     public static readonly OutputRoot Spare = new("spare");
 
-    /// <summary>
-    /// Lays the matrix on an empty ledger and reads it back, so both arms judge the instants the store keeps.
-    /// </summary>
     public static Task<IReadOnlyList<Recording>> LaidAsync(ServiceProvider container) => LaidAsync(container, Shapes());
 
     public static async Task<IReadOnlyList<Recording>> LaidAsync(ServiceProvider container, IEnumerable<Func<Recording, Recording>> shapes)
@@ -174,10 +165,6 @@ internal static class RecordingMatrix
         return recording;
     }
 
-    /// <summary>
-    /// Takes the captions, then descrambles the file <paramref name="apart"/> after: before the captions when it is
-    /// negative, on the same instant when it is zero.
-    /// </summary>
     public static Recording DescrambledAround(Recording recording, TimeSpan apart, CaptionState state)
     {
         Recording ended = recording.IsInFlight ? Settled(recording, RecordingOutcome.Truncated, scrambled: true) : recording;

@@ -18,9 +18,6 @@ public sealed class SegmentSettingsRepository(CarinaDbContext context) : ISegmen
             .AsNoTracking()
             .FirstOrDefaultAsync(row => row.Id == SegmentSettings.TheOnlyRow, cancellationToken);
 
-    /// <summary>
-    /// Inserts the one row, or writes the threshold and when it changed over the row held, in a single statement.
-    /// </summary>
     public async Task SaveAsync(SegmentSettings settings, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);

@@ -4,10 +4,6 @@ using Carina.Domain.Notifications;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// Where every notice leaves from, the loop's and a trial alike: one at a time for a destination, counted against the
-/// most a destination takes in a window, and held back for as long as the other end asked to be left alone.
-/// </summary>
 public sealed class NoticeDispatch(NoticeLine line, NotificationDeliverySettings settings, TimeProvider clock)
 {
     private readonly ConcurrentDictionary<NotificationDestinationId, Lane> lanes = new();

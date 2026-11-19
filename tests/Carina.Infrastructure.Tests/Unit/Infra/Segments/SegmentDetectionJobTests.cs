@@ -264,10 +264,6 @@ public sealed class SegmentDetectionJobTests
         Assert.Equal(before + 3, harness.Lowest.Ran);
     }
 
-    /// <summary>
-    /// Has the catalog hear an opening in <paramref name="recording"/> from <paramref name="from"/> to
-    /// <paramref name="to"/> seconds, and in an earlier episode.
-    /// </summary>
     private static void Opened(SegmentDetectionHarness harness, RecordingId recording, double from, double to)
     {
         CatalogEntryId id = CatalogEntryId.New();

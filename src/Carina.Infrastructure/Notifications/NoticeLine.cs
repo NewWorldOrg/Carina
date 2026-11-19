@@ -11,10 +11,6 @@ using Carina.Infrastructure.Net;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// What sending one notice came to: no failure where the other end took it, otherwise why not, whether the address
-/// is one the other end no longer knows, and how long it asked to be left alone.
-/// </summary>
 public sealed record NoticeAnswer(NoticeFailure? Failure, bool AddressGone, TimeSpan? Asked)
 {
     public static NoticeAnswer Taken { get; } = new(null, false, null);
@@ -24,11 +20,6 @@ public sealed record NoticeAnswer(NoticeFailure? Failure, bool AddressGone, Time
     public static NoticeAnswer Failed(NoticeFailure failure) => new(failure, false, null);
 }
 
-/// <summary>
-/// The connection notices go out on, to webhooks and to push services alike. Only a public address is connected to,
-/// judged on what the name resolves to as the connection is opened. No redirect is followed, no cookie is kept, no
-/// proxy is used, and what the other end writes back is never read.
-/// </summary>
 public sealed class NoticeLine : IDisposable
 {
     public static readonly TimeSpan UsualDeadline = TimeSpan.FromSeconds(10);
@@ -92,10 +83,6 @@ public sealed class NoticeLine : IDisposable
         return await PostAsync(() => Request(new Uri(webhook.AddressAsWritten), payload, Json), GoneForAWebhook, cancellationToken);
     }
 
-    /// <summary>
-    /// Sends one message to the push service of a browser (RFC 8030), encrypted for that browser alone. Only a
-    /// subscription the push service no longer knows counts as gone; a refusal of the server's own token does not.
-    /// </summary>
     public async Task<NoticeAnswer> SendAsync(PushSubscription subscription, PushMessage message, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(subscription);

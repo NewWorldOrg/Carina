@@ -73,10 +73,6 @@ public sealed class PlaybackTicket
 
     public bool Opens(PlaybackTarget target) => Target.Equals(target);
 
-    /// <summary>
-    /// Spends the ticket on <paramref name="target"/> at <paramref name="now"/>: whether it lets the caller in. A
-    /// ticket is spent once, whatever the answer, so every later attempt is refused.
-    /// </summary>
     public bool Spend(PlaybackTarget target, DateTime now, PlaybackTicketPolicy policy)
     {
         ArgumentNullException.ThrowIfNull(target);

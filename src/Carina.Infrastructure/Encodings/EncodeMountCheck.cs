@@ -6,12 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Confirms at startup, for each root this process holds for writing, that moving a file from where
-/// a job works to where its artefact goes is a rename. A working directory on another mount than a
-/// held root stops the process. A held root this process cannot write, and holding no root at all,
-/// are reported.
-/// </summary>
 public sealed class EncodeMountCheck(
     EncodeSettings settings,
     IRenameProbe probe,

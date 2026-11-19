@@ -9,11 +9,6 @@ namespace Carina.Api.Services;
 
 public sealed record EncodeAutoRunReading(EncodeAutoRunStanding Standing, EncodeUnaskedStanding WhereArtefactsGo);
 
-/// <summary>
-/// Reads and settles how the queue runs when nobody asked: whether a recording that ends is queued,
-/// and how many cores a run may take. Each answer also carries what the machine has, what the
-/// auto-run takes, and whether the destinations and profiles defined settle where an artefact goes.
-/// </summary>
 public sealed class EncodeAutoRunService(
     IEncodeAutoRunRepository rows,
     IEncodeAutoRunReader standings,

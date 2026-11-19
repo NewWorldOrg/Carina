@@ -13,10 +13,6 @@ using Npgsql;
 
 namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Encodings;
 
-/// <summary>
-/// However a job run over the ledger ends, the recording it read keeps its result, reasons, size and the time
-/// that size was read exactly as they were. The row is read back whole, with the version the store keeps for it.
-/// </summary>
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
 public sealed class EncodeJobRunnerTests(RepositoryDatabase database) : IAsyncLifetime

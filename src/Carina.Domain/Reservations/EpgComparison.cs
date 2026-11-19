@@ -2,10 +2,6 @@ using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Reservations;
 
-/// <summary>
-/// What a reservation says about its broadcast, held against what the guide says now. Only a
-/// difference beyond what the margins already absorb is returned.
-/// </summary>
 public static class EpgComparison
 {
     public static readonly TimeSpan Unremarkable = TimeSpan.FromSeconds(60);

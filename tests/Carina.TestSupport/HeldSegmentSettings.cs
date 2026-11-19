@@ -2,9 +2,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// The one row of the segment settings, held in memory. Absent until something changes a setting.
-/// </summary>
 public sealed class HeldSegmentSettings : ISegmentSettingsRepository
 {
     private SegmentSettings? held;

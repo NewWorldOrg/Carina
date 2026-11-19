@@ -4,17 +4,6 @@ using Carina.Domain.Encodings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Gathers the learning data of one recording from its sound, its frames and its pictures of the
-/// corners, handed over in blocks that each carry their time on the recording's own time, and puts
-/// every block where its time says: the sound by <see cref="SoundPlacement"/>, the frames by
-/// <see cref="FramePlacement"/> and the pictures by <see cref="CornerPlacement"/>. What is skipped
-/// is filled, the sound with silence and the frames and pictures with copies of the one before, and
-/// the stretches filled are kept as <see cref="LearningDataGaps"/>. The frames are placed at the rate
-/// <see cref="FrameRates"/> reads from the length of a frame, or without one from the time between
-/// the first two, starting at the first frame. Sound and pictures handed over before the frames can
-/// be placed wait for them, the sound no longer than <see cref="LongestWaitForFrames"/>.
-/// </summary>
 public sealed class LearningDataTimeline
 {
     public static readonly TimeSpan LongestWaitForFrames = TimeSpan.FromMinutes(1);
@@ -62,10 +51,6 @@ public sealed class LearningDataTimeline
         this.frameLength = frameLength;
     }
 
-    /// <summary>
-    /// The sound taken, the first of the programme's, and how far its first block lies from the
-    /// first frame; null until both have been handed over.
-    /// </summary>
     public ExtractionSound? Sound
         => firstSoundAt is { } heard && frames is { } placed
             ? new ExtractionSound(0, heard - placed.Clock.FirstFrameAt)
@@ -91,14 +76,8 @@ public sealed class LearningDataTimeline
         }
     }
 
-    /// <summary>
-    /// Takes out the gaps found so far that nothing handed over later can reach back into.
-    /// </summary>
     public IReadOnlyList<LearningDataGap> SettledGaps() => gaps.TakeThrough(Settled);
 
-    /// <summary>
-    /// Takes out every gap found and not yet taken out.
-    /// </summary>
     public IReadOnlyList<LearningDataGap> RemainingGaps() => gaps.TakeAll();
 
     public IReadOnlyList<LearningDataChunk> Hear(TimeSpan at, ReadOnlySpan<short> interleaved)

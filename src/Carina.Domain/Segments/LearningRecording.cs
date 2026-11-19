@@ -3,11 +3,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// One recording learned from: its id and when it started, its readings, what is known of it besides, what
-/// viewers did with its skip buttons, and the seeks they made in it. What its context heard of the
-/// catalog is read afresh from the catalog learning is handed, as the recording would have heard it.
-/// </summary>
 public sealed record LearningRecording
 {
     public LearningRecording(

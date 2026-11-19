@@ -1,8 +1,5 @@
 namespace Carina.Domain.Channels;
 
-/// <summary>
-/// Decides which services can be watched live: a television service whose channel has been selected.
-/// </summary>
 public sealed class LiveChannelDomainService(
     IBroadcastServiceRepository services,
     ICandidateChannelRepository candidates)

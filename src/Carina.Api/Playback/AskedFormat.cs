@@ -11,9 +11,6 @@ public enum FormatAnswer
     NotOneOfThese = 3,
 }
 
-/// <summary>
-/// The format a picture transcoded as it plays is asked for in, read from the query it was asked with.
-/// </summary>
 public sealed record AskedFormat
 {
     private AskedFormat(FormatAnswer answer, VideoCodec format)
@@ -38,9 +35,6 @@ public sealed record AskedFormat
             : new AskedFormat(FormatAnswer.NotOneOfThese, VideoCodecs.Unasked);
     }
 
-    /// <summary>
-    /// Why a picture asked for in <paramref name="format"/> is refused rather than transcoded in another.
-    /// </summary>
     public static string NotTranscodedHere(VideoCodec format)
         => $"This machine does not transcode a picture in {VideoCodecs.NameOf(format)}, and a picture is not "
            + "handed over in another format than the one asked for. GET /api/live/profiles names the formats it "

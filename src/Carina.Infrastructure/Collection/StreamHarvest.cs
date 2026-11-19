@@ -108,10 +108,6 @@ public sealed class StreamHarvest(TimeProvider clock)
         }
     }
 
-    /// <summary>
-    /// Hands over the tables read since the last take, with the services whose whole schedule those
-    /// tables alone carry.
-    /// </summary>
     public Gathered TakeWhatIsGathered()
     {
         if (tables.Count == 0)

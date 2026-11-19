@@ -1,10 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The frames of one sound, looked up by fingerprint value: an open-addressed table from each value
-/// to the run of frames heard with it. Silence, whose fingerprint has no bit set, is left out, and so
-/// is a value heard at more frames than the table is told to keep.
-/// </summary>
 internal sealed class FingerprintIndex
 {
     private const uint Spread = 2654435769;

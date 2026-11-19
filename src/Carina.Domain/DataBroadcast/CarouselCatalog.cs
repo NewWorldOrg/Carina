@@ -4,11 +4,6 @@ using Carina.Domain.Channels;
 
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// The catalog of a data broadcast: the service, the carousel it is entered from, whether the broadcaster
-/// asks for it to open by itself, the path of the document it opens on, and every carousel with the modules
-/// it holds valid.
-/// </summary>
 public sealed record CarouselCatalog
 {
     public const int StartupModuleId = 0x0000;
@@ -41,9 +36,6 @@ public sealed record CarouselCatalog
 
     public IReadOnlyList<CatalogCarousel> Carousels { get; }
 
-    /// <summary>
-    /// The path of the document a data broadcast entered from the carousel of <paramref name="entryTag"/> opens on.
-    /// </summary>
     public static string StartupDocumentOf(int entryTag)
         => string.Create(CultureInfo.InvariantCulture, $"/{entryTag:x2}/{StartupModuleId:x4}/{StartupResource}");
 

@@ -5,13 +5,6 @@ using Carina.Infrastructure.Net;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// The hosts a browser reaches this installation by, which the relay connects to by no scheme and on no port. A
-/// name is compared as a resolver is asked for it, in ASCII, in lower case and without a trailing dot, so an address
-/// that writes it in another case, with the dot or in Unicode is the same host. A host written as an address is also
-/// refused wherever a name resolves to it; a host written as a name is not judged by its addresses, which it may
-/// share with other servers.
-/// </summary>
 public sealed class OwnHost
 {
     private readonly FrozenSet<string> names;

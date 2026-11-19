@@ -549,10 +549,6 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         return row;
     }
 
-    /// <summary>
-    /// An entry of <paramref name="kind"/> and <paramref name="seconds"/>, heard from the start of each
-    /// recording named for as long as the length beside it.
-    /// </summary>
     private static (CatalogEntry Entry, CatalogOccurrence[] Occurrences) Kept(CatalogKind kind, double seconds, RecordingId[] recordings, double[] lengths)
     {
         CatalogEntryId id = CatalogEntryId.New();

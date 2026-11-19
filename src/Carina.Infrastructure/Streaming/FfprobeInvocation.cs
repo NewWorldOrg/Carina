@@ -33,10 +33,6 @@ public static class FfprobeInvocation
         ];
     }
 
-    /// <summary>
-    /// Where the file's own clock begins, as ffmpeg reads it: negative when the file begins shortly before
-    /// the 33-bit clock comes around.
-    /// </summary>
     public static IReadOnlyList<string> Start(StreamSource source)
     {
         ArgumentNullException.ThrowIfNull(source);

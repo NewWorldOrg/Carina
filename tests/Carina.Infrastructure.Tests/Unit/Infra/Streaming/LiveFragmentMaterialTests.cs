@@ -31,10 +31,6 @@ public sealed class LiveFragmentMaterialTests : IDisposable
 
     private static readonly TimeSpan HoursIntoTheDay = TimeSpan.FromHours(13);
 
-    /// <summary>
-    /// An mp4 holds how long a sample lasts in 32 bits, 2^31 - 1 ticks of the sound's 48 kHz or about 12.4 hours, so
-    /// a sound written at zero on a clock this far in is further from the next sound than a sample can last.
-    /// </summary>
     private static readonly TimeSpan FurtherInThanASampleLasts = TimeSpan.FromHours(13);
 
     private static readonly TimeSpan WhenTheClockComesAround =
@@ -200,9 +196,6 @@ public sealed class LiveFragmentMaterialTests : IDisposable
         return delivered.ToArray();
     }
 
-    /// <summary>
-    /// Whether each picture a file decodes to is a keyframe, in the order they are shown.
-    /// </summary>
     private static async Task<IReadOnlyList<string>> PictureKeyframesAsync(string file)
     {
         var start = new ProcessStartInfo(Ffprobe)
@@ -374,10 +367,6 @@ public sealed class LiveFragmentMaterialTests : IDisposable
         return (measured.FirstPicture.Value, carried);
     }
 
-    /// <summary>
-    /// Whether the first sound frame the decoder gives back carries no time when the stream is read the way the live
-    /// transcoder reads it: through a pipe, probed no further than it probes.
-    /// </summary>
     private static async Task<bool> FirstSoundIsUntimedAsync(string joined)
     {
         IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None);

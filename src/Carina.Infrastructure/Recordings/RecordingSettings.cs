@@ -22,9 +22,6 @@ public sealed record RecordingSettings
 
     public static readonly TimeSpan HoldingAnUnannouncedEnd = TimeSpan.FromMinutes(20);
 
-    /// <summary>
-    /// What taking a seat, tuning, beginning the session and the first byte usually take together.
-    /// </summary>
     public static readonly TimeSpan SettingUp = TimeSpan.FromSeconds(5);
 
     public static readonly RecordingSettings Default = new(
@@ -115,15 +112,7 @@ public sealed record RecordingSettings
 
     public OutputRoot OutputRoot { get; }
 
-    /// <summary>
-    /// How far ahead of now a recording is promised while the programme it is recording announces no
-    /// end. It is shorter than the horizon the allocation holds a tuner seat on.
-    /// </summary>
     public TimeSpan UndecidedEndAhead { get; }
 
-    /// <summary>
-    /// How long before a reservation's start the recorder begins to prepare it, so that the first packet
-    /// lands by the start: one tick to notice it and <see cref="SettingUp"/> to set it up.
-    /// </summary>
     public TimeSpan StartingAhead { get; }
 }

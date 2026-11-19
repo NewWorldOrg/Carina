@@ -1,9 +1,5 @@
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// One version of a module told without its resources: its id and version, when it was first and last seen, and the
-/// bytes its resources take.
-/// </summary>
 public sealed record OutlinedVersion
 {
     public OutlinedVersion(int moduleId, int version, long firstSeen, long lastSeen, long entityBytes)
@@ -37,10 +33,6 @@ public sealed record OutlinedVersion
     public long EntityBytes { get; }
 }
 
-/// <summary>
-/// One download of a carousel told without the resources of its versions, the versions in the order they were first
-/// seen.
-/// </summary>
 public sealed record OutlinedCarousel
 {
     public OutlinedCarousel(int tag, uint downloadId, IReadOnlyList<OutlinedVersion> versions)
@@ -64,9 +56,6 @@ public sealed record OutlinedCarousel
     public IReadOnlyList<OutlinedVersion> Versions { get; }
 }
 
-/// <summary>
-/// A <see cref="DataBroadcastRecord"/> told without the resources of its versions: all a catalog of it needs.
-/// </summary>
 public sealed class DataBroadcastOutline
 {
     public DataBroadcastOutline(

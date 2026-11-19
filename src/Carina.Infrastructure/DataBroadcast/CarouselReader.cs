@@ -6,11 +6,6 @@ using Carina.Domain.DataBroadcast;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// Reads one service's data broadcast out of its transport stream, handed over in pieces of any length, as
-/// the signals a <see cref="CarouselState"/> takes, each at the moment of the service's clock it was read at.
-/// The same reading serves a live channel and a recording.
-/// </summary>
 public sealed class CarouselReader
 {
     public const string UnnamedMediaType = "application/octet-stream";
@@ -34,15 +29,8 @@ public sealed class CarouselReader
 
     public ServiceId Service => service;
 
-    /// <summary>
-    /// The moment of the service's clock, followed through its wrap, what is read now is stamped with, or null
-    /// until the clock has been heard.
-    /// </summary>
     public long? Now => tap.Now;
 
-    /// <summary>
-    /// The first moment of the service's clock that was heard, or null until it has been heard.
-    /// </summary>
     public long? FirstHeard => tap.FirstHeard;
 
     public long UnreadablePackets => tap.UnreadablePackets;
@@ -181,8 +169,4 @@ public sealed class CarouselReader
         };
 }
 
-/// <summary>
-/// One signal read of a data broadcast, with the moment of the service's clock, followed through its wrap,
-/// it was read at.
-/// </summary>
 public sealed record CarouselSignalRead(CarouselSignal Signal, long At);

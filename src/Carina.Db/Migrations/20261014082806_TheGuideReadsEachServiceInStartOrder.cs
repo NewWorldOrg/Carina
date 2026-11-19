@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class TheGuideReadsEachServiceInStartOrder : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.CreateIndex(
@@ -18,7 +16,6 @@ public partial class TheGuideReadsEachServiceInStartOrder : Migration
             .Annotation("Npgsql:IndexInclude", new[] { "end_at" });
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropIndex(

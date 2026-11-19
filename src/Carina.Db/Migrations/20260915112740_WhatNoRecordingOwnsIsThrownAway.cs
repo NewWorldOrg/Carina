@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class WhatNoRecordingOwnsIsThrownAway : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -35,7 +33,6 @@ public partial class WhatNoRecordingOwnsIsThrownAway : Migration
             sql: "thrown_away_at IS NULL\nOR (fault IN ('NoLedgerRow') AND last_written_at IS NOT NULL AND thrown_away_at >= noticed_at)");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

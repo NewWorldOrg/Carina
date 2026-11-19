@@ -4,10 +4,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Reads where an encode of a recording takes its chapters from: the version of the model in use and how the
-/// recording stands by that version's detection, read the way playback reads them.
-/// </summary>
 public sealed class EncodeChapterChoices(
     ISegmentModelVersionRepository versions,
     IRecordingDetectionRepository detections)

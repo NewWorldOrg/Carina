@@ -4,11 +4,6 @@ using System.Net.Sockets;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// The three things the relay asks of the network: what a host name resolves to, which addresses this machine
-/// answers at, which take in every address the application can be listening on, and a connection to one address.
-/// Which addresses may be connected to is decided by the relay, not here.
-/// </summary>
 public interface IRelayNetwork
 {
     Task<IReadOnlyList<IPAddress>> ResolveAsync(string host, CancellationToken cancellationToken);

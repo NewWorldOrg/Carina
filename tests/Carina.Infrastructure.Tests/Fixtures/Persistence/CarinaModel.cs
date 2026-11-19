@@ -26,8 +26,6 @@ internal static class CarinaModel
     public static IEntityType Entity<TEntity>(CarinaDbContext context)
         => Schema(context).FindEntityType(typeof(TEntity))!;
 
-    // Tuning and the signal readings are complex properties rather than owned entities:
-    // they carry no identity, so two rows may hold the very same instance.
     public static IEnumerable<string> ColumnsOf(IEntityType entity, string valueObject)
         => entity.GetComplexProperties()
             .Single(property => property.Name == valueObject)

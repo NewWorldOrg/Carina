@@ -3,10 +3,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Recordings;
 
-/// <summary>
-/// Looks up what the guide and the reservation say of a recording's programme and answers when it ends by
-/// <see cref="ProgrammeEnd"/>.
-/// </summary>
 public sealed class ProgrammeEndDomainService(IAnnouncedProgrammes programmes, IReservationRepository reservations)
 {
     public async Task<DateTime?> EndsAtAsync(Recording recording, CancellationToken cancellationToken)

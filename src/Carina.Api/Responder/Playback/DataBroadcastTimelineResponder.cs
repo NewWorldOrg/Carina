@@ -3,10 +3,6 @@ using Carina.Infrastructure.DataBroadcast;
 
 namespace Carina.Api.Responder.Playback;
 
-/// <summary>
-/// One version of a module running over the seconds of the source played, counted from its own zero, and the bytes
-/// the module surface answers for it.
-/// </summary>
 public sealed record DataBroadcastVersionResponder(int Id, int Version, double FromSec, double ToSec, long Size)
 {
     public static DataBroadcastVersionResponder Of(PlacedVersion placed)
@@ -22,9 +18,6 @@ public sealed record DataBroadcastVersionResponder(int Id, int Version, double F
     }
 }
 
-/// <summary>
-/// One download of a carousel with its versions in the order they were first seen.
-/// </summary>
 public sealed record DataBroadcastCarouselResponder(int Tag, uint DownloadId, IReadOnlyList<DataBroadcastVersionResponder> Versions)
 {
     public static DataBroadcastCarouselResponder Of(PlacedCarousel carousel)
@@ -38,11 +31,6 @@ public sealed record DataBroadcastCarouselResponder(int Tag, uint DownloadId, IR
     }
 }
 
-/// <summary>
-/// One event message at the second of the source played it fires at, with its group, id, type, whether it was sent
-/// to fire at once, its private data, and the tag of the stream it came on, null for a recording kept before that
-/// was kept.
-/// </summary>
 public sealed record DataBroadcastEventResponder(
     int Group,
     int Id,
@@ -67,11 +55,6 @@ public sealed record DataBroadcastEventResponder(
     }
 }
 
-/// <summary>
-/// The catalog of a recording's data broadcast over the source played: where it is entered, whether the broadcaster
-/// asks for it to open by itself, the document it opens on, whether versions were left out, every version of every
-/// carousel and every event message.
-/// </summary>
 public sealed record DataBroadcastTimelineResponder(
     int EntryTag,
     bool AutoStart,

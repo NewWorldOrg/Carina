@@ -44,9 +44,6 @@ public sealed class PlaybackPositionRepository(CarinaDbContext context) : IPlayb
         return found.ToDictionary(position => position.RecordingId);
     }
 
-    /// <remarks>
-    /// Written in one statement, which keeps nothing for a recording that no longer exists.
-    /// </remarks>
     public async Task<PlaybackPositionKeep> KeepAsync(
         PlaybackPosition reached,
         CancellationToken cancellationToken)

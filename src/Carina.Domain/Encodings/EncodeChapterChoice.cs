@@ -2,16 +2,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// Where an encode takes the chapters it embeds from, decided as playback decides which stretches a recording
-/// is played with (<see cref="SegmentStanding"/>): the detection by the version of the model in use when there
-/// is one, and nothing when there is none.
-/// </summary>
-/// <remarks>
-/// Only stretches that mark something besides the programme are embedded. A detection that gives only the
-/// programme, or one thrown away, embeds nothing, so the encode is handed no chapters. A stretch the artefact
-/// does not play is not embedded.
-/// </remarks>
 public sealed record EncodeChapterChoice
 {
     private EncodeChapterChoice(int modelVersion, SegmentStanding standing)
@@ -37,10 +27,6 @@ public sealed record EncodeChapterChoice
         return new EncodeChapterChoice(modelVersion, standing);
     }
 
-    /// <summary>
-    /// The stretches embedded, in the recording's own time, which is the time the chapters handed to the
-    /// encode are written in.
-    /// </summary>
     public IReadOnlyList<SegmentSpan> Embedded(PlaybackFileClock clock)
     {
         ArgumentNullException.ThrowIfNull(clock);
@@ -48,21 +34,12 @@ public sealed record EncodeChapterChoice
         return Standing.Marks ? [.. Standing.Played.Where(stretch => clock.Placed(stretch) is not null)] : [];
     }
 
-    /// <summary>
-    /// The chapters embedded, on the artefact's own clock, as the ledger keeps them.
-    /// </summary>
     public IReadOnlyList<ChapterSegment> Chapters(PlaybackFileClock clock)
         => [.. Embedded(clock).Select(clock.Placed).OfType<SegmentSpan>().Select(stretch => new ChapterSegment(stretch.Starts, stretch.Ends, KindOf(stretch.Kind)))];
 
-    /// <summary>
-    /// What the ledger keeps of where the embedded chapters came from, decided at <paramref name="at"/>.
-    /// </summary>
     public ChapterReading Reading(DateTime at)
         => new(ChapterDetectorName.Segments, Verdict, Standing.BreakShare, at, Standing.ModelVersion);
 
-    /// <summary>
-    /// The kind of chapter a stretch is embedded as, which is its own kind.
-    /// </summary>
     public static ChapterKind KindOf(SegmentKind kind) => kind switch
     {
         SegmentKind.Programme => ChapterKind.Programme,

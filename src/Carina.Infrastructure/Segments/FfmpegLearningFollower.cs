@@ -13,24 +13,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// Follows a recording with one ffmpeg started yielding: the file is read once, from its head, and
-/// handed to ffmpeg on its standard input; at the end of a file still being written the follow waits
-/// <see cref="LearningFollowSettings.WhileCaughtUp"/> and reads on, and once the recording has ended
-/// and the file is read to its end the standard input is closed. A recording that had ended before it
-/// was read is read the same way, and its record is held reading rather than following. Before ffmpeg
-/// starts, where the file's own clock begins is read from its head the way the captions of a recording
-/// are put on it (<see cref="FfprobeFileStart"/>), once a file still being written holds
-/// <see cref="LearningFollowSettings.HeadBytes"/>, and that is the recording's time zero. What ffmpeg
-/// hands back (<see cref="FfmpegLearningInvocation"/>) is read by a <see cref="MatroskaReader"/> and placed by a
-/// <see cref="LearningDataTimeline"/>, every chunk is kept as soon as it is whole, and the record goes
-/// as far as the chunk with the gaps no later block can reach. The record ends done when the
-/// recording was read to its end, partial when the recording went or its file could no longer be
-/// read, and failed when ffmpeg or ffprobe is missing, where the file begins could not be read, or
-/// ffmpeg did not find the programme's picture or sound, or broke off. Only the tail of what ffmpeg
-/// says on its error stream is kept, as the reason for a failure. A follow whose record something
-/// else has changed stops and leaves it as it is.
-/// </summary>
 public sealed class FfmpegLearningFollower(
     MachineSettings machine,
     LearningFollowSettings settings,

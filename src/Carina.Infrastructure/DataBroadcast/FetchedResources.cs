@@ -6,12 +6,6 @@ using Carina.Domain.DataBroadcast;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// A document or resource fetched from a broadcaster's server as a resource of a module: placed at the address it
-/// was finally fetched from, so that what it refers to is resolved against that, typed by what the server said where
-/// that is a type a data broadcast carries and by its extension where it is not, and its text in UTF-8 the way a
-/// module's text is.
-/// </summary>
 public static class FetchedResources
 {
     private const string Bml = "text/X-arib-bml";

@@ -5,10 +5,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Api.Live;
 
-/// <summary>
-/// The two playlists a player reads a live channel or a recording through: the first, naming the key's own playlist
-/// once, and the key's own, listing the segments.
-/// </summary>
 public static class LiveHlsPlaylists
 {
     public const string MediaType = "application/vnd.apple.mpegurl";
@@ -75,9 +71,6 @@ public static class LiveHlsPlaylists
     private static StringBuilder Head()
         => new StringBuilder("#EXTM3U\n").Append(CultureInfo.InvariantCulture, $"#EXT-X-VERSION:{Version}\n");
 
-    /// <summary>
-    /// The bits a second of the segment carrying the most, or what the profile is capped at when no segment is held.
-    /// </summary>
     private static long Bandwidth(HlsWindow window, LiveProfile profile)
         => window.Segments
             .Select(segment => (long?)Math.Ceiling((decimal)segment.Bytes * 8 * TimeSpan.TicksPerSecond / segment.Length.Ticks))

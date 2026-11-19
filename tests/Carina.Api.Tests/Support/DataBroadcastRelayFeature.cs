@@ -25,9 +25,6 @@ namespace Carina.Api.Tests.Support;
 
 internal sealed record AskedOfTheRelay(string Channel, string Uri, string? Text, string? Charset);
 
-/// <summary>
-/// The relay as the HTTP surface sees it: it keeps what it was asked and answers what it is told to.
-/// </summary>
 internal sealed class ScriptedRelay : IBroadcasterRelay
 {
     public ConcurrentQueue<AskedOfTheRelay> Asked { get; } = new();
@@ -51,9 +48,6 @@ internal sealed class ScriptedRelay : IBroadcasterRelay
     }
 }
 
-/// <summary>
-/// The driver as the HTTP surface asks it which card answered: it counts the asking and answers what it is told to.
-/// </summary>
 internal sealed class ScriptedCardReader : IConditionalAccessCardReader
 {
     private int asked;
@@ -71,10 +65,6 @@ internal sealed class ScriptedCardReader : IConditionalAccessCardReader
     }
 }
 
-/// <summary>
-/// The network as the application's own relay sees it: it keeps every name it is asked to resolve and every address
-/// it is asked to connect to, and reaches nothing.
-/// </summary>
 internal sealed class UnreachedNetwork : IRelayNetwork
 {
     public ConcurrentQueue<string> Asked { get; } = new();

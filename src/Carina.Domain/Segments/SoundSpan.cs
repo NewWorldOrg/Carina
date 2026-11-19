@@ -1,8 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// A stretch of sound, by the time it starts and ends.
-/// </summary>
 public sealed record SoundSpan
 {
     public SoundSpan(TimeSpan starts, TimeSpan ends)
@@ -22,9 +19,6 @@ public sealed record SoundSpan
 
     public TimeSpan Length => Ends - Starts;
 
-    /// <summary>
-    /// Whether the two stretches share at least half of the shorter one.
-    /// </summary>
     public bool MostlyShares(SoundSpan other)
     {
         ArgumentNullException.ThrowIfNull(other);

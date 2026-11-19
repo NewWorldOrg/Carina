@@ -2,10 +2,6 @@ using Carina.Domain.Encodings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Reads pictures handed over in the shape <see cref="WatermarkFrame"/> names, in pieces of any
-/// length, and writes the <see cref="CornerOutline"/> of each as soon as the whole of it has arrived.
-/// </summary>
 public sealed class CornerReader
 {
     private readonly byte[] frame = new byte[WatermarkFrame.Pixels];

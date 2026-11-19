@@ -5,11 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// Reads the records of the learning data and the data itself for detecting segments. Which records wait to
-/// be detected is <see cref="RecordingDetection.IsAwaited"/> written out in <see cref="Awaiting"/>, for the
-/// recordings still kept.
-/// </summary>
 public sealed class DetectionWorklist(CarinaDbContext context) : IDetectionWorklist
 {
     public static IQueryable<LearningExtraction> Awaiting(CarinaDbContext context, int modelVersion)

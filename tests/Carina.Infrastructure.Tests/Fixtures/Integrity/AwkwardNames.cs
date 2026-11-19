@@ -1,8 +1,5 @@
 namespace Carina.Infrastructure.Tests.Fixtures.Integrity;
 
-/// <summary>
-/// Names a disk allows that a sweep must still read and carry as they are.
-/// </summary>
 internal static class AwkwardNames
 {
     public static readonly string[] All =

@@ -18,11 +18,6 @@ public enum ChapterRewriteOutcome
     Failed = 5,
 }
 
-/// <summary>
-/// What one round of comparing standing artefacts' chapters with the segments did: how many artefacts were
-/// read, what became of each, the jobs whose artefact could not be written again, and whether the round gave
-/// way to the machine being needed.
-/// </summary>
 public sealed record ChapterRewriteRound(
     int Read,
     int Rewritten,
@@ -32,20 +27,6 @@ public sealed record ChapterRewriteRound(
     IReadOnlyList<EncodeJobId> Failed,
     bool Yielded);
 
-/// <summary>
-/// Compares the chapters standing artefacts carry with the ones their recording's detection by the version in
-/// use would embed now, one artefact at a time, and writes an artefact again with the new chapters when
-/// <see cref="ChapterRewrite"/> says it is due.
-/// </summary>
-/// <remarks>
-/// An artefact whose chapters still agree is written down as standing for the detection and left as it is.
-/// One opened in the last <see cref="ArtefactRewriteDomainService.LeftAloneAfterAnOpening"/>, one not where the ledger
-/// says, one written again within a day, and one whose room holds less than the artefact's size are passed
-/// over. The copy is made beside the artefact and checked, and only once the machine is still spare and the
-/// artefact is seen to stand, to be the file it was and to be unopened, does the placer rename the copy over
-/// it; otherwise the copy is abandoned and tried again later. Whatever is not renamed is swept with the job's
-/// scratch.
-/// </remarks>
 public sealed class ArtefactChapterRewrites(
     IChapterRewriteWorklist worklist,
     ICaptionTrackWorklist standing,

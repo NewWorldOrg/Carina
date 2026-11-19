@@ -13,15 +13,6 @@ using Puppis.Contracts;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// Takes the data broadcast out of ended recordings one at a time, newest first, at the moments the captions are
-/// taken, and keeps the record of it on the shelf beside them. A pass starts nothing unless the machine is idle as
-/// <see cref="Idleness"/> judges it for the captions too, and reads a recording's
-/// file only in its turn among the passes that read recordings through. It first puts in the queue every ended
-/// recording whose record is not yet due, and, once idle, every record that failed with tries left and every
-/// record the row says is made while none is kept. A recording whose file has gone keeps the record already taken
-/// of it.
-/// </summary>
 public sealed class DataBroadcastJob(
     IServiceScopeFactory scopes,
     IDataBroadcastTaker taker,
@@ -257,10 +248,6 @@ public sealed class DataBroadcastJob(
         return await SettledAsync(worklist.TakenAsync(subject.Id, record.Modules, cancellationToken), subject.Id, DataBroadcastState.Made, true);
     }
 
-    /// <summary>
-    /// A recording whose file is no longer on the disk keeps the record already taken of it, and is missing when
-    /// there is none.
-    /// </summary>
     private async Task<DataBroadcastState?> WithoutItsFileAsync(
         IDataBroadcastWorklist worklist,
         RecordingId id,

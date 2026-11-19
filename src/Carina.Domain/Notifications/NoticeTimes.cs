@@ -4,9 +4,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// Words times as a notice says them: in Japan's time, with the day of the week.
-/// </summary>
 internal static class NoticeTimes
 {
     private const string DaysOfTheWeek = "日月火水木金土";

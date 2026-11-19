@@ -7,33 +7,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// What one look at the catalog did: what in spare time stood in the way when nothing was done, null when nothing
-/// was asked of spare time; what the matching found and changed, whether the record was marked as matched, and the
-/// entry estimated again when no recording waited to be matched.
-/// </summary>
 public sealed record CatalogMatchingLook(SpareTimeVerdict? Verdict, CatalogMatched? Matched, bool Marked, CatalogEntry? Reestimated = null);
 
-/// <summary>
-/// Matches recordings against the catalog, one at a time, on two paths. A recording whose follow came to its
-/// end as it was recorded (<see cref="FollowedToTheEnd"/>) and whose data was read to the end is matched at
-/// once, whatever is being recorded or watched, so that it is matched before its detection and encoding are
-/// due. Every other recording whose data waits to be matched — those that had data before the process
-/// started, those read afterwards and those read again — waits for <see cref="SpareTime"/> and is matched the
-/// most recently started first, one a look: after <see cref="CatalogMatchingSettings.BeforeFirstLook"/>, then
-/// every <see cref="CatalogMatchingSettings.BetweenLooks"/>, or after
-/// <see cref="CatalogMatchingSettings.AfterAMatch"/> once a look has matched one. A recording told to the
-/// first path is taken as soon as it is told, before the next look, and once marked as matched it is told on
-/// (<see cref="MatchedAtOnce"/>) to be detected at once. What a match changes is written before the record is
-/// marked as matched; a record that changed meanwhile is left waiting and is matched again, which adds no
-/// stretch twice. A look in spare time that finds no recording waiting estimates again the entry first seen
-/// earliest of those last estimated with an earlier version of the estimation
-/// (<see cref="CatalogEntry.AwaitsReestimation"/>), one a look until none is left, and is followed as soon as a
-/// match is. Once a match or an estimate is written, every recording that hears an entry whose kind or confidence
-/// it changed, or a stretch it took for another kind, is taken as matched again
-/// (<see cref="LearningExtraction.CatalogChanged"/>), so that it waits to be detected again; an estimate that
-/// leaves an entry as it was has none detected again.
-/// </summary>
 public sealed class CatalogMatchingJob(
     IServiceScopeFactory scopes,
     LearningRecords records,
@@ -43,10 +18,6 @@ public sealed class CatalogMatchingJob(
     TimeProvider clock,
     ILogger<CatalogMatchingJob> logger) : BackgroundService
 {
-    /// <summary>
-    /// The first path: matches at once the recording followed to its end, when its data was read to the end and
-    /// waits to be matched.
-    /// </summary>
     public async Task<CatalogMatchingLook> MatchFollowedAsync(RecordingId id, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -69,10 +40,6 @@ public sealed class CatalogMatchingJob(
         return look;
     }
 
-    /// <summary>
-    /// The second path: in spare time, matches the most recently started recording whose data waits to be
-    /// matched, or, when none waits, estimates again the next entry that waits for it.
-    /// </summary>
     public async Task<CatalogMatchingLook> LookAsync(CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
@@ -147,10 +114,6 @@ public sealed class CatalogMatchingJob(
         return new CatalogMatchingLook(verdict, null, false, entry);
     }
 
-    /// <summary>
-    /// Takes every recording that hears an entry <paramref name="change"/> recast, or a stretch it took for another
-    /// kind, as matched again now, so that it waits to be detected again.
-    /// </summary>
     private async Task HeardAnewAsync(IServiceProvider services, CatalogChange change, CancellationToken cancellationToken)
     {
         IReadOnlyList<RecordingId> heard = await services.GetRequiredService<CatalogMatchingDomainService>().HeardAnewAsync(change, cancellationToken);
@@ -186,10 +149,6 @@ public sealed class CatalogMatchingJob(
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 
-    /// <summary>
-    /// Waits for <paramref name="waiting"/>, or until a recording is told to the first path; false once the
-    /// process is stopping.
-    /// </summary>
     private async Task<bool> WaitAsync(TimeSpan waiting, CancellationToken stoppingToken)
     {
         using CancellationTokenSource either = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);

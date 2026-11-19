@@ -1,16 +1,11 @@
 namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Segments;
 
-/// <summary>
-/// Statements that lay the rows that remember a version of the model by its number: a detection, the chapters of an
-/// encode and a round of learning, each written as the store keeps it.
-/// </summary>
 internal static class RowsNamingAVersion
 {
     public const string Profile = "4d5e6f70-8192-4a3b-b4c5-d6e7f8091a2b";
 
     public const string Destination = "5e6f7081-92a3-4b4c-85d6-e7f8091a2b3c";
 
-    /// <summary>The tables these rows and the versions are kept in, emptied as a database just migrated has them.</summary>
     public const string Emptied = "TRUNCATE segment_model_version, segment_detection, segment_skip_event, segment_learning_round, encode_job, encode_destination, encode_profile CASCADE";
 
     public static string Detected(int version)

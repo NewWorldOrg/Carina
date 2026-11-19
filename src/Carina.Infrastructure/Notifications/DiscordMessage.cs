@@ -4,9 +4,6 @@ using Carina.Domain.Notifications;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// A notice as Discord takes it: one coloured embed, with nobody mentioned whatever the words say.
-/// </summary>
 public static class DiscordMessage
 {
     public static JsonObject Of(int colour, MarkedUpNotice words, string? link)

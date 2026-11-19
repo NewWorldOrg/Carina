@@ -4,10 +4,6 @@ namespace Carina.TestSupport;
 
 public static class StandInProgramme
 {
-    /// <summary>
-    /// More than a pipe holds, written on the error stream, so a stand-in that begins with it cannot
-    /// reach its last line before it has been identified and handed over.
-    /// </summary>
     private const string MoreThanAPipeHolds = """
         head -c 70000 /dev/zero | tr '\0' '.' >&2
         printf '\n' >&2
@@ -23,10 +19,6 @@ public static class StandInProgramme
         return path;
     }
 
-    /// <summary>
-    /// The same stand-in, made to outlive the look at it: it is held at its first line until someone
-    /// reads what it said, which is after it has been handed over. Only the error stream is filled.
-    /// </summary>
     public static string WrittenToOutliveTheLook(string path, string body)
     {
         ArgumentNullException.ThrowIfNull(body);

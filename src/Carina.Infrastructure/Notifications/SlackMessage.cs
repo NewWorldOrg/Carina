@@ -5,9 +5,6 @@ using Carina.Domain.Notifications;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// A notice as Slack takes it: one coloured attachment that holds the title, the body and, when there is one, the link.
-/// </summary>
 public static class SlackMessage
 {
     public const string LinkLabel = "画面で開く";

@@ -4,10 +4,6 @@ using Puppis.Contracts;
 
 namespace Carina.Domain.Channels;
 
-/// <summary>
-/// What the driver says is wrong with a tuner it lists: taken out of service, and why, or still handed out but
-/// not quite well, and why.
-/// </summary>
 public enum TunerTroubleKind
 {
     NoLock = 1,
@@ -36,10 +32,6 @@ public static class TunerTroubles
 {
     public const string CannotLockClassification = nameof(TunerTroubleKind.NoLock);
 
-    /// <summary>
-    /// Lists, once each and in the driver's order, the enabled tuners the driver says are out of service or not
-    /// quite well, each with the kind of trouble it names.
-    /// </summary>
     public static IReadOnlyList<TunerTrouble> Of(IReadOnlyList<TunerSnapshot> tuners)
     {
         ArgumentNullException.ThrowIfNull(tuners);
@@ -54,9 +46,6 @@ public static class TunerTroubles
         ];
     }
 
-    /// <summary>
-    /// Reads the kind of trouble an incident's classification names, or <see langword="null"/> when it names none.
-    /// </summary>
     public static TunerTroubleKind? Named(string? classification)
         => classification is not null
            && Enum.TryParse(classification, ignoreCase: false, out TunerTroubleKind kind)
@@ -65,9 +54,6 @@ public static class TunerTroubles
             ? kind
             : null;
 
-    /// <summary>
-    /// Whether a kind of trouble is one the driver takes the tuner out of service for.
-    /// </summary>
     public static bool TakesItOutOfService(TunerTroubleKind kind)
         => kind is not (TunerTroubleKind.TuneFailing or TunerTroubleKind.Degraded);
 

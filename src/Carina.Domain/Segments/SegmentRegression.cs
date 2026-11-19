@@ -1,48 +1,13 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// A model fitted to labelled samples, how many Newton steps it took, and whether the penalised
-/// log-likelihood came to rest before the steps ran out.
-/// </summary>
 public sealed record SegmentFit(SegmentModel Model, int Iterations, bool Converged);
 
-/// <summary>
-/// Fits the logistic regression telling the kinds of segment apart to labelled samples, by Newton's method
-/// (IRLS). Labels of the programme and of breaks alone are fitted as two kinds, a break against the programme;
-/// an opening or an ending among them makes it four, a multinomial logistic regression (softmax) of the break,
-/// the opening and the ending each against the programme. Of the opening and the ending, one no sample labels
-/// can be kept from a version that weighs both, with the scales of the features it weighs: only the kinds
-/// labelled and the break are fitted then, on those scales, and the kept weights are handed on as they were.
-/// Without a version to keep it from, a kind no sample labels is fitted from none. The parameters are an
-/// intercept and a weight per feature of <see cref="SegmentFeature.Names"/> for each kind fitted, and an offset
-/// per station and one per series named by the samples, which weigh the break alone. Each step solves
-/// <c>(XᵀWX + Λ) Δθ = Xᵀ(c ⊙ (y − p)) − Λ(θ − θ₀)</c> by a Cholesky decomposition, where <c>W</c> holds
-/// <c>c (p_k δ_kl − p_k p_l)</c> between the kinds weighed, which is <c>c p (1 − p)</c> with two, and <c>Λ</c>
-/// carries twice each pull, since the loss pulls by <c>Σ_k λ_k ‖θ_k − θ₀_k‖² + λ_u Σ (u − u₀)² + λ_v Σ (v − v₀)²</c>.
-/// Each kind is pulled by <c>λ_k = λ n₀ / (n₀ + n_k)</c>, where <c>n_k</c> is the weight of the kind's labels and
-/// <c>n₀</c> is <see cref="InUseCountsAs"/>: the version pulled towards counts as that many labels, so a kind labelled
-/// seldom stays near it and the samples move a kind the more the more it is labelled. A kind's weights
-/// and its intercept are pulled towards a version handed over, the version in use, moved onto the scales the samples
-/// standardise by so that they score each feature as it does; a weight or an offset it does not have, or every one
-/// when none is handed over, is pulled towards zero, and the intercept of a kind it does not weigh is not pulled. Its
-/// offset of a station or a series no sample is on is handed on as it is. With two kinds every step is the one the
-/// two-kind fit took, to the last bit. A step that would lower
-/// the penalised log-likelihood is halved until it does not. The fit stops once a step changes the
-/// penalised log-likelihood by less than <see cref="SmallestChange"/>, after <see cref="MostIterations"/>
-/// steps, or when the system cannot be solved, as with no samples. Each feature is standardised by the
-/// mean and standard deviation of the samples it is known in, a deviation of nothing standing as one, and a
-/// feature not known in a sample counts as its mean. Nothing is drawn at random: the same samples in the
-/// same order give the same model.
-/// </summary>
 public static class SegmentRegression
 {
     public const int MostIterations = 50;
 
     public const double SmallestChange = 1e-6;
 
-    /// <summary>
-    /// How much label weight the version pulled towards counts as for each kind: as much as one label.
-    /// </summary>
     public const double InUseCountsAs = 1;
 
     private const int MostHalvings = 30;
@@ -126,10 +91,6 @@ public static class SegmentRegression
         return moved;
     }
 
-    /// <summary>
-    /// The highest of <paramref name="scores"/> and of the programme's nothing, and the sum of the exponentials of
-    /// every score, the programme's first, less it: what the softmax is normalised by.
-    /// </summary>
     private static (double Highest, double Sum) Normaliser(double[] scores)
     {
         double highest = 0;
@@ -152,10 +113,6 @@ public static class SegmentRegression
         return (highest, sum);
     }
 
-    /// <summary>
-    /// Solves <c>h x = g</c> for a symmetric <paramref name="h"/> of <paramref name="width"/> columns by its
-    /// Cholesky decomposition, or answers null when it is not positive definite.
-    /// </summary>
     private static double[]? Solved(double[] h, double[] g, int width)
     {
         double[] lower = new double[width * width];
@@ -451,12 +408,6 @@ public static class SegmentRegression
                 thresholds,
                 names.Select((name, feature) => (name, feature)).ToDictionary(pair => pair.name, pair => scales[pair.feature]));
 
-        /// <summary>
-        /// Where each parameter is pulled to: each weight of <paramref name="toward"/> on a kind fitted, moved onto the
-        /// scale the samples standardise its feature by so that it scores the feature as <paramref name="toward"/> does,
-        /// the intercept moved by as much as those scales' means shift the score, and its offset of each station and
-        /// series; zero for a weight or an offset it does not have.
-        /// </summary>
         private double[] Target(SegmentModel toward)
         {
             double[] pulledTo = new double[Width];
@@ -497,10 +448,6 @@ public static class SegmentRegression
             return pulledTo;
         }
 
-        /// <summary>
-        /// The kinds fitted: the break alone when no sample labels an opening or an ending; otherwise the break, the
-        /// opening and the ending, but for one no sample labels when it is kept from <paramref name="keeping"/>.
-        /// </summary>
         private static SegmentKind[] Fitted(IReadOnlyList<SegmentSample> samples, SegmentModel? keeping)
         {
             SegmentKind[] labelled = [.. new[] { SegmentKind.Opening, SegmentKind.Ending }.Where(kind => samples.Any(sample => sample.Kind == kind))];
@@ -528,11 +475,6 @@ public static class SegmentRegression
             return new FeatureScale(mean, deviation > FlatDeviation * Math.Max(1, Math.Abs(mean)) ? deviation : 1);
         }
 
-        /// <summary>
-        /// Adds <paramref name="coefficient"/> times the outer product of two rows, each its columns, entries and how
-        /// many of them are used, to the upper triangle of <paramref name="hessian"/>, where a row's column is no later
-        /// than the other's.
-        /// </summary>
         private static void Accumulate(double[] hessian, int width, double coefficient, (int[] Columns, double[] Entries, int Used) row, (int[] Columns, double[] Entries, int Used) other)
         {
             for (int one = 0; one < row.Used; one++)

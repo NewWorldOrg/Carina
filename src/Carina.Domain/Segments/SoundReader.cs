@@ -1,14 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Reads sound handed over as 16-bit samples, <see cref="SampleRate"/> a second, left and right
-/// interleaved, the first sample at the recording's own time zero, in pieces of any length. A
-/// reading is written as soon as every sample it covers has arrived: the fingerprint of the window
-/// starting at every <see cref="SoundFingerprint.Hop"/>th sample, of the two channels added
-/// together, the time before zero heard as silence; the loudness; and the channel difference.
-/// <see cref="Finish"/> writes those the end of the sound cuts short, the time after it heard as
-/// silence, and drops a left sample left without its right.
-/// </summary>
 public sealed class SoundReader
 {
     public const int SampleRate = 8000;

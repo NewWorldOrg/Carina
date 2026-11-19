@@ -252,8 +252,6 @@ public sealed class LiveSessionManagerTests
         Assert.Equal(1, scarce.Started);
         Assert.Equal([EveryFrame], crowded.Keys);
 
-        // The refused key is another profile of a channel already being read, so it opened no
-        // reading of its own and the one the seated viewer is watching through is left alone.
         Assert.Equal(1, supply.Asked);
         Assert.False(supply.Opened[0].Disposed);
     }
@@ -2354,10 +2352,6 @@ public sealed class LiveSessionManagerTests
         }
     }
 
-    /// <summary>
-    /// Waits for a session's ending to be told and for the session to be torn down, so that a second line about
-    /// the same ending would have been written by then.
-    /// </summary>
     private async Task Told()
     {
         await Eventually.Happens(() => warnings.Endings.Count > 0, "how the session ended is told");
@@ -2527,10 +2521,6 @@ public sealed class LiveSessionManagerTests
         public void Signal(AppEventName name) => Signalled();
     }
 
-    /// <summary>
-    /// Refuses the first carousel left out, so that reading the data broadcast fails; counts the data broadcasts
-    /// read to their end; and, once asked, holds the word that reading stopped until it is released.
-    /// </summary>
     private sealed class WatchingWhatTheDataBroadcastSays : ILogger<LiveSessionManager>, IDisposable
     {
         private readonly ManualResetEventSlim released = new(initialState: true);
@@ -2586,10 +2576,6 @@ public sealed class LiveSessionManagerTests
         }
     }
 
-    /// <summary>
-    /// A manager whose log is watched for what the data broadcast says, let go of in the order the word it may be
-    /// holding needs: the word released, the manager disposed, the log disposed.
-    /// </summary>
     private sealed class DataBroadcastRig : IAsyncDisposable
     {
         public WatchingWhatTheDataBroadcastSays Logger { get; } = new();

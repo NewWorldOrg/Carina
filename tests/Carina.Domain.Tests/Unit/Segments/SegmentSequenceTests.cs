@@ -457,9 +457,6 @@ public sealed class SegmentSequenceTests
     private static SegmentPiece[] Fixed(SegmentPiece[] pieces, params (int At, SegmentKind Kind, double Chance)[] fixes)
         => [.. pieces.Select((piece, at) => fixes.Where(fix => fix.At == at).Select(fix => piece with { Fixed = new CatalogFix(fix.Kind, fix.Chance) }).SingleOrDefault() ?? piece)];
 
-    /// <summary>
-    /// <see cref="Laid"/> pieces placed in a programme that spans them all.
-    /// </summary>
     private static SegmentPiece[] Placed(params double[] lengths)
     {
         double programme = lengths.Sum();

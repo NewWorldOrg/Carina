@@ -4,11 +4,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// The one row that says how the queue runs when nobody asked: whether a recording that ends is
-/// queued at all, and how many of the machine's cores a run may take. No row is held until somebody
-/// settles them. <see cref="Subject"/> states what the auto-run takes and is not a setting.
-/// </summary>
 public sealed class EncodeAutoRun
 {
     public const int TheOnlyRow = 1;
@@ -42,10 +37,6 @@ public sealed class EncodeAutoRun
         return Math.Clamp(machine.Cores, FewestCores, MostCoresAnyMachineHas);
     }
 
-    /// <summary>
-    /// Whether <paramref name="mostCores"/> may be settled as the cores a run takes on <paramref name="machine"/>:
-    /// one at least, and no more than it has.
-    /// </summary>
     public static bool Fits(int mostCores, MachineSettings machine)
         => mostCores >= FewestCores && mostCores <= CoresOn(machine);
 
@@ -69,11 +60,6 @@ public sealed class EncodeAutoRun
     }
 }
 
-/// <summary>
-/// How the queue runs as it stands: the settled row where there is one, and the machine's deployed
-/// settings where there is not. <see cref="Stored"/> tells the two apart.
-/// <see cref="MostCores"/> is what a run will actually take on this machine, not what was asked for.
-/// </summary>
 public sealed record EncodeAutoRunStanding(bool Automatically, int MostCores, bool Stored, DateTime? UpdatedAt)
 {
     public static EncodeAutoRunStanding Over(EncodeAutoRun? held, EncodeSettings deployed, MachineSettings machine)
@@ -87,10 +73,6 @@ public sealed record EncodeAutoRunStanding(bool Automatically, int MostCores, bo
             : new EncodeAutoRunStanding(held.Automatically, Within(held.MostCores, cap), true, held.UpdatedAt);
     }
 
-    /// <summary>
-    /// The cores a run takes on <paramref name="machine"/>: what the auto-run allows, or fewer when that is all the
-    /// machine running it has.
-    /// </summary>
     public int CoresARunTakes(MachineSettings machine)
     {
         ArgumentNullException.ThrowIfNull(machine);

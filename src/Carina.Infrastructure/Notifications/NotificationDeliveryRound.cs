@@ -18,16 +18,6 @@ public sealed record NotificationDeliveries(int Sent, int Failed, int GivenUp)
     }
 }
 
-/// <summary>
-/// One pass over the deliveries that wait: each destination is sent what waits for it in the order it happened, as
-/// far as the destination has room, and every delivery that was tried or can no longer be sent is written where it
-/// now stands.
-/// </summary>
-/// <remarks>
-/// A delivery whose next attempt is not due is passed over without holding up the ones behind it. After a failure
-/// worth another try a destination is left alone until the next pass. A delivery that was taken but could not be
-/// written as sent is not sent again while the process remembers it; only the writing is tried again.
-/// </remarks>
 public sealed class NotificationDeliveryRound(
     INotificationDeliveryRepository deliveries,
     INotificationDestinationRepository destinations,

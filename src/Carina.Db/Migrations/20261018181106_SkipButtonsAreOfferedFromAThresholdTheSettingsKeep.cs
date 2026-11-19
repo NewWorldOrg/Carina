@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class SkipButtonsAreOfferedFromAThresholdTheSettingsKeep : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -41,7 +39,6 @@ public partial class SkipButtonsAreOfferedFromAThresholdTheSettingsKeep : Migrat
             sql: "skip_threshold BETWEEN 0.50 AND 0.95");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

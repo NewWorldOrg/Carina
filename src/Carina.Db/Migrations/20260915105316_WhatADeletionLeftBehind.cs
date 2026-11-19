@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class WhatADeletionLeftBehind : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -30,7 +28,6 @@ public partial class WhatADeletionLeftBehind : Migration
             sql: "(files_left_behind IS NULL OR left_behind_at IS NOT NULL)\nAND (files_left_behind IS NULL OR files_left_behind > 0)\nAND (left_behind_at IS NULL OR recording_outcome IS NOT NULL)\nAND (left_behind_at IS NULL OR left_behind_at >= started_at_actual)");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

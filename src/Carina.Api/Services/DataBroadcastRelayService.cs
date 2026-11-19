@@ -29,24 +29,10 @@ public enum DataBroadcastRelayRefusal
     OutsideTheBoundary = 8,
 }
 
-/// <summary>
-/// What a viewer asks to start a Hybridcast application by: the address of the AIT, the organisation and application
-/// identifiers the document named, and the path of the receiver script the application's documents are given.
-/// </summary>
 public sealed record HybridcastAsk(string Ait, uint OrgId, ushort AppId, string ReceiverScript);
 
-/// <summary>
-/// A Hybridcast application started for a viewer: the ticket its frame opens the relay with, and the application.
-/// </summary>
 public sealed record HybridcastStart(IssuedPlaybackTicket Ticket, HybridcastApplication Application);
 
-/// <summary>
-/// Relays a live channel's data broadcast document to a broadcaster's server, only where the browser asking allows
-/// communication and only for a channel that can be watched live here, and names the receiver's card to the document
-/// only where the browser lets that be handed over too. Where the browser allows Hybridcast as well, it reads the AIT
-/// a document names and starts the application the document asks for, handing the viewer a ticket its frame opens
-/// the relay with; what the frame asks for is relayed only inside the application's boundary.
-/// </summary>
 public sealed partial class DataBroadcastRelayService(
     LiveChannelDomainService channels,
     IBroadcasterRelay relay,
@@ -94,10 +80,6 @@ public sealed partial class DataBroadcastRelayService(
            && !path.Contains("//", StringComparison.Ordinal)
            && !path.Contains("..", StringComparison.Ordinal);
 
-    /// <summary>
-    /// The applications the AIT at an address names, for a document of a live channel: only where the browser allows
-    /// both communication and Hybridcast.
-    /// </summary>
     public async Task<ServiceResult<RelayedAit, DataBroadcastRelayRefusal>> ReadAitAsync(
         NetworkId network,
         ServiceId service,
@@ -118,10 +100,6 @@ public sealed partial class DataBroadcastRelayService(
         return ServiceResult<RelayedAit, DataBroadcastRelayRefusal>.Success(read);
     }
 
-    /// <summary>
-    /// Reads the AIT again and starts the application the identifiers name, where it is one to start by itself:
-    /// a ticket is issued to the viewer for the application on this channel, and the application is kept under it.
-    /// </summary>
     public async Task<ServiceResult<HybridcastStart, DataBroadcastRelayRefusal>> StartApplicationAsync(
         NetworkId network,
         ServiceId service,
@@ -164,9 +142,6 @@ public sealed partial class DataBroadcastRelayService(
         return ServiceResult<HybridcastStart, DataBroadcastRelayRefusal>.Success(new HybridcastStart(issued, started));
     }
 
-    /// <summary>
-    /// The application a frame's ticket started, where it was started on this channel by the same viewer.
-    /// </summary>
     public ServiceResult<HybridcastLaunch, DataBroadcastRelayRefusal> LaunchFor(NetworkId network, ServiceId service, string? carrier, Subject viewer)
     {
         ArgumentNullException.ThrowIfNull(network);
@@ -241,10 +216,6 @@ public sealed partial class DataBroadcastRelayService(
         return ServiceResult<RelayedSocket, DataBroadcastRelayRefusal>.Success(opened);
     }
 
-    /// <summary>
-    /// The card the driver last heard from, for a document of a live channel to be given as the receiver's
-    /// identifier: only where the browser allows communication and hands the identifier over.
-    /// </summary>
     public async Task<ServiceResult<ConditionalAccessCardDto, DataBroadcastRelayRefusal>> ReceiverIdAsync(
         NetworkId network,
         ServiceId service,

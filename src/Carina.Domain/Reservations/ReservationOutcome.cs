@@ -27,11 +27,6 @@ public enum ReservationOutcomeKind
     GaveUpRetrying = 9,
 }
 
-/// <summary>
-/// Sorts ledger classifications into lines that settle the reservation, saying what became of the
-/// recording, and lines that note something that happened on the way to one. Only a settling line
-/// takes a reservation out of the run that judges what became of it.
-/// </summary>
 public static class ReservationOutcomeKinds
 {
     public static readonly IReadOnlyList<ReservationOutcomeKind> Settling =
@@ -96,16 +91,8 @@ public sealed class ReservationOutcome
 
     public RetryGiveUp? GaveUpBecause { get; private set; }
 
-    /// <summary>
-    /// When the recording this line names as <see cref="RecordingFault.ScramblingUnresolved"/> was
-    /// descrambled, or null while it has not been.
-    /// </summary>
     public DateTime? DescrambledAt { get; private set; }
 
-    /// <summary>
-    /// Whether this line names <see cref="RecordingFault.ScramblingUnresolved"/> and has not been
-    /// descrambled since.
-    /// </summary>
     public bool LeftScrambled => NamesScrambling(Faults) && DescrambledAt is null;
 
     public static ReservationOutcome Record(
@@ -325,12 +312,6 @@ public sealed class ReservationOutcome
         };
     }
 
-    /// <summary>
-    /// Lifts <see cref="LeftScrambled"/> from a line that names
-    /// <see cref="RecordingFault.ScramblingUnresolved"/>, keeping everything else the line says.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The line is not <see cref="LeftScrambled"/>.</exception>
-    /// <exception cref="ArgumentException"><paramref name="at"/> is not UTC or is before the line was written.</exception>
     public void Descrambled(DateTime at)
     {
         if (!LeftScrambled)

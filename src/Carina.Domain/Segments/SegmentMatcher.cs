@@ -2,22 +2,6 @@ using System.Numerics;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Finds the stretches of one recording that sound the same as stretches of another recording, of a
-/// catalog entry's fingerprint, or of itself elsewhere. The recording heard is indexed once, from each
-/// fingerprint value to the frames it is heard at. Every frame of the other sound whose value is heard
-/// somewhere in the recording votes for the offset between the two, in frames; an offset that gathers
-/// <see cref="LeastVotes"/> votes together with the offsets on either side of it is a candidate. The
-/// frames voting for a candidate are cut into stretches where they lie no more than two seconds apart,
-/// and each stretch is widened both ways, a frame at a time, while the share of disagreeing bits over the
-/// second centred on the next frame stays under <see cref="MostBitErrors"/>; it is not widened into a frame
-/// that is silence on either side, and the silence at its ends is cut off, so that a stretch between two
-/// silences is as long as the sound between them. A stretch whose votes mostly fall on silence or on
-/// a sound that repeats itself within a second, one shorter than <see cref="Shortest"/> or longer than
-/// <see cref="Longest"/>, and one whose bits disagree that much over its whole length are not matches.
-/// Silence, and a value heard at more than <see cref="MostPlacesOfOneValue"/> frames of the recording,
-/// cast no vote: neither says where a match lies.
-/// </summary>
 public sealed class SegmentMatcher
 {
     public const int LeastVotes = 250;
@@ -68,11 +52,6 @@ public sealed class SegmentMatcher
 
     public static int FrameAt(TimeSpan time) => (int)Math.Round((double)time.Ticks / Frame.Ticks, MidpointRounding.AwayFromZero);
 
-    /// <summary>
-    /// The stretches of the recording heard that sound the same as stretches of
-    /// <paramref name="other"/>, whose fingerprints start at its own time zero. The stretches of the
-    /// other sound in <paramref name="explained"/> are neither voted from nor matched into.
-    /// </summary>
     public IReadOnlyList<SoundMatch> Against(SoundOrigin other, ReadOnlySpan<uint> there, IReadOnlyList<SoundSpan> explained)
     {
         ArgumentNullException.ThrowIfNull(other);
@@ -81,10 +60,6 @@ public sealed class SegmentMatcher
         return Matched(other, there, Masked(there.Length, explained), false);
     }
 
-    /// <summary>
-    /// The stretches of the recording heard that sound the same as a later stretch of itself which
-    /// they do not overlap, each found once, from its earlier side.
-    /// </summary>
     public IReadOnlyList<SoundMatch> AgainstItself(SoundOrigin itself)
     {
         ArgumentNullException.ThrowIfNull(itself);
@@ -168,11 +143,6 @@ public sealed class SegmentMatcher
         return votes;
     }
 
-    /// <summary>
-    /// The offsets that gather enough votes with their neighbours, the most voted first and, of two that
-    /// gather as many, the one with more votes of its own; an offset taken takes its neighbours' votes with
-    /// it, so that each vote counts towards one candidate.
-    /// </summary>
     private static IEnumerable<Candidate> Candidates(List<long> votes)
     {
         List<OffsetVotes> offsets = Offsets(votes);
@@ -297,10 +267,6 @@ public sealed class SegmentMatcher
     private bool Reaches(ReadOnlySpan<uint> there, bool[]? masked, Diagonal diagonal, int frame, bool itself)
         => !Silent(there, diagonal, frame, itself) && diagonal.Agrees(there, masked, frame);
 
-    /// <summary>
-    /// Whether a frame of the stretch is silence on either side: the recording heard is silent there, or
-    /// either fingerprint has no bit set, as silence has none.
-    /// </summary>
     private bool Silent(ReadOnlySpan<uint> there, Diagonal diagonal, int frame, bool itself)
     {
         int other = frame + diagonal.Offset;
@@ -357,11 +323,6 @@ public sealed class SegmentMatcher
             => 2 * (Math.Min(ends, otherEnds) - Math.Max(starts, otherStarts)) >= Math.Min(ends - starts, otherEnds - otherStarts);
     }
 
-    /// <summary>
-    /// The frames of the recording heard lined up with the frames of the other sound at one offset, from
-    /// <see cref="Low"/> up to <see cref="High"/>; a frame of the other sound already explained, or out
-    /// of reach, disagrees in half of its bits.
-    /// </summary>
     private sealed record Diagonal(uint[] Heard, int Low, int High, int Offset)
     {
         public bool Agrees(ReadOnlySpan<uint> there, bool[]? masked, int frame)

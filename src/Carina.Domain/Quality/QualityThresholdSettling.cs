@@ -1,15 +1,9 @@
 namespace Carina.Domain.Quality;
 
-/// <summary>
-/// A level as it is to be kept, and the change to record beside it when its value moved.
-/// </summary>
 public sealed record QualityThresholdSettled(QualityThreshold Threshold, QualityThresholdChange? Change);
 
 public static class QualityThresholdSettling
 {
-    /// <summary>
-    /// Sets a level by hand, naming who set it. The measurement it may stand beside is kept, and no later one moves it.
-    /// </summary>
     public static QualityThresholdSettled ByHand(QualityThresholdStanding standing, double value, DateTime at, string? by)
     {
         ArgumentNullException.ThrowIfNull(standing);
@@ -26,10 +20,6 @@ public static class QualityThresholdSettling
             Change(standing, value, at, by, QualityThresholdChangeCause.Hand));
     }
 
-    /// <summary>
-    /// Lets go of a level set by hand, back to the measurement it stands beside or, without one, the shipped value,
-    /// naming who let go of it. A level nobody set by hand is left as it is.
-    /// </summary>
     public static QualityThresholdSettled Released(QualityThresholdStanding standing, DateTime at, string? by)
     {
         ArgumentNullException.ThrowIfNull(standing);
@@ -48,10 +38,6 @@ public static class QualityThresholdSettling
             Change(standing, setting.Current, at, by, QualityThresholdChangeCause.Hand));
     }
 
-    /// <summary>
-    /// Keeps a new measurement, and takes its value unless the level was set by hand. A change is recorded only
-    /// when the value in force moved. A level the measurement decides names nobody as its updater.
-    /// </summary>
     public static QualityThresholdSettled Measured(QualityThresholdStanding standing, QualityThresholdMeasurement measurement)
     {
         ArgumentNullException.ThrowIfNull(standing);

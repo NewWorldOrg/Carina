@@ -1,8 +1,5 @@
 namespace Carina.Domain.Recordings;
 
-/// <summary>
-/// What the sessions before the one writing a recording counted of it.
-/// </summary>
 public sealed record CarriedCount
 {
     public CarriedCount(DropCounters counters, DropTimeline positions, long? scrambledPackets, long overflows)

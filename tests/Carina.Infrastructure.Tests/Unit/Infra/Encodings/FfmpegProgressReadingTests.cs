@@ -11,10 +11,6 @@ public sealed class FfmpegProgressReadingTests
 
     private static readonly MachineSettings Machine = new();
 
-    /// <summary>
-    /// What ffmpeg 6.1.6 writes to <c>-progress pipe:1</c>: the first block carries N/A throughout, and
-    /// <c>out_time_ms</c> holds the same number as <c>out_time_us</c>.
-    /// </summary>
     private const string AsFfmpegWritesIt = """
         frame=0
         fps=0.00

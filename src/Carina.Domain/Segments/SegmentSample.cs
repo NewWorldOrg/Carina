@@ -1,9 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// One labelled segment to learn from: its features, its station and series, the kind it is labelled, and
-/// the weight its label carries.
-/// </summary>
 public sealed record SegmentSample
 {
     public SegmentSample(SegmentFeatureValues features, string station, string? series, SegmentKind kind, double weight)

@@ -5,16 +5,6 @@ namespace Carina.Domain.Recordings;
 
 public sealed record WindowMove(DateTime EndsAt, bool EndUndecided);
 
-/// <summary>
-/// Whether a recording already under way has to hold its tuner longer than it was promised, and
-/// until when.
-/// </summary>
-/// <remarks>
-/// A programme that runs later takes the recording with it; one that says it will finish sooner does
-/// not cut the window short, and a guide that has gone quiet moves nothing. A programme that
-/// announces no end is followed on a horizon of the app's own, renewed once half of it has been
-/// spent while the programme is still announced.
-/// </remarks>
 public static class ProgrammeFollowing
 {
     public static WindowMove? Next(

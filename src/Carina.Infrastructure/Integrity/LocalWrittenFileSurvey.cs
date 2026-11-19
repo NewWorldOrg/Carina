@@ -10,12 +10,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Integrity;
 
-/// <summary>
-/// Walks the roots this process encodes into, the directory it draws thumbnails into and the one it
-/// keeps captions and the records of data broadcasts in. A place is left out when it shares a name with a recording root, or when its
-/// directory is a recording root's, or one inside it or around it, or one already taken. What is
-/// claimed in a place left out is still claimed wherever that place is walked under another name.
-/// </summary>
 public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
 {
     public static readonly OutputRoot ThumbnailPlace = new("thumbnails");
@@ -170,9 +164,6 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
             : [];
     }
 
-    /// <summary>
-    /// Where a place is on this machine, when this process walks it or the place it writes into.
-    /// </summary>
     public string? WhereIs(OutputRoot place)
     {
         ArgumentNullException.ThrowIfNull(place);

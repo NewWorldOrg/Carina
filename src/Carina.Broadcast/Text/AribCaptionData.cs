@@ -1,9 +1,5 @@
 namespace Carina.Broadcast.Text;
 
-/// <summary>
-/// Reads the caption data a caption stream carries in each packet: a data group, and in it the statement of
-/// the first language, as the bytes of its body units joined in order.
-/// </summary>
 public static class AribCaptionData
 {
     public const byte CaptionIdentifier = 0x80;
@@ -24,11 +20,6 @@ public static class AribCaptionData
 
     private const int LoopLengthLength = 3;
 
-    /// <summary>
-    /// The body of the statement in the first language a packet carries, empty for one that carries no body
-    /// unit, or null for anything else: the management data, another language, a superimposition, or data
-    /// whose lengths do not add up.
-    /// </summary>
     public static byte[]? Statement(ReadOnlySpan<byte> data)
     {
         if (data.Length < 3 || data[0] != CaptionIdentifier || data[1] != PrivateStreamIdentifier)

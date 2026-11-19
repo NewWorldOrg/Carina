@@ -57,10 +57,6 @@ public sealed record ReservationReceptionResponder(bool Unavailable, DateTime? S
 
 public sealed record ReservationBroadcastGroupResponder(string? Key, BroadcastGroupRole Role);
 
-/// <summary>
-/// One reservation. <c>Standing</c> is the state the domain decided, with what the recording ledger
-/// wrote read over the top of it; the ledger's claim time and recording outcome travel beside it.
-/// </summary>
 public sealed record ReservationResponder(
     Guid Id,
     ReservationProgrammeResponder Programme,
@@ -156,20 +152,12 @@ public sealed record ReservationPrimaryResponder(string Programme, DateTime Star
     }
 }
 
-/// <summary>
-/// Why a reservation was not made, and for a listing of a moved broadcast, the listing that is reserved
-/// in its place.
-/// </summary>
 public sealed record ReservationRefusedResponder(ReservationFailure Refusal, ReservationPrimaryResponder? Primary)
 {
     public static ReservationRefusedResponder Of(ReservationFailure refusal, Programme? primary)
         => new(refusal, primary is null ? null : ReservationPrimaryResponder.Of(primary));
 }
 
-/// <summary>
-/// What became of one reservation when it was made or changed: where it came to stand, the reservations recorded in
-/// its place when it contends, and the reservations that held a tuner before the change and contend for one after it.
-/// </summary>
 public sealed record ReservationSettlementResponder(
     ReservationResponder Reservation,
     AllocationVerdict? Verdict,

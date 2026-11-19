@@ -10,7 +10,6 @@ using Carina.TestSupport;
 
 namespace Carina.Api.Tests.Feature.Epg;
 
-/// <summary>A synthetic broadcast whose guide the collector gathers, and the features that collect it.</summary>
 internal static class CollectedGuide
 {
     public const int Network = 4;

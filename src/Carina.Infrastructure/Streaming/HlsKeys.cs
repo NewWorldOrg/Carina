@@ -7,10 +7,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// Holds the keys players open the segments of a live channel or a recording with, by a digest of each so that the key
-/// itself is held nowhere, and lets go of a key and what it holds once nothing has been asked with it for a while.
-/// </summary>
 public sealed class HlsKeys(HlsSettings settings, TimeProvider clock) : IHlsKeys, IAsyncDisposable
 {
     private readonly Lock gate = new();

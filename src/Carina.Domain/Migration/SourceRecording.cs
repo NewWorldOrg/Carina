@@ -42,17 +42,10 @@ public sealed record SourceRecording
 
     public EventId? Programme { get; }
 
-    /// <summary>
-    /// The programme the recording was of, from the moment it began, or none when the source system named no service
-    /// or no programme for it.
-    /// </summary>
     public ProgrammeRef? Programmed
         => Service is { } service && Programme is { } programme
             ? new ProgrammeRef(service.Network, service.Service, programme, StartAt)
             : null;
 
-    /// <summary>
-    /// Whether the recording ends after it begins, which a recording here always does.
-    /// </summary>
     public bool LastsAnyTime => EndAt > StartAt;
 }

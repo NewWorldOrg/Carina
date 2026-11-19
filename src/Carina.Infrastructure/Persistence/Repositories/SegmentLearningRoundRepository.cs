@@ -15,10 +15,6 @@ public sealed class SegmentLearningRoundRepository(CarinaDbContext context) : IS
     public async Task<bool> TakenAsync(DateOnly day, CancellationToken cancellationToken)
         => await context.Set<SegmentLearningRound>().AsNoTracking().AnyAsync(round => round.Day == day, cancellationToken);
 
-    /// <summary>
-    /// Inserts the round unless one is kept for its day, in a single statement, so that of two takers of the same
-    /// day only one is told it took it.
-    /// </summary>
     public async Task<bool> TakeAsync(SegmentLearningRound round, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(round);
@@ -62,10 +58,6 @@ public sealed class SegmentLearningRoundRepository(CarinaDbContext context) : IS
             .OrderByDescending(round => round.Day)
             .FirstOrDefaultAsync(cancellationToken);
 
-    /// <summary>
-    /// Opens a transaction on this context's connection and takes a lock that lasts as long as it does, without
-    /// waiting for it; the context is then for holding the turn and nothing else.
-    /// </summary>
     public async Task<IAsyncDisposable?> HoldAsync(CancellationToken cancellationToken)
     {
         IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);

@@ -9,11 +9,6 @@ using Microsoft.OpenApi;
 
 namespace Carina.Api.OpenApi;
 
-/// <summary>
-/// Lists the values a request property read as text takes, so that a value outside them is refused by what is
-/// wrong with it rather than as unreadable input, and the generated client still knows the choices. The values
-/// come from where the reading takes them, spelled as the wire spells them; the property may be left out.
-/// </summary>
 public sealed class WireChoicesSchemaTransformer : IOpenApiSchemaTransformer
 {
     private static readonly Dictionary<(Type Declaring, string Property), IReadOnlyList<string>> Choices = new()

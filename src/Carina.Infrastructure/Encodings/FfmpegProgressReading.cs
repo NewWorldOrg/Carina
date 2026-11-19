@@ -4,11 +4,6 @@ using Carina.Domain.Encodings;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Reads what ffmpeg writes to <c>-progress pipe:1</c>, one line at a time, and hands back where
-/// the job has got to at the end of each block. Every value is looked up by its key, and the time
-/// done is read from <c>out_time_us</c>.
-/// </summary>
 public sealed class FfmpegProgressReading(TimeSpan? whole)
 {
     public const string ReachedKey = "out_time_us";

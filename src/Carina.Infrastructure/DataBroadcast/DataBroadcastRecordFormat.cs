@@ -4,14 +4,6 @@ using Carina.Domain.DataBroadcast;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// How a <see cref="DataBroadcastRecord"/> is laid out on disk: a header naming the format, where the
-/// recording's clock begins, the carousel it is entered from, a byte marking whether versions were left out and
-/// whether the broadcaster asks for it to open by itself, and the count of carousels; then each carousel as its tag, its download id and its versions, each with its id, version, the
-/// moments it was first and last seen and its resources as the side channel lists them; then the count of event
-/// messages and each as the side channel carries it, closed by the tag of its stream. Every number is big-endian,
-/// and every moment is signed. A record of an earlier version keeps its event messages without the tag.
-/// </summary>
 public static class DataBroadcastRecordFormat
 {
     public const ushort FormatVersion = 3;
@@ -51,8 +43,6 @@ public static class DataBroadcastRecordFormat
         return written.ToArray();
     }
 
-    /// <exception cref="ArgumentException">A carousel holds more versions than a count of two bytes tells, or an
-    /// event message does not name the stream it came on.</exception>
     public static void Write(DataBroadcastRecord record, Stream into)
     {
         ArgumentNullException.ThrowIfNull(record);
@@ -97,11 +87,6 @@ public static class DataBroadcastRecordFormat
         }
     }
 
-    /// <summary>
-    /// Whether the head of a file is the head of a record this format wrote: its magic, a version it reads, marks
-    /// that version names, and as many bytes as a header takes. A record of the first version marks only whether
-    /// it is incomplete.
-    /// </summary>
     public static bool Heads(ReadOnlySpan<byte> head)
         => head.Length >= HeaderLength
            && head[..MagicLength].SequenceEqual(Magic)
@@ -114,9 +99,6 @@ public static class DataBroadcastRecordFormat
 
     private static bool TagsEvents(ReadOnlySpan<byte> head) => BinaryPrimitives.ReadUInt16BigEndian(head[VersionAt..]) >= FormatVersion;
 
-    /// <summary>
-    /// Reads a record back, or answers null when the bytes are not one this format wrote.
-    /// </summary>
     public static DataBroadcastRecord? Read(ReadOnlyMemory<byte> bytes)
     {
         ReadOnlySpan<byte> head = bytes.Span;
@@ -136,10 +118,6 @@ public static class DataBroadcastRecordFormat
         }
     }
 
-    /// <summary>
-    /// Finds one version in a record being read, stepping over every other version by its length without reading it,
-    /// or answers null when the bytes are not a record this format wrote or the record does not hold that version.
-    /// </summary>
     public static async Task<ModuleVersion?> FindAsync(Stream reading, ModuleVersionKey key, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(reading);
@@ -179,10 +157,6 @@ public static class DataBroadcastRecordFormat
         return null;
     }
 
-    /// <summary>
-    /// Reads a record being read without the resources of its versions, stepping over each by its length, or answers
-    /// null when the bytes are not a record this format wrote. The resources themselves are not looked at.
-    /// </summary>
     public static async Task<DataBroadcastOutline?> OutlineAsync(Stream reading, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(reading);

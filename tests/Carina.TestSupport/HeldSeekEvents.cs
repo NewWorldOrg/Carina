@@ -3,10 +3,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// The seeks held in memory, taken as the store takes them: no more than <see cref="SeekEvent.MostAnHour"/> for one
-/// recording within <see cref="SeekEvent.Within"/> before each.
-/// </summary>
 public sealed class HeldSeekEvents : ISeekEventRepository
 {
     private readonly Lock gate = new();

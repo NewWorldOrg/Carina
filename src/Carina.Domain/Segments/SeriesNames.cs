@@ -6,19 +6,6 @@ using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The series a programme belongs to and its episode, read from the programme's name alone, since the
-/// guide carries no description of a series. The marks are taken out of the name, as symbols or as
-/// their letters in square brackets; the name is folded with NFKC and cut at its first full-width
-/// space; every episode is taken out with the subtitle in brackets that follows it, and the spaces at
-/// either end; then a subtitle that ends the name, in <c>「」</c> or <c>『』</c> or after <c>▽</c>, is taken
-/// out while at least <see cref="ShortestSharedHead"/> characters stay before it, so that a programme
-/// whose name is in brackets, alone or after a word as short as <c>アニメ</c>, keeps it. An episode is
-/// written <c>#N</c>, <c>第N話</c>, <c>第N回</c>, <c>N話</c>, or <c>第</c>, a number in kanji up to ninety-nine
-/// and <c>話</c>. A season, chapter or part number is not an episode, and nor is a number that is part of
-/// the name. A series name kept by an earlier rule is read again with <see cref="Of"/> before it is
-/// compared, since the rules only ever take more out of a name.
-/// </summary>
 public static partial class SeriesNames
 {
     public const int ShortestSharedHead = 4;
@@ -33,9 +20,6 @@ public static partial class SeriesNames
 
     private static readonly char[] Ends = [' ', '\t', Cut];
 
-    /// <summary>
-    /// The series name, or null when nothing is left of the name once the marks and episodes are out.
-    /// </summary>
     public static string? Of(string programmeName)
     {
         ArgumentNullException.ThrowIfNull(programmeName);
@@ -48,9 +32,6 @@ public static partial class SeriesNames
         return series.Length is 0 ? null : series;
     }
 
-    /// <summary>
-    /// The first episode the name gives, or null when it gives none that can be counted.
-    /// </summary>
     public static int? EpisodeOf(string programmeName)
     {
         ArgumentNullException.ThrowIfNull(programmeName);
@@ -66,16 +47,8 @@ public static partial class SeriesNames
         return null;
     }
 
-    /// <summary>
-    /// Whether two series names are the very same, character for character; a name not known is the same as
-    /// none.
-    /// </summary>
     public static bool Same(string? one, string? other) => one is not null && string.Equals(one, other, StringComparison.Ordinal);
 
-    /// <summary>
-    /// Whether two series names name one series: they are the same, or the shorter, of at least
-    /// <see cref="ShortestSharedHead"/> characters, is the head of the longer.
-    /// </summary>
     public static bool Link(string? one, string? other)
     {
         if (one is null || other is null)

@@ -1,9 +1,5 @@
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// How long after the start the recordings that have ended are first looked at, how often they are
-/// looked at while none is read and while one is, and how many are looked at at once.
-/// </summary>
 public sealed record LearningBacklogSettings
 {
     public static readonly LearningBacklogSettings Default = new();

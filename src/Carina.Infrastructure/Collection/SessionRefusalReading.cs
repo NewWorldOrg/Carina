@@ -21,9 +21,6 @@ public static class SessionRefusalReading
     public static TuneFailureKind? TuneFailureIn(SessionSnapshot? session)
         => Named(session?.FailureTitle);
 
-    /// <summary>
-    /// Whether the driver ended the stream because the disk it writes to had no room left.
-    /// </summary>
     public static bool FilledTheDisk(SessionSnapshot? session)
         => session is { StopReason: SessionStopReason.RecordingFailed, FailureTitle: SessionRefusalTitles.DiskFull };
 

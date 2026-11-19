@@ -36,11 +36,6 @@ public sealed record ProgrammeBroadcast(
 
     public static readonly TimeSpan FurthestAhead = TimeSpan.FromDays(10);
 
-    /// <summary>
-    /// A programme as one table of the guide announced it. With no name and a shared event it is a shadow; its
-    /// related programmes are the events of its groups other than itself; and how it is running is believed only from
-    /// the present and following table.
-    /// </summary>
     public static ProgrammeBroadcast Announced(
         ProgrammeId id,
         TransportStreamId transportStreamId,
@@ -71,10 +66,6 @@ public sealed record ProgrammeBroadcast(
         };
     }
 
-    /// <summary>
-    /// Joins two tables of one visit that announced this programme, this one read first. The one that names it is
-    /// the base, a value it lacks is taken from the other, and it is a shadow only when both said so.
-    /// </summary>
     public ProgrammeBroadcast MergedWith(ProgrammeBroadcast arriving)
     {
         ArgumentNullException.ThrowIfNull(arriving);

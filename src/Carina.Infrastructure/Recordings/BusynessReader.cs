@@ -4,11 +4,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Infrastructure.Recordings;
 
-/// <summary>
-/// Reads whether any recording is being written, whether anybody is watching through a transcoder, and the
-/// earliest start, margin included, of the reservations still to be recorded that reach the next
-/// <see cref="Idleness.NoReservationWithin"/>.
-/// </summary>
 public sealed class BusynessReader(
     IRecordingRepository recordings,
     IReservationRepository reservations,
