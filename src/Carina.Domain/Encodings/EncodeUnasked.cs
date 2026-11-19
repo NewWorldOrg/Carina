@@ -11,11 +11,6 @@ public enum EncodeUnaskedStanding
     TheProfileIsNotOffered = 4,
 }
 
-/// <summary>
-/// Where an artefact goes and what shape it takes when nobody said. A machine with one destination
-/// offered uses it, with the profile it names unless another is asked for; a machine with several
-/// makes no choice and says why. The standing says what is missing when nothing is queued.
-/// </summary>
 public sealed record EncodeUnasked
 {
     private EncodeUnasked(EncodeDestination? destination, EncodeProfile? profile, EncodeUnaskedStanding standing)

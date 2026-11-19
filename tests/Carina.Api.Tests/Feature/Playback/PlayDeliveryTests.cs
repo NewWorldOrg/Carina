@@ -2151,9 +2151,6 @@ public sealed class PlayDeliveryTests
     private static EncodeTimeline Skipped(double head)
         => new(TimeSpan.FromSeconds(1.4), TimeSpan.FromSeconds(head), TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30) - TimeSpan.FromSeconds(head));
 
-    /// <summary>
-    /// Keeps a detection of the recording by the version in use with a pod of adverts five minutes in.
-    /// </summary>
     private static async Task APodAsync(PlayFeature feature, Recording recording)
     {
         SegmentSpan[] segments =

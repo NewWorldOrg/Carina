@@ -31,15 +31,8 @@ public sealed record RecordingWatch(
         => Broken > 0 || Resumed > 0 || Settled > 0 || Collisions > 0 || LeftOpen > 0 || StoodDown > 0
            || OutOfTouch > 0;
 
-    /// <summary>
-    /// Whether any recording broke, resumed or settled on this pass.
-    /// </summary>
     public bool AnythingMoved => Broken > 0 || Resumed > 0 || Settled > 0;
 
-    /// <summary>
-    /// Whether a recording still being written wrote more, or counted or placed its losses differently,
-    /// on this pass.
-    /// </summary>
     public bool CountsMoved => Advanced > 0;
 }
 
@@ -468,10 +461,6 @@ public sealed class RecordingStreamSupervisor(
         }
     }
 
-    /// <summary>
-    /// Marks a recording that is over and whose session the driver does not know, the same way
-    /// recovery marks what it finds.
-    /// </summary>
     private async Task MarkWhatWasLeftBehindAsync(
         Recording recording,
         DateTime now,
@@ -594,9 +583,6 @@ public sealed class RecordingStreamSupervisor(
         return tuning.Typed();
     }
 
-    /// <summary>
-    /// Names the rate a recording's weight is judged against, or nothing when the catalogue cannot say yet.
-    /// </summary>
     private async Task<ExpectedBitrate?> RateOfAsync(Recording recording, CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
@@ -683,10 +669,6 @@ public sealed class RecordingStreamSupervisor(
                 : RecordingFault.TuneFailed,
         };
 
-    /// <summary>
-    /// The stretch a session that carried on into a file that already held something left out: from the last write
-    /// before it opened the file to its own first write.
-    /// </summary>
     private static RecordingGap? GapBefore(SessionSnapshot session)
         => session.AppendedAfter is { } after
            && session.FirstWrittenAt is { } first

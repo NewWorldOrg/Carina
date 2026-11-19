@@ -9,11 +9,6 @@ public sealed class SegmentModelVersionRepository(CarinaDbContext context) : ISe
 {
     public const long WriterLock = 5_243_197_610_103;
 
-    /// <summary>
-    /// The highest number given, 0 while none has been: of the versions kept, and of what the rounds of learning, the
-    /// detections, the viewers' skips and the chapters of an encode remember, which outlasts a version let go or a
-    /// table emptied.
-    /// </summary>
     private const string HighestGivenSql =
         """
         SELECT coalesce(greatest(
@@ -116,11 +111,6 @@ public sealed class SegmentModelVersionRepository(CarinaDbContext context) : ISe
         return named.ToHashSet();
     }
 
-    /// <summary>
-    /// Deletes, in one statement under the writers' lock, the versions named that are still candidates learning made
-    /// that nobody put in use or chose and that nothing names, the statement holding again what
-    /// <see cref="SegmentModelVersion.IsLetGoBefore"/> says of them for a change made since the domain read them.
-    /// </summary>
     public async Task<IReadOnlyList<int>> LetGoAsync(IReadOnlyCollection<int> numbers, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(numbers);

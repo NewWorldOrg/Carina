@@ -8,11 +8,6 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Carina.Infrastructure.Persistence.Configurations;
 
-/// <summary>
-/// The shapes the segment tables keep in jsonb: the parameters of a version of the model, the figures of its
-/// evaluation and what a rollback from it measured, the stretches of a detection and its boundary candidates,
-/// seconds written as numbers to <see cref="SecondDigits"/> places and kinds by their names.
-/// </summary>
 internal static class SegmentJson
 {
     public const int SecondDigits = 2;
@@ -164,9 +159,6 @@ internal static class SegmentJson
 
     private sealed record StationShape(int NetworkId, int ServiceId, int Recordings, MetricsShape Metrics);
 
-    /// <summary>
-    /// What an evaluation stands on, as kept; one kept before the openings and endings were counted holds none.
-    /// </summary>
     private sealed record EvidenceShape(int Recordings, int Boundaries, DateTime? LabelsUntil, int Openings = 0, int Endings = 0);
 
     private sealed record RollbackShape(double ReturnedAfterSkipShare, double PreviousShare, int Skips, int BackTo);

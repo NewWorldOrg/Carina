@@ -2,10 +2,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.Domain.Tests.Unit.Segments;
 
-/// <summary>
-/// Synthetic programmes for matching: a stretch of random tones of its own, with pieces of sound
-/// shared with other programmes laid over it at chosen seconds.
-/// </summary>
 internal static class SoundScenes
 {
     public const int SampleRate = SoundReader.SampleRate;

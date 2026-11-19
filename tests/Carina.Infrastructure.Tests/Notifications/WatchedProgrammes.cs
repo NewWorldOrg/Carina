@@ -11,10 +11,6 @@ using EventId = Carina.Domain.Programmes.EventId;
 
 namespace Carina.Infrastructure.Tests.Notifications;
 
-/// <summary>
-/// Writes what the guide says of a made-up programme and the row asking to be told of it into the scratch
-/// database, and looks at the rows as the loop does.
-/// </summary>
 internal sealed class WatchedProgrammes(RepositoryDatabase database)
 {
     public const string ProgrammeName = "A made-up programme";

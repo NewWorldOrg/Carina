@@ -5,10 +5,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Rules;
 
-/// <summary>
-/// Decides which reservations the rules take back: after a pass of the rules, when a rule is switched off, when it is
-/// deleted, and in the rehearsal of a rule not yet saved.
-/// </summary>
 public sealed class RuleWithdrawalDomainService(
     IReservationRepository reservations,
     IBroadcastStreamDirectory directory,
@@ -16,10 +12,6 @@ public sealed class RuleWithdrawalDomainService(
     ICollectionEpochRepository epochs,
     TimeProvider clock)
 {
-    /// <summary>
-    /// Reads which stream carries each service and how each stream's guide was last read. A reading finished no later
-    /// than the guide was last thrown away does not count as read.
-    /// </summary>
     public async Task<RuleWithdrawalGuard> GuardAsync(TimeSpan grace, CancellationToken cancellationToken)
     {
         Dictionary<(int NetworkId, int ServiceId), int> carriers = [];
@@ -49,12 +41,6 @@ public sealed class RuleWithdrawalDomainService(
         return new RuleWithdrawalGuard(carriers, settled, grace);
     }
 
-    /// <summary>
-    /// The reservations a pass of the rules takes back. A reservation of a rule that failed to match is left alone; one
-    /// of a rule still standing stays while the rule takes its broadcast, while a pass that read only what arrived did
-    /// not read its listing, and while another segment of its relayed broadcast is being recorded, has been recorded
-    /// or is still taken.
-    /// </summary>
     public async Task<IReadOnlyList<Reservation>> LeavingAsync(
         RulePassReading pass,
         RuleWithdrawalGuard guard,
@@ -81,9 +67,6 @@ public sealed class RuleWithdrawalDomainService(
         return leaving;
     }
 
-    /// <summary>
-    /// The reservations a rule being switched off takes back.
-    /// </summary>
     public async Task<IReadOnlyList<Reservation>> SwitchedOffAsync(
         RuleId rule,
         RuleWithdrawalGuard guard,
@@ -100,10 +83,6 @@ public sealed class RuleWithdrawalDomainService(
         ];
     }
 
-    /// <summary>
-    /// The reservations a rule being deleted takes back, and those it leaves standing without it: a reservation being
-    /// recorded, cancelled or missed is kept.
-    /// </summary>
     public async Task<RuleRetiring> RetiringAsync(
         RuleId rule,
         RuleWithdrawalGuard guard,
@@ -120,10 +99,6 @@ public sealed class RuleWithdrawalDomainService(
             [.. standing.Where(reservation => !guard.Lets(reservation, RuleWithdrawal.WhenTheRuleIsDeleted, at))]);
     }
 
-    /// <summary>
-    /// What a rule not yet saved would take back of the reservations it already holds: while it stands, those whose
-    /// broadcast it no longer takes; if deleted, every one it may.
-    /// </summary>
     public async Task<RuleWithdrawalRehearsal> RehearseAsync(
         RuleId draft,
         IReadOnlyList<ListingKey> taken,
@@ -147,10 +122,6 @@ public sealed class RuleWithdrawalDomainService(
             [.. held.Where(reservation => guard.Lets(reservation, RuleWithdrawal.WhenTheRuleIsDeleted, at))]);
     }
 
-    /// <summary>
-    /// Names the reservations that stand for the listings taken: the one naming a listing's start, or, when none does,
-    /// those of the same broadcast, so a reservation whose start moved still counts as taken.
-    /// </summary>
     public static HashSet<ListingKey> StandingFor(IEnumerable<ListingKey> taken, IEnumerable<Reservation> held)
     {
         ArgumentNullException.ThrowIfNull(taken);
@@ -213,10 +184,6 @@ public sealed class RuleWithdrawalDomainService(
         return !holds || !await ContinuesARelayAsync(reservation, kept, cancellationToken);
     }
 
-    /// <summary>
-    /// Whether this reservation is a segment of a relayed broadcast another segment of which is being recorded, has
-    /// been recorded, or is still taken by a rule.
-    /// </summary>
     private async Task<bool> ContinuesARelayAsync(
         Reservation reservation,
         HashSet<ListingKey> kept,

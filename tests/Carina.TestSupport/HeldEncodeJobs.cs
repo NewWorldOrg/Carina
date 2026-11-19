@@ -4,9 +4,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// The encode job ledger held in memory, holding one owner per artefact name under an output root.
-/// </summary>
 public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
 {
     public List<EncodeJob> Jobs { get; } = [];
@@ -19,15 +16,8 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
 
     public Func<EncodeJob, bool>? WhenWritingTheEnding { get; set; }
 
-    /// <summary>
-    /// Whether a claim hands out a copy of the row, so that what is done to the job handed out reaches the ledger
-    /// only when it is written back.
-    /// </summary>
     public bool KeepsItsOwnRows { get; set; }
 
-    /// <summary>
-    /// The copy the last claim handed out while <see cref="KeepsItsOwnRows"/> was set.
-    /// </summary>
     public EncodeJob? HandedOut { get; private set; }
 
     public Task<EncodeJob?> FindAsync(EncodeJobId id, CancellationToken cancellationToken)

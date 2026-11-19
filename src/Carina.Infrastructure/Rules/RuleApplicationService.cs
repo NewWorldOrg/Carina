@@ -202,10 +202,6 @@ public sealed class RuleApplicationService(
         return leaving;
     }
 
-    /// <summary>
-    /// Runs <paramref name="writing"/>, and runs it once more when a reservation it wrote had changed
-    /// in the store since it was read.
-    /// </summary>
     private static async Task<T> OnceMoreIfMovedAsync<T>(Func<Task<T>> writing)
     {
         try
@@ -311,11 +307,6 @@ public sealed class RuleApplicationService(
         return new Making(made, refused, revived);
     }
 
-    /// <summary>
-    /// Brings back the cancelled reservation already standing on the key of a broadcast a rule takes
-    /// again. Only a reservation a rule made and the guide took out comes back; one a person cancelled
-    /// does not.
-    /// </summary>
     private async Task<bool> RevivedAsync(
         Reservation already,
         DateTime at,
@@ -434,10 +425,6 @@ public sealed class RuleApplicationService(
             at,
             match.Rule.EncodeWhenRecorded);
 
-    /// <summary>
-    /// The programmes read, together with every programme in the guide that shares a relayed or moved
-    /// broadcast with one of them, or carries the same broadcast on another service at the same time.
-    /// </summary>
     private static IReadOnlyList<Programme> Alongside(IReadOnlyList<Programme> read, BroadcastGroupResolver groups)
     {
         HashSet<ProgrammeId> held = [.. read.Select(programme => programme.Id)];

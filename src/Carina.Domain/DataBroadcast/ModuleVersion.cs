@@ -1,9 +1,5 @@
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// One version of one module of a carousel as it was put together, with when it was first and last seen on
-/// the <see cref="StreamClock"/>, never a raw PTS.
-/// </summary>
 public sealed record ModuleVersion
 {
     public const int HeaderBytes = sizeof(ushort) + sizeof(byte) + sizeof(ulong) + sizeof(ulong) + sizeof(uint);
@@ -46,9 +42,6 @@ public sealed record ModuleVersion
 
     public IReadOnlyList<CarouselResource> Resources { get; }
 
-    /// <summary>
-    /// The bytes it takes in a record: its module id, version, sightings and length, and each resource.
-    /// </summary>
     public long Bytes => HeaderBytes + Resources.Sum(resource => resource.Bytes);
 
     public ModuleVersion SeenAt(long at) => at <= LastSeen ? this : this with { LastSeen = at };

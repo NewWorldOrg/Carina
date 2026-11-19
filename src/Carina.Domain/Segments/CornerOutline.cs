@@ -2,14 +2,6 @@ using Carina.Domain.Encodings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The outline in the four corners of a picture looked in for a station's watermark, the corners
-/// and the edges <see cref="WatermarkFrame"/> names, shrunk to blocks of <see cref="Block"/> by
-/// <see cref="Block"/> pixels: a block is on when at least <see cref="EdgesInABlock"/> of its pixels
-/// are an edge. A corner is <see cref="Columns"/> by <see cref="Rows"/> blocks from its top left,
-/// the last row shorter. The corners follow one another top left, top right, bottom left, bottom
-/// right, each row after row, one bit a block, the lowest bit of a byte first.
-/// </summary>
 public static class CornerOutline
 {
     public const int Block = 4;

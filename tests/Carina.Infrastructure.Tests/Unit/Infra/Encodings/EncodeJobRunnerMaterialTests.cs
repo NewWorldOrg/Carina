@@ -21,12 +21,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Encodings;
 
-/// <summary>
-/// Runs a job through the ffmpeg the application runs, against a synthetic broadcast, and reads the
-/// artefact back off the file: where it is placed and how long it is, that its captions keep their time
-/// once the job's caption shift is taken off them, that it carries the chapters of a detection, and that
-/// captions taken before the run go in as one Japanese text track, off by default.
-/// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
 public sealed class EncodeJobRunnerMaterialTests
@@ -545,10 +539,6 @@ public sealed class EncodeJobRunnerMaterialTests
         return said.Said;
     }
 
-    /// <summary>
-    /// A source whose first picture is declared to lie a fixed way into it. Where the source's clock
-    /// begins is still read off the file itself.
-    /// </summary>
     private sealed class AHeadOfItsOwn(ISourceHeadReader read, TimeSpan skip) : ISourceHeadReader
     {
         public async Task<SourceHeadReading> ReadAsync(string source, ServiceId service, CancellationToken cancellationToken)

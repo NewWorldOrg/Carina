@@ -12,32 +12,15 @@ public interface IAnnouncedProgrammes
 {
     Task<Programme?> FindAsync(ProgrammeId id, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// When this service's announced schedule was last heard whole, read from the mark the reading left
-    /// on the programmes it named. A programme of that service carrying an older mark was not in that
-    /// reading. Null when no reading has ever heard this service whole.
-    /// </summary>
     Task<DateTime?> HeardWholeAtAsync(int networkId, int serviceId, CancellationToken cancellationToken);
 }
 
 public interface IProgrammeRepository : IAnnouncedProgrammes
 {
-    /// <summary>
-    /// Finds a programme as the guide shows it, so one a programme heard later has superseded is not found
-    /// (see <see cref="ProgrammeSupersession"/>).
-    /// </summary>
     Task<Programme?> FindUnlessSupersededAsync(ProgrammeId id, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Lists the service's programmes that touch the window, leaving out those a programme heard later has
-    /// superseded.
-    /// </summary>
     Task<IReadOnlyList<Programme>> ListAsync(ProgrammeWindow window, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Lists the programmes the guide shows for these services in the window: placeholders and the programmes
-    /// a programme heard later has superseded are left out.
-    /// </summary>
     Task<IReadOnlyList<Programme>> ListForServicesAsync(
         IReadOnlyList<ProgrammeService> services,
         DateTime from,
@@ -52,11 +35,6 @@ public interface IProgrammeRepository : IAnnouncedProgrammes
         DateTime at,
         CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Lists the programmes that ended before <paramref name="at"/> with the time each ended,
-    /// earliest end first. A programme with no end ends where the next programme on its service
-    /// begins, and has not ended while nothing begins after it.
-    /// </summary>
     Task<IReadOnlyList<EndedProgramme>> ListEndedBeforeAsync(
         DateTime at,
         int rows,
@@ -64,10 +42,6 @@ public interface IProgrammeRepository : IAnnouncedProgrammes
 
     Task<int> ForgetAsync(IReadOnlyList<Programme> programmes, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Returns the latest time the service's programmes reach, placeholders aside: the latest end,
-    /// or the start of a programme whose end is not yet decided.
-    /// </summary>
     Task<DateTime?> CoveredUntilAsync(int networkId, int serviceId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Programme>> ListAfterAsync(
@@ -77,11 +51,5 @@ public interface IProgrammeRepository : IAnnouncedProgrammes
 
     Task<int> ForgetEverythingAsync(CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Lists the programmes that carry a relayed or moved link, together with the programmes those
-    /// links name, as far as the guide holds them, and the named programmes another service carries as
-    /// the same broadcast at the same time: joined by event sharing, or under the same name on the same
-    /// transport stream from the same start to the same end.
-    /// </summary>
     Task<IReadOnlyList<Programme>> ListGroupedAsync(CancellationToken cancellationToken);
 }

@@ -4,21 +4,12 @@ using Puppis.Contracts;
 
 namespace Carina.Domain.Channels;
 
-/// <summary>
-/// A channel added to a service by hand, or why it is not: the service holds it already, the driver could not be asked
-/// which tuners it holds, or none of them in service is of the kind that receives it, with the kind needed and the kinds
-/// in service.
-/// </summary>
 public sealed record CandidateChannelAdmission(
     CandidateChannel? Added,
     CandidateChannelRefusal? Refusal,
     TunerKind Needed,
     IReadOnlyList<TunerKind> InService);
 
-/// <summary>
-/// Decides whether a channel may be added to a service as another candidate, looking up the candidates the service
-/// holds and the tuners the driver holds.
-/// </summary>
 public sealed class CandidateChannelDomainService(
     ICandidateChannelRepository candidates,
     IDriverClient driver,

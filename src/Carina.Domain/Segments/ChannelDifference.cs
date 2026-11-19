@@ -1,11 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// How the left and right channels differ over every <see cref="Hop"/> samples: how alike they are,
-/// their correlation from -1 to 1 in steps of one hundredth, and how loud half their difference is,
-/// in the steps of <see cref="SoundLoudness"/>. The correlation is <see cref="Unmeasured"/> when
-/// either channel is silent.
-/// </summary>
 public readonly record struct ChannelDifference(byte Correlation, byte Difference)
 {
     public const int Hop = 800;

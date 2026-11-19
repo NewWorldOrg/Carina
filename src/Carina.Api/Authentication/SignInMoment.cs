@@ -1,6 +1,5 @@
 namespace Carina.Api.Authentication;
 
-/// <summary>The things that happen at the gate and at the ways in, each worth one line.</summary>
 public enum SignInMoment
 {
     RefusedWithoutASessionCookie = 1,

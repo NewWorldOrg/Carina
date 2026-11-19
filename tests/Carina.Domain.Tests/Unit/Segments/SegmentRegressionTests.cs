@@ -429,10 +429,6 @@ public sealed class SegmentRegressionTests
     private static SegmentSample[] Mixed()
         => [.. Enumerable.Range(0, 40).Select(at => Sample((SegmentKind)(1 + (at % 4)), 0.2 + (at % 4 * 0.2), 5 + (at * 7 % 90), at % 7 / 7.0, at % 2 is 0 ? Station : OtherStation, at % 3 is 1 ? "架空の物語" : null))];
 
-    /// <summary>
-    /// The programme, now and then in the window an opening starts in or as long as a theme, adverts on the grid,
-    /// and four openings in the window and as long as a theme.
-    /// </summary>
     private static SegmentSample[] FewOpenings()
         =>
         [
@@ -441,11 +437,6 @@ public sealed class SegmentRegressionTests
             .. Enumerable.Range(0, 4).Select(_ => Themed(SegmentKind.Opening, 0.8, 1, 1, 0)),
         ];
 
-    /// <summary>
-    /// Hundreds of label weight of each kind, as a break is labelled over a round, drawn from the same rule in a different
-    /// order for each <paramref name="draw"/>: an opening mostly in the window and as long as a theme, an advert mostly on
-    /// the grid, the programme mostly neither.
-    /// </summary>
     private static SegmentSample[] ManyOpenings(int draw)
         =>
         [
@@ -465,9 +456,6 @@ public sealed class SegmentRegressionTests
             [SegmentFeature.IsShortMultipleOf15s] = grid,
         });
 
-    /// <summary>
-    /// How much the score of <paramref name="kind"/> moves for a feature moved by one, as it stands before it is standardised.
-    /// </summary>
     private static double Slope(SegmentModel model, SegmentKind kind, string feature)
         => model.Weights.Classes[kind].Features[feature] / model.Standardisation[feature].Sd;
 

@@ -2,13 +2,6 @@ using System.Net;
 
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// The addresses a Hybridcast application may be relayed to. A managed address takes in its own host and every
-/// host under it, on its own scheme and port, and where it names a path, that path and what is under it. A pair
-/// that names no address would take in every address; the relay narrows that to the host of the entry alone, so an
-/// application whose AIT leaves its boundary open reaches nothing beyond the server it was entered from. A WebSocket
-/// address is judged as the http or https address it upgrades from.
-/// </summary>
 public sealed class HybridcastBoundary
 {
     private readonly IReadOnlyList<Uri> managed;

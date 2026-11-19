@@ -15,11 +15,6 @@ public sealed record ReservationOutcomeProgrammeResponder(
     DateTime StartsAt,
     string Name);
 
-/// <summary>
-/// One line of the ledger, as the ledger wrote it. <c>TuneFailure</c>, <c>RecordingOutcome</c>,
-/// <c>RetryResult</c>, <c>GaveUpBecause</c> and <c>DescrambledAt</c> are null whenever the ledger holds
-/// nothing there.
-/// </summary>
 public sealed record ReservationOutcomeResponder(
     Guid Id,
     Guid ReservationId,

@@ -1,11 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Neighbouring segments read as one, from the start of the segment at <see cref="First"/> to the end of the one at
-/// <see cref="Last"/>, and the kinds it may be taken for (<see cref="SegmentFeatures"/>): what lies inside an advert or
-/// an opening or an ending, such as the logo coming and going or a pause in a song, cuts it into segments that say
-/// little of it one by one.
-/// </summary>
 public sealed record JoinedPiece
 {
     public JoinedPiece(int first, int last, SegmentPiece piece, IReadOnlyList<SegmentKind> kinds)

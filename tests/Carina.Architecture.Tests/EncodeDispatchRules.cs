@@ -2,13 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace Carina.Architecture.Tests;
 
-/// <summary>
-/// Reads the encode feature for a job moved to running anywhere but by the ledger's conditional
-/// update, a file moved or copied into place anywhere but by the placer, and a programme started
-/// anywhere but by the one run that hands the ledger the programme's identity before reading from
-/// it. The feature is its folders plus any file named for it, wherever it sits. It reads source
-/// text, so it sees the ordinary spellings and no others.
-/// </summary>
 public static partial class EncodeDispatchRules
 {
     public const string FeatureFolder = "/Encodings/";

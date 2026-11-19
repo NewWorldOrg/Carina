@@ -15,12 +15,6 @@ public enum QualityLevel
     MayNotBeWatchable = 4,
 }
 
-/// <summary>
-/// One recording read against the levels the quality domain keeps. What was lost and what was left scrambled are
-/// judged apart; the scrambling is answered on its own, and the recording as a whole stands at the worse of the two.
-/// A counted recording with a gap in it stands at least at the warning level. A recording descrambled since it
-/// ended is read without the packets that were left scrambled while it was received.
-/// </summary>
 public sealed record RecordingQuality
 {
     private RecordingQuality(QualityLevel overall, QualityLevel scrambled)
@@ -33,9 +27,6 @@ public sealed record RecordingQuality
 
     public QualityLevel Scrambled { get; }
 
-    /// <summary>
-    /// The recording as it stands now: one descrambled since it ended reads good on scrambling.
-    /// </summary>
     public static RecordingQuality Of(Recording recording, QualityBands bands)
     {
         ArgumentNullException.ThrowIfNull(recording);
@@ -48,9 +39,6 @@ public sealed record RecordingQuality
             recording.DescrambledAt is not null);
     }
 
-    /// <summary>
-    /// What was counted while the recording was received, whatever has been done to its file since.
-    /// </summary>
     public static RecordingQuality Of(DropCounters counters, long? scrambledPackets, long missedMs, QualityBands bands)
         => Read(counters, scrambledPackets, missedMs, bands, descrambled: false);
 
@@ -89,11 +77,6 @@ public sealed record RecordingQuality
             scrambled);
     }
 
-    /// <summary>
-    /// The recordings that lost no packet out of at least one counted, whose packets left scrambled stay under the
-    /// warning level or that have been descrambled since, and that have no gap in them, as a condition a store can
-    /// search by.
-    /// </summary>
     public static Expression<Func<Recording, bool>> CountedClean(QualityBands bands)
     {
         ArgumentNullException.ThrowIfNull(bands);

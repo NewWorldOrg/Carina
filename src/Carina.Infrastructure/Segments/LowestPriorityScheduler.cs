@@ -3,12 +3,6 @@ using System.Runtime.InteropServices;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// Runs work one piece at a time on a thread of its own, at the lowest priority the thread can be given: the
-/// lowest the runtime names, and on Linux, where the runtime leaves the thread as it is, the highest nice
-/// value a thread may take for itself. <see cref="Lowered"/> says which nice value the thread took, or null
-/// when it could take none, and <see cref="Ran"/> how many pieces of work it has run.
-/// </summary>
 public sealed class LowestPriorityScheduler : TaskScheduler, IDisposable
 {
     public const int LowestNice = 19;

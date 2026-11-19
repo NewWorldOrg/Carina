@@ -1,8 +1,5 @@
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// One module as a carousel's download info lists it: its id, version and size before it is inflated.
-/// </summary>
 public sealed record ListedModule
 {
     public ListedModule(int id, int version, long size)

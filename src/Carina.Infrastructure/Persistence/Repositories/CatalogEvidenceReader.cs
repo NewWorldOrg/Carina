@@ -5,11 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// Reads the stretches of the adverts the catalog is sure of, each beside what its entry is and the length of
-/// learning data read from its recording, without the fingerprints, and the loudness and the light of the frames of
-/// each such recording, one recording at a time, and counts what the catalog is sure of in each recording in the domain.
-/// </summary>
 public sealed class CatalogEvidenceReader(CarinaDbContext context) : ICatalogEvidenceReader
 {
     private static readonly LearningDataKind[] Seams = [LearningDataKind.Loudness, LearningDataKind.FrameLights];

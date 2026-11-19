@@ -12,27 +12,11 @@ using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// What one look at the recordings being written did: how many records it put back after a start, how many
-/// follows it began, and how many follows were running when it was done.
-/// </summary>
 public sealed record LearningLook(int Recovered, int Began, int Following)
 {
     public bool SaysAnything => Recovered > 0 || Began > 0;
 }
 
-/// <summary>
-/// Follows every recording being written under an output root this process can read, one follow
-/// each, for its learning data. It looks after <see cref="LearningFollowSettings.BeforeFirstLook"/>,
-/// then every <see cref="LearningFollowSettings.BetweenLooks"/> and whenever the driver tells of a
-/// recording's progress. The first look puts back the records a follow left running when the process
-/// last stopped: a recording still being written is followed again from its head, and one that has
-/// ended or gone waits to be read. A recording being written whose file is there is followed from its
-/// head, its record made following, one left waiting included, and a follow is told when its recording
-/// ends or goes. A follow that comes to its end, rather than being stopped, is told to the matching against
-/// the catalog (<see cref="FollowedToTheEnd"/>). Stopping the process stops every follow and leaves its
-/// record for the next start.
-/// </summary>
 public sealed class LearningFollowJob(
     IServiceScopeFactory scopes,
     ILearningFollower follower,

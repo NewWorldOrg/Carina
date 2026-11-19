@@ -3,10 +3,6 @@ using System.Text.Json;
 
 namespace Carina.Api.Tests.Feature.Notifications;
 
-/// <summary>
-/// The checks every endpoint of the notifications passes through: a caller who has not signed in, a write from
-/// no origin or another one, a write that carries a form, and a read from another origin.
-/// </summary>
 internal static class NotificationGuard
 {
     public const string OneDestination = "/api/notifications/destinations/00000000-0000-0000-0000-000000000001";

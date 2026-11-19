@@ -2,12 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace Carina.Architecture.Tests;
 
-/// <summary>
-/// Reads the encode feature for anything that shortens what it writes: the durations and frame
-/// counts that stop a run early, the filters that keep part of a stream, and the muxer that writes a
-/// file per stretch. The feature is its folders plus any file named for it, wherever it sits. It
-/// reads source text, so it sees the ordinary spellings and no others.
-/// </summary>
 public static partial class EncodeCutRules
 {
     public const string FeatureFolder = "/Encodings/";

@@ -8,12 +8,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// Talks to a broadcaster's server for a document shown on a live channel, over the <see cref="RelayLine"/> that
-/// connects to public addresses only and never to this installation. Redirects are followed on the same host only. Each exchange is written to the
-/// log by its channel, host, path, method, result, status, sizes and time, never by its query, its bodies or a
-/// cookie, and nothing is retried.
-/// </summary>
 public sealed class BroadcasterRelay : IBroadcasterRelay, IDisposable
 {
     public const string FormMediaType = "application/x-www-form-urlencoded";

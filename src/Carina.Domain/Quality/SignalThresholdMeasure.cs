@@ -2,9 +2,6 @@ using Puppis.Contracts;
 
 namespace Carina.Domain.Quality;
 
-/// <summary>
-/// One finished session that counted its packets, with what its locked samples usually read.
-/// </summary>
 public sealed record SessionSignal(
     string DriverInstanceId,
     DateTime StartedAt,
@@ -31,9 +28,6 @@ public static class SignalThresholdMeasure
 
     public static readonly TimeSpan AroundADriverStart = TimeSpan.FromMinutes(10);
 
-    /// <summary>
-    /// Reads each finished session that counted its packets at what its locked samples usually read.
-    /// </summary>
     public static IReadOnlyList<SessionSignal> Read(
         IReadOnlyList<QualitySessionMeasurement> sessions,
         IReadOnlyList<QualitySignalSample> samples)
@@ -54,11 +48,6 @@ public static class SignalThresholdMeasure
         ];
     }
 
-    /// <summary>
-    /// Leaves out the sessions whose drops say nothing of the signal: those the driver overflowed in, those that
-    /// counted no packet, those begun just after a driver started and those that ran into the end of a driver
-    /// another one replaced.
-    /// </summary>
     public static IReadOnlyList<SessionSignal> Considered(IReadOnlyList<SessionSignal> sessions)
     {
         ArgumentNullException.ThrowIfNull(sessions);
@@ -81,10 +70,6 @@ public static class SignalThresholdMeasure
         ];
     }
 
-    /// <summary>
-    /// The level that best tells the sessions that dropped from the ones that did not, or null when there are too
-    /// few of either or the level leaves more than a fifth of either side on the wrong side.
-    /// </summary>
     public static QualityThresholdMeasurement? Measure(
         QualityThresholdKey key,
         IReadOnlyList<SessionSignal> sessions,

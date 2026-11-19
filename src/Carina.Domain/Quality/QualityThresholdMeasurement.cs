@@ -2,10 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Quality;
 
-/// <summary>
-/// A level measured from the sessions that dropped packets and the ones that did not, with how many of each it
-/// stood on and the span they were taken over.
-/// </summary>
 public sealed record QualityThresholdMeasurement
 {
     private QualityThresholdMeasurement(

@@ -8,9 +8,6 @@ public sealed class EncodeJob
 {
     public const int FirstAttempt = 1;
 
-    /// <summary>
-    /// How many times in a row a text track of captions is tried from the same captions before it is left.
-    /// </summary>
     public const int CaptionTrackTriesAtMost = 3;
 
     private EncodeJob()
@@ -41,22 +38,10 @@ public sealed class EncodeJob
 
     public EncodeFileName? ArtefactName { get; private set; }
 
-    /// <summary>
-    /// Whether a person asked for the artefact of this recording and profile to be made again. It is
-    /// settled when the job is queued.
-    /// </summary>
     public bool MakesItAgain { get; private set; }
 
-    /// <summary>
-    /// When this job let go of the name it holds: to a job asked to make the artefact again, or by ending
-    /// without completing. The name is still written here.
-    /// </summary>
     public DateTime? NameGivenUpAt { get; private set; }
 
-    /// <summary>
-    /// When a newer artefact of the same recording was made and this job's artefact stopped being the
-    /// recording's one. Nothing while this job's artefact is the recording's one, or when it made none.
-    /// </summary>
     public DateTime? ReplacedAt { get; private set; }
 
     public EncodeRoute? Route { get; private set; }
@@ -69,58 +54,28 @@ public sealed class EncodeJob
 
     public ChapterReading? Chapters { get; private set; }
 
-    /// <summary>
-    /// What became of the text track of captions for this job's artefact, or nothing while none was tried.
-    /// </summary>
     public EncodeCaptionTrack? CaptionTrack { get; private set; }
 
-    /// <summary>
-    /// When the captions the track was tried from were taken: the moment the recording says its captions were
-    /// made. Nothing while no track was tried.
-    /// </summary>
     public DateTime? CaptionTrackFrom { get; private set; }
 
-    /// <summary>
-    /// How many times in a row the track from those captions failed.
-    /// </summary>
     public int CaptionTrackAttempts { get; private set; }
 
-    /// <summary>
-    /// Why this attempt made its artefact a second time, and once it has, what it kept. Nothing while it made it
-    /// once.
-    /// </summary>
     public EncodeRemake? Remade { get; private set; }
 
     public bool HasEnded => EncodeStandings.IsTerminal(Status);
 
-    /// <summary>
-    /// Whether this job completed and what it made has not been replaced by a newer artefact.
-    /// </summary>
     public bool StandsAsTheArtefact => Status is EncodeJobStatus.Completed && ArtefactName is not null && ReplacedAt is null;
 
     public EncodeStanding Standing => EncodeStandings.Of(Status);
 
-    /// <summary>
-    /// Whether the job claims the artefact it makes: while it is still in hand, and once it has completed while its
-    /// artefact stands for a recording the ledger still holds. The query the integrity check reads in the store says the
-    /// same.
-    /// </summary>
     public bool ClaimsItsArtefact(bool recordingHeld) => !HasEnded || (StandsAsTheArtefact && recordingHeld);
 
-    /// <summary>
-    /// The artefact this job makes: the name it holds once it has named one, and before that the name
-    /// it will be held to.
-    /// </summary>
     public EncodeFileName ArtefactItMakes => ArtefactName ?? EncodeFileName.Artefact(RecordingId, ProfileId);
 
     public EncodeFileName WorkFileName => EncodeFileName.Working(RecordingId, Id, Attempt);
 
     public EncodeFileName RemadeFileName => EncodeFileName.Remade(RecordingId, Id, Attempt);
 
-    /// <summary>
-    /// The work file this attempt keeps: the second it wrote when it made its artefact again and kept that, and
-    /// the first otherwise.
-    /// </summary>
     public EncodeFileName KeptWorkFileName
         => Remade is null or EncodeRemake.NoSmallerTheSecondTime ? WorkFileName : RemadeFileName;
 
@@ -130,10 +85,6 @@ public sealed class EncodeJob
 
     public EncodeFileName CaptionedFileName => EncodeFileName.Captioned(RecordingId, Id, Attempt);
 
-    /// <summary>
-    /// The file a running job places as its artefact: the work file it keeps with the text track of captions put
-    /// in when this attempt put one in, and the work file it keeps as the encode wrote it otherwise.
-    /// </summary>
     public EncodeFileName FileToPlace => CaptionTrack is EncodeCaptionTrack.Added ? CaptionedFileName : KeptWorkFileName;
 
     public static EncodeJob Queue(
@@ -145,10 +96,6 @@ public sealed class EncodeJob
         DateTime at)
         => Waiting(id, recordingId, profileId, destinationId, outputRoot, at, makesItAgain: false);
 
-    /// <summary>
-    /// A job queued because a person asked for an artefact that already exists to be made again. It is
-    /// the only kind that puts what it makes where an earlier artefact stands.
-    /// </summary>
     public static EncodeJob QueueAgain(
         EncodeJobId id,
         RecordingId recordingId,
@@ -298,11 +245,6 @@ public sealed class EncodeJob
         };
     }
 
-    /// <summary>
-    /// Whether this job's artefact is to have a text track put in from the captions taken from its recording
-    /// at <paramref name="captionsMadeAt"/>: it stands as the recording's artefact, and no track was tried
-    /// from those captions, or it failed fewer times than it is tried.
-    /// </summary>
     public bool AwaitsCaptionTrack(DateTime captionsMadeAt)
     {
         DateTime madeAt = UtcTimes.Required(captionsMadeAt, nameof(captionsMadeAt));
@@ -316,11 +258,6 @@ public sealed class EncodeJob
             || (CaptionTrack is EncodeCaptionTrack.Failed && CaptionTrackAttempts < CaptionTrackTriesAtMost);
     }
 
-    /// <summary>
-    /// Writes down what became of the text track tried from the captions taken at <paramref name="from"/>:
-    /// while the job runs, for the artefact it is about to place, or once its artefact
-    /// stands as the recording's.
-    /// </summary>
     public void Tracked(EncodeCaptionTrack outcome, DateTime from)
     {
         EncodeCaptionTrack settled = Track(outcome);
@@ -339,10 +276,6 @@ public sealed class EncodeJob
         CaptionTrackAttempts = settled is EncodeCaptionTrack.Failed ? before + 1 : 0;
     }
 
-    /// <summary>
-    /// Writes down that what this run made came out larger than the recording, and that it is made a second
-    /// time, coarser. An attempt does it once.
-    /// </summary>
     public void Remaking()
     {
         Only(EncodeJobStatus.Running, "make its artefact again");
@@ -355,10 +288,6 @@ public sealed class EncodeJob
         Remade = EncodeRemake.LargerThanTheSource;
     }
 
-    /// <summary>
-    /// Writes down what this run kept once it made its artefact a second time, as
-    /// <see cref="EncodeRemakes.Judge"/> answers.
-    /// </summary>
     public void MadeAgain(EncodeRemake kept)
     {
         EncodeRemake judged = Again(kept);
@@ -398,10 +327,6 @@ public sealed class EncodeJob
         Route = route;
     }
 
-    /// <summary>
-    /// Writes down the programme this job runs as, begun no earlier than the job itself: the operating
-    /// system reports a process start at a coarser resolution than the clock the job keeps.
-    /// </summary>
     public void Spawned(RunningProgramme programme)
     {
         ArgumentNullException.ThrowIfNull(programme);
@@ -426,10 +351,6 @@ public sealed class EncodeJob
         Timeline = timeline;
     }
 
-    /// <summary>
-    /// Writes down what the run made of where the breaks in this job's recording are, before the encode
-    /// that bakes them in starts. It is written whatever the answer.
-    /// </summary>
     public void Judged(ChapterReading reading)
     {
         ArgumentNullException.ThrowIfNull(reading);
@@ -438,10 +359,6 @@ public sealed class EncodeJob
         Chapters = reading;
     }
 
-    /// <summary>
-    /// Writes down what the chapters this job's artefact carries stand for, once they were compared with the
-    /// segments again after the artefact stood, and written into it again when they had moved.
-    /// </summary>
     public void Rechaptered(ChapterReading reading)
     {
         ArgumentNullException.ThrowIfNull(reading);
@@ -477,10 +394,6 @@ public sealed class EncodeJob
         Timeline = Timeline.Measured(artefactLength);
     }
 
-    /// <summary>
-    /// How long a running job has gone without making headway, measured from its last report or,
-    /// before the first, from when it started. Nothing for a job that is not running.
-    /// </summary>
     public TimeSpan? QuietFor(DateTime now)
     {
         UtcTimes.Required(now, nameof(now));
@@ -495,9 +408,6 @@ public sealed class EncodeJob
         return now > lastHeard ? now - lastHeard : TimeSpan.Zero;
     }
 
-    /// <summary>
-    /// Whether a running job has made no headway for as long as a run is allowed to go quiet.
-    /// </summary>
     public bool IsStalled(DateTime now, TimeSpan stalledAfter)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(stalledAfter, TimeSpan.Zero);
@@ -519,11 +429,6 @@ public sealed class EncodeJob
         ArtefactName = artefactName;
     }
 
-    /// <summary>
-    /// Lets go of the name in the ledger so that a job asked to make the artefact again can hold it.
-    /// What this job made is still named here; the file at that name is replaced by the job that now
-    /// holds it.
-    /// </summary>
     public void GiveUpTheName(DateTime at)
     {
         if (ArtefactName is null)
@@ -534,10 +439,6 @@ public sealed class EncodeJob
         NameGivenUpAt = UtcTimes.Required(at, nameof(at));
     }
 
-    /// <summary>
-    /// Whether this job's artefact and <paramref name="other"/>'s are the same file: the same name under
-    /// the same output root.
-    /// </summary>
     public bool SharesTheArtefactWith(EncodeJob other)
     {
         ArgumentNullException.ThrowIfNull(other);
@@ -545,10 +446,6 @@ public sealed class EncodeJob
         return ArtefactName is { } name && name.Equals(other.ArtefactName) && OutputRoot.Equals(other.OutputRoot);
     }
 
-    /// <summary>
-    /// Marks what this job made as replaced by <paramref name="newer"/>, a later completed job of the
-    /// same recording.
-    /// </summary>
     public void Replaced(EncodeJob newer, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(newer);
@@ -601,9 +498,6 @@ public sealed class EncodeJob
         LetGoOfTheName(at);
     }
 
-    /// <summary>
-    /// Calls the job off at <paramref name="at"/> while it waits or runs; one that has ended stays as it was.
-    /// </summary>
     public EncodeCallOff CallOff(DateTime at)
     {
         if (HasEnded)
@@ -656,11 +550,6 @@ public sealed class EncodeJob
         Remade = null;
     }
 
-    /// <summary>
-    /// Puts a job the ledger holds as running back in the queue to start over, or gives it up when it
-    /// has already had as many attempts as it gets. Called when the process comes up and when a run
-    /// throws.
-    /// </summary>
     public EncodeRecovery Recover(int mostAttempts, DateTime at)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(mostAttempts, FirstAttempt);

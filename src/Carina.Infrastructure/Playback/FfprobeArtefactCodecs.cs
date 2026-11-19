@@ -9,11 +9,6 @@ using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Playback;
 
-/// <summary>
-/// Reads the codec and the tag of an artefact's first picture track by asking ffprobe, and keeps what it read for as
-/// long as the file has the same size and the same time it was last written. A file that could not be read
-/// is not asked about again for <see cref="UnreadKeptFor"/>.
-/// </summary>
 public sealed class FfprobeArtefactCodecs(
     IPlaybackFileStore files,
     MachineSettings settings,

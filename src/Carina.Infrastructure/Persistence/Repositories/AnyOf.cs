@@ -2,9 +2,6 @@ using System.Linq.Expressions;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// Joins one predicate per asked-for value into a single <c>OR</c> the store can translate.
-/// </summary>
 internal static class AnyOf
 {
     public static Expression<Func<T, bool>> Matching<T, TAsked>(

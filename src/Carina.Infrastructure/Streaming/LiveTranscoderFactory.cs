@@ -56,9 +56,6 @@ public sealed class LiveTranscoderFactory(
         }
     }
 
-    /// <summary>
-    /// Why a picture asked for in <paramref name="format"/> is not transcoded on this machine.
-    /// </summary>
     public static string NotEncodedHere(VideoCodec format)
         => $"this machine does not encode a picture in {VideoCodecs.NameOf(format)}.";
 

@@ -1,10 +1,5 @@
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Copies an artefact's picture, sound and subtitle tracks and what it says about itself into a new file with
-/// the chapters read from a metadata file in place of its own, or with no chapters when there is none to read;
-/// and reads back the chapters a file carries.
-/// </summary>
 public static class FfmpegChapterRewriteInvocation
 {
     public static IReadOnlyList<string> Arguments(string artefact, string? chapters, string destination)

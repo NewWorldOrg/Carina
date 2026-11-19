@@ -454,10 +454,6 @@ public sealed class CatalogTests
                 stretch.KindOverride))),
         ]);
 
-    /// <summary>
-    /// An entry kept as <paramref name="kind"/> with a stretch at each place, a week of the drama and where in its
-    /// programme, in the recording <paramref name="weeks"/> names for that week.
-    /// </summary>
     private static (CatalogEntry Entry, CatalogOccurrence[] Stretches) KeptAt(
         CatalogKind kind,
         double confidence,

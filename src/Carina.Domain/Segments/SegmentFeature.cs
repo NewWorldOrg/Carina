@@ -2,13 +2,6 @@ using System.Globalization;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The names of the features computed for each segment, as the weights and the standardisation of a
-/// version of the model name them. A genre is one feature per kind of genre, set for the programme's
-/// first genre. None of them reads the catalog: what the catalog hears fixes the segments it covers when
-/// the sequence is decided (<see cref="SegmentSequence"/>), so that a recording judged without its entries
-/// is judged on what the regression learned from everything else.
-/// </summary>
 public static class SegmentFeature
 {
     public const string Length = "length";

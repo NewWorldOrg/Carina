@@ -1,9 +1,5 @@
 namespace Carina.Domain.Programmes;
 
-/// <summary>
-/// The running status the present/following table last announced for a programme. The schedule
-/// tables announce none, so a programme only ever read from them stays undetermined.
-/// </summary>
 public enum ProgrammeRunning
 {
     Undetermined = 0,

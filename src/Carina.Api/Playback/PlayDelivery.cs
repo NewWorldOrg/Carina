@@ -366,10 +366,6 @@ public static class PlayDelivery
         CancellationToken cancellationToken)
         => (await chapters.ChaptersAsync(recording, offer, cancellationToken)).Data!;
 
-    /// <summary>
-    /// The sounds a plan names. A transcoded recording whose sounds cannot be read is named as
-    /// carrying the main sound, and what could not be read is handed back beside it.
-    /// </summary>
     private static async Task<SoundsOffered> OfferedAsync(
         PlaybackPlan plan,
         PlaybackFile handover,

@@ -6,10 +6,6 @@ namespace Carina.Infrastructure.Tests.Unit.Infra.Machines;
 [Trait("Category", "Unit")]
 public sealed class FfmpegFacultiesTests
 {
-    /// <summary>
-    /// The encoder listing as ffmpeg 6.1.6 prints it, with the flag column and the row of dashes above
-    /// the entries.
-    /// </summary>
     private const string Encoders = """
         Encoders:
          V..... = Video

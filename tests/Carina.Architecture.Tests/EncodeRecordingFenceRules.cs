@@ -2,14 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace Carina.Architecture.Tests;
 
-/// <summary>
-/// Reads the encode feature for a write to the recording it was made from: telling a recording how
-/// it ended, adding a reason to it, moving it along, or handing it back to the recording port to be
-/// written. The feature is its folders plus any file named for it, wherever it sits. It reads source
-/// text and sees the ordinary spellings: a call on something named for a recording, an outcome or a
-/// reason spelled at the call, the write verbs on whatever name the port is held under, and raw
-/// SQL.
-/// </summary>
 public static partial class EncodeRecordingFenceRules
 {
     public const string FeatureFolder = EncodeDispatchRules.FeatureFolder;

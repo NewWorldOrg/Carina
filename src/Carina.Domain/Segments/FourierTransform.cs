@@ -2,11 +2,6 @@ using System.Numerics;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The discrete Fourier transform of a fixed size, a power of two, worked in place on the real and
-/// imaginary parts held apart. The order the samples are taken in and the turns they are multiplied
-/// by are worked out once, when the transform is made.
-/// </summary>
 public sealed class FourierTransform
 {
     private readonly int[] reversed;

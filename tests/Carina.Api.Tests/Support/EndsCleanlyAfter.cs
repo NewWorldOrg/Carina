@@ -13,9 +13,6 @@ using Puppis.Contracts;
 
 namespace Carina.Api.Tests.Support;
 
-/// <summary>
-/// A device that hands over some bytes and then returns none at all: a stream ending cleanly.
-/// </summary>
 [SupportedOSPlatform("linux")]
 internal sealed class EndsCleanlyAfter(ITunerDevice carrying, long after) : ITunerDevice
 {

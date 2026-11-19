@@ -2,11 +2,6 @@ using Carina.Domain.Encodings;
 
 namespace Carina.Domain.Playback;
 
-/// <summary>
-/// Where what was taken from a recording's file sits on the source a playback plan plays. It is placed at a zero,
-/// or left unplaced: the plan hands over no artefact whose job says where its file's clock began, or the artefact was
-/// made from a file whose clock began elsewhere, which <see cref="Artefact"/> and <see cref="ArtefactBegan"/> name.
-/// </summary>
 public sealed record SourceAlignment
 {
     public static readonly SourceAlignment Unplaced = new(null, null, null);

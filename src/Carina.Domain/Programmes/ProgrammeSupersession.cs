@@ -1,14 +1,5 @@
 namespace Carina.Domain.Programmes;
 
-/// <summary>
-/// What the guide shows where programmes of one service share airtime. A station that replaces part of its
-/// schedule announces only the new programmes and never withdraws the old ones, so the programme heard most
-/// recently stands and the ones last heard before it are superseded. A programme no whole reading has marked
-/// counts as heard before every other, two heard at the same moment both stand, an end not yet announced counts
-/// as an hour after the start, and a placeholder takes no part. The rows stay; only the guide's reads leave the
-/// superseded ones out. A programme in the guide is held against the guide; one already moved to the archive is
-/// held against the guide and the archive together, and one moved before the archive kept heard times has none.
-/// </summary>
 public static class ProgrammeSupersession
 {
     public static readonly TimeSpan LengthWhenTheEndIsNotAnnounced = TimeSpan.FromHours(1);

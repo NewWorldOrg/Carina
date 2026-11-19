@@ -2,13 +2,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// The version of the model in use, as a test sets it: the first, put in use at <see cref="Installed"/>,
-/// until a test puts another in its place; and the versions used before it, as a test adds them. The built-in
-/// version is taken as kept already: asking for it is kept and writes nothing, or fails as a test sets it. A
-/// candidate is numbered after every number held so far and <see cref="RememberedElsewhere"/>, and letting go of
-/// candidates leaves those a test says something still names (<see cref="Named"/>).
-/// </summary>
 public sealed class HeldSegmentModelVersions : ISegmentModelVersionRepository
 {
     public static readonly DateTime Installed = new(2026, 10, 18, 0, 0, 0, DateTimeKind.Utc);

@@ -1,8 +1,5 @@
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// Why a programme is not asked to be told of.
-/// </summary>
 public enum ProgrammeWatchRefusal
 {
     NoSuchProgramme = 1,

@@ -416,10 +416,6 @@ public sealed class SegmentLearningTests
     private static LearningRecording Seeking(LearningRecording recording, ViewerSeek seek)
         => new(recording.Id, recording.StartedAt, recording.Evidence, recording.Context, recording.Actions, [seek]);
 
-    /// <summary>
-    /// The recording read as a round reads it to learn from, hearing what it heard of the catalog when it was made but
-    /// sure of none of it, and its seeks read against that reading and the version in use's detection of it.
-    /// </summary>
     private static (RecordingPieces Read, SegmentContext Context, ViewerSeeks Seeks) AsTheRoundReads(LearningRecording recording, LearningCatalog catalog)
     {
         IReadOnlyList<CatalogHeard> heard = catalog.HeardBy(recording.Id, recording.StartedAt);
@@ -497,10 +493,6 @@ public sealed class SegmentLearningTests
     private static (TimeSpan Starts, TimeSpan Ends, SegmentKind Kind)[] Themes(IReadOnlyList<SegmentSpan> shown)
         => [.. shown.Where(span => span.Kind is SegmentKind.Opening or SegmentKind.Ending).Select(span => (span.Starts, span.Ends, span.Kind))];
 
-    /// <summary>
-    /// The recording detected with <paramref name="model"/>, hearing what it heard of the catalog when it was made or
-    /// nothing of it, against what the catalog is sure of in it now.
-    /// </summary>
     private static SegmentComparison Compared(LearningRecording recording, LearningCatalog catalog, SegmentModel model, bool hearing)
         => new(
             recording.Context.NetworkId,
@@ -510,9 +502,6 @@ public sealed class SegmentLearningTests
 
     private static SegmentMetrics? Metrics(SegmentComparison compared) => SegmentMetrics.Of([compared], SkipReturns.None);
 
-    /// <summary>
-    /// <see cref="HandMadeModels.FirstOfFourKinds"/> taking a segment for an opening on the earlier episodes alone.
-    /// </summary>
     private static SegmentModel RemembersOpenings()
     {
         SegmentModel first = HandMadeModels.FirstOfFourKinds;
@@ -524,10 +513,6 @@ public sealed class SegmentLearningTests
         return new SegmentModel(new SegmentWeights(classes), first.StationOffsets, first.SeriesOffsets, first.Thresholds, first.Standardisation);
     }
 
-    /// <summary>
-    /// The recording detected with <paramref name="model"/> in <paramref name="context"/>, against what the catalog is
-    /// sure of in it now.
-    /// </summary>
     private static SegmentComparison Compared(LearningRecording recording, LearningCatalog catalog, SegmentContext context, SegmentModel model)
         => new(
             recording.Context.NetworkId,
@@ -535,12 +520,6 @@ public sealed class SegmentLearningTests
             CatalogTruth.Of(catalog.HeardNow(recording.Id), recording.Evidence),
             SegmentDetector.Detect(recording.Evidence, context, model));
 
-    /// <summary>
-    /// The figures of <paramref name="judged"/> detected hearing nothing of the catalog by a model fitted with the one
-    /// setting to the labels of <paramref name="others"/>, each read hearing what it heard of <paramref name="catalog"/>
-    /// when it was made and labelled as if it heard only what <paramref name="labelledBy"/> gives, the programme no
-    /// stretch touches left out unless <paramref name="uncovered"/>.
-    /// </summary>
     private static SegmentMetrics? Fold(
         LearningRecording judged,
         IReadOnlyList<LearningRecording> others,
@@ -559,11 +538,6 @@ public sealed class SegmentLearningTests
             detection));
     }
 
-    /// <summary>
-    /// The figures of the folds of a round with the one setting, each recording judged by a model fitted to the others,
-    /// each read again without the entries set aside for the one judged when it hears one of them and labelled against the
-    /// version in use's detection of it, read without those entries when <paramref name="forgetting"/>.
-    /// </summary>
     private static SegmentMetrics? Folds(IReadOnlyList<LearningRecording> recordings, LearningCatalog catalog, SegmentModelVersion inUse, bool forgetting)
     {
         SegmentThresholds setting = OneSetting.Settings[0];
@@ -596,10 +570,6 @@ public sealed class SegmentLearningTests
         return SegmentMetrics.Of(compared, SkipReturns.None);
     }
 
-    /// <summary>
-    /// The model fitted with the one setting to the labels of <paramref name="others"/>, read and labelled as
-    /// <see cref="Fold"/> reads and labels them.
-    /// </summary>
     private static SegmentModel FoldModel(
         IReadOnlyList<LearningRecording> others,
         LearningCatalog catalog,
@@ -611,12 +581,6 @@ public sealed class SegmentLearningTests
         return SegmentRegression.Fit([.. others.SelectMany(recording => Samples(recording, catalog, labelledBy(recording), setting, uncovered))], setting).Model;
     }
 
-    /// <summary>
-    /// The samples of <paramref name="recording"/> read hearing what it heard of <paramref name="catalog"/> when it
-    /// was made, sure of none of it, its segments and the neighbouring segments read as one alike, labelled as if it
-    /// heard only <paramref name="labelledBy"/>, every stretch the catalog has in it now keeping the programme by
-    /// elimination off the segments it lies over, or only those it heard then unless <paramref name="touchingNow"/>.
-    /// </summary>
     private static IEnumerable<SegmentSample> Samples(
         LearningRecording recording,
         LearningCatalog catalog,

@@ -2,9 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// A set of rules for telling: which kinds of notice go to which destinations, while it is turned on.
-/// </summary>
 public sealed class NotificationRule
 {
     public const int MostRules = 20;
@@ -50,9 +47,6 @@ public sealed class NotificationRule
         DateTime at)
         => Rehydrate(id, name, enabled: true, events, destinations, at, at);
 
-    /// <summary>
-    /// The set of rules made with the first destination: failures and trouble, told to that destination.
-    /// </summary>
     public static NotificationRule Usual(NotificationRuleId id, NotificationDestinationId destination, DateTime at)
         => Define(id, new NotificationName(UsualName), UsualEvents, [destination], at);
 
@@ -100,10 +94,6 @@ public sealed class NotificationRule
         ChangedAt = UtcTimes.Required(at, nameof(at));
     }
 
-    /// <summary>
-    /// Stops sending to a destination being removed. A set of rules that does not name it is left alone, and one it is
-    /// the last destination of is left as it is, to be removed with it.
-    /// </summary>
     public NotificationRuleNarrowing StopSendingTo(NotificationDestinationId destination, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(destination);

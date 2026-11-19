@@ -2,12 +2,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// One thing a viewer did with a skip button, kept for good under the recording's id by value: what
-/// <see cref="ViewerAction"/> says, and nothing of who did it. A button offers one of <see cref="KindsOffered"/>;
-/// at most <see cref="MostAnHour"/> events are taken for one recording in any hour, and the moments one names lie
-/// within the recording, to <see cref="Resolution"/>.
-/// </summary>
 public sealed class SkipEvent
 {
     public const int MostAnHour = 600;
@@ -38,21 +32,10 @@ public sealed class SkipEvent
 
     public int? ModelVersion { get; private set; }
 
-    /// <summary>
-    /// What the viewer did, as learning reads it.
-    /// </summary>
     public ViewerAction Action() => new(HappenedAt, Event, Kind, From, To, ModelVersion);
 
-    /// <summary>
-    /// Whether a event of the same recording that happened at <paramref name="other"/> counts towards the
-    /// <see cref="MostAnHour"/> this one is taken beside: it happened later than <see cref="Within"/> before this one.
-    /// </summary>
     public bool CountsWith(DateTime other) => other > HappenedAt - Within;
 
-    /// <summary>
-    /// Whether this event is taken beside those of its recording that happened at <paramref name="kept"/>: fewer than
-    /// <see cref="MostAnHour"/> of them count with it (<see cref="CountsWith"/>).
-    /// </summary>
     public bool IsTakenBeside(IEnumerable<DateTime> kept)
     {
         ArgumentNullException.ThrowIfNull(kept);
@@ -60,9 +43,6 @@ public sealed class SkipEvent
         return kept.Count(CountsWith) < MostAnHour;
     }
 
-    /// <summary>
-    /// The event, not yet kept, of <paramref name="action"/> on the recording.
-    /// </summary>
     public static SkipEvent Of(RecordingId recordingId, ViewerAction action)
     {
         ArgumentNullException.ThrowIfNull(action);
@@ -98,10 +78,6 @@ public sealed class SkipEvent
         };
     }
 
-    /// <summary>
-    /// The moment <paramref name="seconds"/> into a recording written for <paramref name="written"/>, to
-    /// <see cref="Resolution"/>; none when it lies before the recording's zero or after its length.
-    /// </summary>
     public static TimeSpan? Moment(double seconds, TimeSpan written)
     {
         if (!double.IsFinite(seconds))

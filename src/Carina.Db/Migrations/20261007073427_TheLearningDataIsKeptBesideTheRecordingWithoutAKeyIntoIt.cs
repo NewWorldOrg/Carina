@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class TheLearningDataIsKeptBesideTheRecordingWithoutAKeyIntoIt : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.CreateTable(
@@ -81,7 +79,6 @@ public partial class TheLearningDataIsKeptBesideTheRecordingWithoutAKeyIntoIt : 
             filter: "state = 'Reading'");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropTable(

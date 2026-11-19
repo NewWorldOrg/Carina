@@ -12,9 +12,6 @@ public enum MatroskaTrackKind
     Audio = 2,
 }
 
-/// <summary>
-/// A track as the header of a Matroska stream describes it. A value the header leaves out is null.
-/// </summary>
 public sealed record MatroskaTrack(
     int Number,
     MatroskaTrackKind Kind,
@@ -26,10 +23,6 @@ public sealed record MatroskaTrack(
     int? Channels,
     int? BitDepth);
 
-/// <summary>
-/// What a <see cref="MatroskaReader"/> hands on: the tracks once their header is read, and every block
-/// with the number of its track and its time.
-/// </summary>
 public interface IMatroskaSink
 {
     void Tracks(IReadOnlyList<MatroskaTrack> tracks);
@@ -37,13 +30,6 @@ public interface IMatroskaSink
     void Block(int track, TimeSpan at, ReadOnlySpan<byte> payload);
 }
 
-/// <summary>
-/// Reads the Matroska ffmpeg writes to a pipe, as far as the learning data needs it: the EBML header,
-/// a segment of known or unknown size, its information and its tracks, and its clusters of known or
-/// unknown size with their time and their blocks, simple or in a group, none of them laced. Any other
-/// element is passed over. Bytes are handed over in pieces of any length; a piece that ends inside an
-/// element the reader needs whole is read up to that element, which is read once the rest has come.
-/// </summary>
 public sealed class MatroskaReader(IMatroskaSink sink)
 {
     public const int LargestElement = 64 << 20;
@@ -149,10 +135,6 @@ public sealed class MatroskaReader(IMatroskaSink sink)
 
     private bool begun;
 
-    /// <summary>
-    /// Reads as many whole elements as <paramref name="bytes"/> holds and says how many bytes that took.
-    /// </summary>
-    /// <exception cref="InvalidDataException">The bytes are not Matroska this reader can read.</exception>
     public int ReadFrom(ReadOnlySpan<byte> bytes)
     {
         int at = 0;
@@ -173,11 +155,6 @@ public sealed class MatroskaReader(IMatroskaSink sink)
         return at;
     }
 
-    /// <summary>
-    /// Reads the stream to its end, waiting on <paramref name="afterEach"/> after each piece that came,
-    /// and says whether the stream ended between two elements rather than inside one.
-    /// </summary>
-    /// <exception cref="InvalidDataException">The bytes are not Matroska this reader can read.</exception>
     public async Task<bool> ReadToEndAsync(Stream stream, Func<CancellationToken, Task> afterEach, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(stream);

@@ -10,10 +10,6 @@ using Carina.Domain.Viewing;
 
 namespace Carina.Api.Playback;
 
-/// <summary>
-/// A recording transcoded as it plays, handed to a browser through playlists: the first opened by the session, the
-/// rest by the key it names.
-/// </summary>
 public static class RecordingHlsDelivery
 {
     public const string Path = "/api/videos/{id}/hls.m3u8";
@@ -140,10 +136,6 @@ public static class RecordingHlsDelivery
         await OpenAsync(context, transcode, watcher, recording, keys);
     }
 
-    /// <summary>
-    /// Starts the transcoder on a token the request can call off only while it starts, because the key it is handed
-    /// to holds it after this request has been answered.
-    /// </summary>
     private static async Task<OnTheFlyStart> StartAsync(
         HttpContext context,
         IOnTheFlyPlayer player,

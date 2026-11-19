@@ -2,12 +2,6 @@ using Carina.Infrastructure.Streaming;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Streaming;
 
-/// <summary>
-/// Reads the face the image installs for the captions. The decoder scales a glyph's em to the cell a
-/// caption gives each character, so a face whose every advance is the whole em or half of it keeps a
-/// full-width character to its cell and a half-width one to half of it, and the synthetic broadcasts'
-/// captions are drawn with the face itself rather than falling through to the one behind it.
-/// </summary>
 [Trait("Category", "Material")]
 public sealed class FfmpegLiveInvocationMaterialTests
 {

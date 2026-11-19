@@ -1,12 +1,5 @@
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// The data broadcast of one live channel or one recording as it stands: whether the service carries one,
-/// the catalog, every module version that is valid and has arrived, and each data stream's reference of the
-/// programme time. Each signal read of the stream moves it on and says what changed, at the moment it was read
-/// on the <see cref="StreamClock"/>, never a raw PTS. The catalog is told only when what it lists changes; a
-/// module that arrives is told on its own, and so is a reference of the programme time that moved.
-/// </summary>
 public sealed class CarouselState
 {
     private static readonly IReadOnlyList<CarouselDelta> Nothing = [];
@@ -26,9 +19,6 @@ public sealed class CarouselState
     public IReadOnlyList<ModuleVersion> Modules
         => [.. carousels.Values.SelectMany(carousel => carousel.ArrivedInListedOrder())];
 
-    /// <summary>
-    /// The reference of the programme time each data stream last carried, in the order of their tags.
-    /// </summary>
     public IReadOnlyList<NptReference> NptReferences => [.. references.Values];
 
     public IReadOnlyList<CarouselDelta> Apply(CarouselSignal signal, long at)

@@ -12,13 +12,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Carina.Api.Controllers.Live;
 
-/// <summary>
-/// Sends a text from a live channel's data broadcast document to a broadcaster's server and hands back what came
-/// back, the way <c>transmitTextDataOverIP</c> returns it. Anything the relay refuses or the server fails at is a
-/// result in a success, so that the document reads it; the request itself is refused only where it names no
-/// address or character set, where the browser asking has not allowed communication, or where the channel cannot
-/// be watched live here. Opened with the reader's own session only, never with a ticket.
-/// </summary>
 [ApiController]
 [Route("api/live/{networkId:int}-{serviceId:int}/data-broadcast/transmit")]
 [EndpointEffect(EndpointEffect.Reading)]
@@ -67,10 +60,6 @@ public sealed class TransmitLiveDataBroadcastAction(DataBroadcastRelayService re
     }
 }
 
-/// <summary>
-/// The live channel a data broadcast relay is asked for, read from the path, and how a refusal of the relay is
-/// answered.
-/// </summary>
 public sealed record LiveDataBroadcastChannel(NetworkId Network, ServiceId Service)
 {
     public const string TheChannelsThereAre =

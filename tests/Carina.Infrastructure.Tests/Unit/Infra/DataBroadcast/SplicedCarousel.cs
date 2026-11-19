@@ -4,10 +4,6 @@ using Carina.BroadcastTestSupport;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.DataBroadcast;
 
-/// <summary>
-/// A synthetic broadcast ffmpeg wrote, with a carousel of two modules and an event message put into it, as the
-/// material tests of the data broadcast read it.
-/// </summary>
 internal static class SplicedCarousel
 {
     private const int CarouselEvery = 40;

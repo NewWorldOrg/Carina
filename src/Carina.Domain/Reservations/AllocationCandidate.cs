@@ -60,16 +60,8 @@ public sealed record AllocationCandidate
 
     public bool Pinned { get; }
 
-    /// <summary>
-    /// How far the recording this reservation has already started is actually promised, when that is
-    /// further than the reservation's own end. The planner treats the tuner as held until then.
-    /// </summary>
     public DateTime? HeldUntil { get; }
 
-    /// <summary>
-    /// The tuner the recording this reservation has already started is running on, when the
-    /// recording has named one.
-    /// </summary>
     public TunerDeviceId? HeldOn { get; }
 
     public static AllocationCandidate Of(

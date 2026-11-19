@@ -168,10 +168,6 @@ public sealed class SegmentTrainingJobTests : IAsyncLifetime
         return Convert.ToString(await command.ExecuteScalarAsync(Cancel), CultureInfo.InvariantCulture) ?? string.Empty;
     }
 
-    /// <summary>
-    /// Leaves the first version alone in use with the first model, the version of four kinds the migrations put in
-    /// use beside it as one used before, no versions, skips or rounds of these tests, and no settings row.
-    /// </summary>
     private async Task ResetAsync()
     {
         await using CarinaDbContext context = database.Open();

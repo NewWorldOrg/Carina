@@ -29,9 +29,6 @@ public sealed record PlaybackSubject
 
     public PlaybackFileSearch AsRecorded { get; }
 
-    /// <summary>
-    /// The artefacts made of the recording that the one it is handed to plays as they are, newest first.
-    /// </summary>
     public IReadOnlyList<PlaybackFileSearch> Playable { get; }
 
     public static PlaybackSubject NothingHasBeenEncodedYet(RecordingOutcome? outcome, PlaybackFileSearch asRecorded)

@@ -5,9 +5,6 @@ namespace Carina.Api.Services;
 
 public sealed record NotificationSettingsRead(int NotifyLeadMinutes, bool PublicOriginKnown);
 
-/// <summary>
-/// Reads and changes how long before a programme a notice of it is sent, and says whether links can be built.
-/// </summary>
 public sealed class NotificationSettingsService(
     INotificationSettingsRepository settings,
     NoticeLinkBase links,

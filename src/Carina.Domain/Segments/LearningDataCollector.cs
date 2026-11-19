@@ -2,14 +2,6 @@ using System.Runtime.InteropServices;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Gathers the learning data of one recording as its sound, its frames and its pictures of the
-/// corners are handed over, each in pieces of any length and in any order between the three, and
-/// hands back a chunk as soon as all three have gone past its end. The sound is read by a
-/// <see cref="SoundReader"/>, the frames by a <see cref="PictureReader"/> on <see cref="Clock"/>,
-/// and the pictures of the corners by a <see cref="CornerReader"/>, picture <c>n</c> taken at
-/// second <c>n</c> of the recording's own time. <see cref="Finish"/> hands back what is left.
-/// </summary>
 public sealed class LearningDataCollector
 {
     private readonly SoundReader soundReader = new();

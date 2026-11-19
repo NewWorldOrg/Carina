@@ -3,9 +3,6 @@ using System.Text;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// Cleans and cuts text somebody outside wrote, such as the name of a programme, before a notice says it.
-/// </summary>
 public static class NoticeText
 {
     public const string Ellipsis = "…";
@@ -35,19 +32,10 @@ public static class NoticeText
         UnicodeCategory.ParagraphSeparator,
     ];
 
-    /// <summary>
-    /// One line of text without control characters, bidirectional controls, line breaks or halves of surrogate pairs.
-    /// </summary>
     public static string Clean(string? written) => Kept(written, keepsLineBreaks: false);
 
-    /// <summary>
-    /// As <see cref="Clean"/>, keeping line feeds.
-    /// </summary>
     public static string CleanLines(string? written) => Kept(written, keepsLineBreaks: true);
 
-    /// <summary>
-    /// The words, or as many whole graphemes of them as leave room for an ellipsis within <paramref name="longest"/>.
-    /// </summary>
     public static string Cut(string said, int longest)
     {
         ArgumentNullException.ThrowIfNull(said);

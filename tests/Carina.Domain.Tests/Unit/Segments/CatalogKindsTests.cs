@@ -20,11 +20,6 @@ public sealed class CatalogKindsTests
 
     private static readonly CatalogEntryId Entry = CatalogEntryId.New();
 
-    /// <summary>
-    /// The evening a synthetic weekly series of half an hour airs, whose opening is matched in pieces: a long head, a
-    /// short phrase that the programme plays again in its middle, and a slot of 30 seconds on the grid. The first
-    /// episode is recorded twice, the second recording starting a few seconds after the first.
-    /// </summary>
     private static readonly DateTime LateEvening = new(2026, 10, 5, 13, 0, 0, DateTimeKind.Utc);
 
     private static readonly TimeSpan Lead = TimeSpan.FromSeconds(10);
@@ -33,11 +28,6 @@ public sealed class CatalogKindsTests
 
     private static readonly DateTime Now = new(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc);
 
-    /// <summary>
-    /// The night a synthetic weekly late-night series airs, whose sponsor's advert is put in the same break every week,
-    /// so that it is heard at about the same place from the start of each episode as a fixed part of the programme is.
-    /// Each week has a recording of its own, and a quiz on the same station shares the adverts heard in two series.
-    /// </summary>
     private static readonly DateTime Night = new(2026, 10, 5, 15, 0, 0, DateTimeKind.Utc);
 
     private static readonly CatalogSeries Variety = new(1, "架空の深夜番組", Night);
@@ -787,9 +777,6 @@ public sealed class CatalogKindsTests
 
     private sealed record Sound(CatalogEntryId Entry, TimeSpan Length, PlacedOccurrence[] Placed)
     {
-        /// <summary>
-        /// The sound heard besides in <paramref name="programme"/>, in a recording of its own.
-        /// </summary>
         public Sound And(ProgrammeCopy programme, double fromProgrammeStart)
             => this with { Placed = [.. Placed, CatalogSeries.At(Entry, programme, fromProgrammeStart, Length.TotalSeconds)] };
     }

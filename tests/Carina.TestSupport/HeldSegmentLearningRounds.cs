@@ -2,10 +2,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// The rounds of learning finished, held in memory one per day, as the store keeps them, and the turn to take one,
-/// which a test can say another process holds.
-/// </summary>
 public sealed class HeldSegmentLearningRounds : ISegmentLearningRoundRepository
 {
     private readonly Lock gate = new();

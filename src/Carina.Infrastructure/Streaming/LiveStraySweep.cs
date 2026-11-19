@@ -8,13 +8,6 @@ using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// Lets go of the live sessions the driver holds that no viewer in this app is behind.
-/// </summary>
-/// <remarks>
-/// It assumes one app to a driver; a second app against the same driver would have its sessions
-/// read as strays.
-/// </remarks>
 public sealed class LiveStraySweep(
     IDriverClient driver,
     ILiveLeases leases,

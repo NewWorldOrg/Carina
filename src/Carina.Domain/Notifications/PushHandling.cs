@@ -1,9 +1,5 @@
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// What a push service is asked to do with one message: how long to keep it for a device that is not reachable,
-/// and how soon to wake the device for it.
-/// </summary>
 public sealed record PushHandling
 {
     public static readonly TimeSpan UsualLifetime = TimeSpan.FromHours(24);
@@ -27,9 +23,6 @@ public sealed record PushHandling
 
     public PushUrgency Urgency { get; }
 
-    /// <summary>
-    /// The handling of a notice that a programme begins: urgent, and worth keeping only until the programme ends.
-    /// </summary>
     public static PushHandling UntilTheEnd(DateTime endsAt, DateTime at)
         => new(endsAt > at ? endsAt - at : TimeSpan.Zero, PushUrgency.High);
 }

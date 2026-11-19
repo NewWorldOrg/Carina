@@ -363,9 +363,6 @@ internal sealed class NotificationFeature : IAsyncDisposable
         return body.GetProperty("data").GetProperty("id").GetGuid();
     }
 
-    /// <summary>
-    /// Puts a half-hour programme in the guide, on the one made-up station, and gives the text it is named by.
-    /// </summary>
     public string Announced(int carried, DateTime startsAt, string name = "作り物の番組", bool shadow = false)
     {
         NetworkId network = new(32_736);

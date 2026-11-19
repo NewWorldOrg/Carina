@@ -2,12 +2,6 @@ using Carina.Domain.Encodings;
 
 namespace Carina.Domain.Migration;
 
-/// <summary>
-/// What a run finds before it carries anything: how the new root stands, where what it carries is encoded, and what a
-/// link from the source into the new root would meet. A run for real starts only into an empty new root, with one
-/// destination and its default profile to queue every recording it carries for encoding, and where a link can be
-/// made; a rehearsal is never stopped, and says what a run for real would meet instead.
-/// </summary>
 public sealed record MigrationPreconditions
 {
     public MigrationPreconditions(
@@ -38,9 +32,6 @@ public sealed record MigrationPreconditions
 
     public MigrationCarryStanding Carrying { get; }
 
-    /// <summary>
-    /// What stops a run of <paramref name="pass"/> before it carries anything, or none.
-    /// </summary>
     public MigrationHindrance? Hindering(MigrationPass pass)
     {
         if (pass is not MigrationPass.ForReal)

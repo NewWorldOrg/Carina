@@ -11,9 +11,6 @@ public sealed class EncodeAutoRunRepository(CarinaDbContext context) : IEncodeAu
             .AsNoTracking()
             .FirstOrDefaultAsync(row => row.Id == EncodeAutoRun.TheOnlyRow, cancellationToken);
 
-    /// <summary>
-    /// Inserts or updates the one row in a single statement.
-    /// </summary>
     public async Task SaveAsync(EncodeAutoRun autoRun, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(autoRun);

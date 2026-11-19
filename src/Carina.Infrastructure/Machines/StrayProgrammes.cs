@@ -5,12 +5,6 @@ using Carina.Domain.Machines;
 
 namespace Carina.Infrastructure.Machines;
 
-/// <summary>
-/// Stops a programme an earlier process wrote down and did not live to stop. The programme under the
-/// recorded id is stopped only if, by the kernel's own record, it began when the recorded one began,
-/// within <see cref="Drift"/>. A programme that is gone, or is gone by the time it is looked at, is
-/// reported as such. The wait after the kill reads the kernel's record.
-/// </summary>
 public sealed class StrayProgrammes(TimeSpan drift, TimeSpan patience) : IStrayProgrammes
 {
     public static readonly TimeSpan Drift = TimeSpan.FromSeconds(2);
@@ -92,10 +86,6 @@ public sealed class StrayProgrammes(TimeSpan drift, TimeSpan patience) : IStrayP
         return true;
     }
 
-    /// <summary>
-    /// Whether the process is gone as the kernel sees it: no record under the id, or a record of a
-    /// process that has exited and waits to be reaped.
-    /// </summary>
     internal static bool IsGone(int processId)
     {
         string record;

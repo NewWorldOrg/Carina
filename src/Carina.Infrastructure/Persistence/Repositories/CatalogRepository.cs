@@ -137,10 +137,6 @@ public sealed class CatalogRepository(CarinaDbContext context) : ICatalogReposit
         }
     }
 
-    /// <summary>
-    /// Writes what is still to be written in one transaction; false, with nothing written and the entries whose
-    /// rows changed since they were read set aside with their stretches taken for another kind, when one did.
-    /// </summary>
     private async Task<bool> TryKeepAsync(CatalogChange change, CancellationToken cancellationToken)
     {
         await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);

@@ -485,10 +485,6 @@ public sealed class GetDriverStatusActionTests : IDisposable
         }
     }
 
-    /// <summary>
-    /// Holds the driver between closing its event feeds and closing its socket, which is where a busy
-    /// machine leaves it for a moment on every stop.
-    /// </summary>
     private sealed class SlowToStop : IHostedLifecycleService
     {
         private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);

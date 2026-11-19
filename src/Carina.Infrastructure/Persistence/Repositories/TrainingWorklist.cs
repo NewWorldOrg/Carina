@@ -4,10 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// Reads the recordings a round of learning could read from the records of the learning data, those with a stretch of
-/// the catalog, a skip event or a seek, beside whether the catalog hears an advert in each, in one statement.
-/// </summary>
 public sealed class TrainingWorklist(CarinaDbContext context) : ITrainingWorklist
 {
     public async Task<IReadOnlyList<LearningCandidate>> CandidatesAsync(CancellationToken cancellationToken)

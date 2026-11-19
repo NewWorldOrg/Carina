@@ -7,11 +7,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Carina.Infrastructure.Integrity;
 
-/// <summary>
-/// The files encode work claims: what a job still in hand writes on the way and the artefact it is
-/// making, what is being written to put a text track of captions into an artefact or to write its chapters
-/// again, and the artefact a completed job made that stands for a recording the ledger still holds.
-/// </summary>
 public sealed class EncodeWorkLedger(CarinaDbContext context) : IEncodeWorkLedger
 {
     private static readonly IReadOnlyList<EncodeJobStatus> StillInHand =

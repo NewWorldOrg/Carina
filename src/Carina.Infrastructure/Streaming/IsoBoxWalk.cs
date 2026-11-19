@@ -2,10 +2,6 @@ using System.Buffers.Binary;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// Walks the boxes lying side by side in an ISO base media file, one level deep, stopping at the first box whose size
-/// does not fit what is left.
-/// </summary>
 internal ref struct IsoBoxWalk(ReadOnlySpan<byte> boxes)
 {
     private const int HeaderLength = 8;

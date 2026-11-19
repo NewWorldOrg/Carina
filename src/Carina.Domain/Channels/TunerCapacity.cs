@@ -19,10 +19,6 @@ public sealed class TunerCapacity
 
     public IReadOnlyList<string> Undetermined { get; }
 
-    /// <summary>
-    /// The capacity a ledger gives: a tuner the ledger or the driver has turned off is not counted, one of a kind that
-    /// receives nothing known is undetermined, and one the driver reports faulted is counted as faulted.
-    /// </summary>
     public static TunerCapacity Of(IReadOnlyList<TunerConfigEntry> ledger, IReadOnlyList<TunerSnapshot> observed)
     {
         ArgumentNullException.ThrowIfNull(ledger);
@@ -65,11 +61,6 @@ public sealed class TunerCapacity
     public bool SharesSeats(TuneSystem first, TuneSystem second) =>
         seats.Any(seat => seat.Serves.Contains(first) && seat.Serves.Contains(second));
 
-    /// <summary>
-    /// The capacities that may be left once a tuner is taken by something the plan cannot tune: the
-    /// named seat alone when this capacity counts it, none when it does not, and each seat in turn
-    /// when no tuner is named.
-    /// </summary>
     public IReadOnlyList<TunerCapacity> LeftWhenTaken(string? deviceId)
     {
         if (deviceId is not null)

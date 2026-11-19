@@ -10,10 +10,6 @@ using Carina.Infrastructure.Thumbnails;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Thumbnails;
 
-/// <summary>
-/// Pictures taken out of a synthetic broadcast that was cut in the middle of a key frame and carried on in the
-/// middle of a later group of pictures, the way a recording the driver resumed into is joined.
-/// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
 public sealed class FfmpegThumbnailRendererMaterialTests : IDisposable

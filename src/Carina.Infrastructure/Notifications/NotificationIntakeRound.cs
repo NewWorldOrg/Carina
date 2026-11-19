@@ -6,15 +6,6 @@ namespace Carina.Infrastructure.Notifications;
 
 public sealed record NotificationIntake(int Seen, int Taken, int Queued);
 
-/// <summary>
-/// One look at the ledgers for what happened since the look-back began, taking each happening the
-/// notice ledger does not hold yet together with a delivery for every destination the rule sets name.
-/// </summary>
-/// <remarks>
-/// What happened before the look-back began is left alone. A happening no rule set asks for is still
-/// taken, with nothing to deliver. A notice that cannot be written is logged and the others of the
-/// same look are written.
-/// </remarks>
 public sealed class NotificationIntakeRound(
     NotificationIntakeDomainService intake,
     INoticeRepository notices,

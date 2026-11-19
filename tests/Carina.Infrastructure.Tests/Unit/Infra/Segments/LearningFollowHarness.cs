@@ -18,9 +18,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
-/// <summary>
-/// The recordings being written, as following them for their learning data reads them, held in memory.
-/// </summary>
 internal sealed class HeldLearningWorklist : ILearningWorklist
 {
     public List<Recording> Recordings { get; } = [];
@@ -38,9 +35,6 @@ internal sealed class HeldLearningWorklist : ILearningWorklist
         });
 }
 
-/// <summary>
-/// The guide as working out when a recording's programme ends reads it, which is part way through a look.
-/// </summary>
 internal sealed class LookedUpProgrammes : IAnnouncedProgrammes
 {
     public HeldProgrammes Guide { get; } = new();
@@ -69,10 +63,6 @@ internal sealed class LookedUpProgrammes : IAnnouncedProgrammes
             recording.StartedAtActual));
 }
 
-/// <summary>
-/// A follower that follows nothing: it remembers what it was asked to follow, and a follow lasts until
-/// it is stopped or told its recording ended, when it settles the record as read to the end.
-/// </summary>
 internal sealed class HeldFollower(LearningRecords records, DateTime at) : ILearningFollower
 {
     public ConcurrentQueue<FollowedRecording> Asked { get; } = new();

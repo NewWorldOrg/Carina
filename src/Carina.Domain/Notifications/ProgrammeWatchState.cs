@@ -11,9 +11,6 @@ public enum ProgrammeWatchState
     Cancelled = 4,
 }
 
-/// <summary>
-/// Where the clock stands against a programme asked to be told of.
-/// </summary>
 public enum ProgrammeWatchMoment
 {
     NotYet = 1,

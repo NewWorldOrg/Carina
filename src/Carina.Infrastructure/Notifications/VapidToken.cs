@@ -6,10 +6,6 @@ using System.Text.Json;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// The token a server shows a push service to say who is sending (VAPID, RFC 8292): a JWT signed with ES256 that
-/// names the push service's origin, when the token stops being good, and optionally the sender.
-/// </summary>
 public static class VapidToken
 {
     private const int KeySizeInBits = 256;

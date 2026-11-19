@@ -138,10 +138,6 @@ public sealed class ReservationService(
         return await SettledAsync(run, planned, alongside, cancellationToken);
     }
 
-    /// <summary>
-    /// Reserves the other segments of a relayed broadcast that nothing reserves yet, with what was asked
-    /// for the one segment, and answers with the reservations that lost their tuner to them.
-    /// </summary>
     private async Task<IReadOnlyList<ReservationId>> ReserveAlongsideAsync(
         ReservationDraft draft,
         BroadcastResolution resolution,
@@ -195,10 +191,6 @@ public sealed class ReservationService(
             at,
             draft.EncodeWhenRecorded);
 
-    /// <summary>
-    /// The listing a moved broadcast is reserved on, when the programme named is one of its other
-    /// listings.
-    /// </summary>
     public async Task<ServiceResult<Programme, ReservationFailure>> PrimaryOfMovedAsync(
         ProgrammeId id,
         CancellationToken cancellationToken)

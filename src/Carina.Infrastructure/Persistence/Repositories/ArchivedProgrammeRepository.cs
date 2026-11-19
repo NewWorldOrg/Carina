@@ -76,11 +76,6 @@ public sealed class ArchivedProgrammeRepository(CarinaDbContext context) : IArch
         return kept;
     }
 
-    /// <summary>
-    /// Writes down, for the programmes just kept and the archived programmes they share airtime with, whether a
-    /// programme heard later has superseded them. Every programme of their services that could share airtime with
-    /// one of them is read, in the archive and in the guide, and judged by <see cref="ProgrammeSupersession"/>.
-    /// </summary>
     private async Task JudgeAsync(IReadOnlyList<ArchivedProgramme> kept, CancellationToken cancellationToken)
     {
         if (kept.Count == 0)

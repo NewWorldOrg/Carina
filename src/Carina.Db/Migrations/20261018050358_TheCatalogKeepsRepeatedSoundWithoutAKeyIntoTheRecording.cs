@@ -8,10 +8,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class TheCatalogKeepsRepeatedSoundWithoutAKeyIntoTheRecording : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.AddColumn<DateTime>(
@@ -113,7 +111,6 @@ public partial class TheCatalogKeepsRepeatedSoundWithoutAKeyIntoTheRecording : M
             unique: true);
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropTable(

@@ -6,10 +6,6 @@ using Carina.Infrastructure.DataBroadcast;
 
 namespace Carina.Infrastructure.Tests.Fixtures.DataBroadcast;
 
-/// <summary>
-/// Reads the frames of the data broadcast side channel back the way a player would, with a CBOR reader of its
-/// own, so that what is written is checked against the format and not against the writer.
-/// </summary>
 internal static class SideChannelReading
 {
     public static byte KindOf(LiveFrame frame) => frame.Payload.Span[0];

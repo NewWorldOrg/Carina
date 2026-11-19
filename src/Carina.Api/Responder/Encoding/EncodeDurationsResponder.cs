@@ -2,10 +2,6 @@ using Carina.Domain.Encodings;
 
 namespace Carina.Api.Responder.Encoding;
 
-/// <summary>
-/// How long the jobs that finished took. <c>averageSeconds</c> is null until
-/// <c>fewestToAverage</c> jobs have finished; the count and the window are answered either way.
-/// </summary>
 public sealed record EncodeDurationsResponder(
     int Jobs,
     int FewestToAverage,

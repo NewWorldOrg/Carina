@@ -7,9 +7,6 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// Seals the address of a webhook for the database, and opens it again for the moment of sending.
-/// </summary>
 public sealed class WebhookUrlSeal(IDataProtectionProvider provider)
 {
     public const string Purpose = "Carina.Notifications.WebhookUrl";
@@ -23,9 +20,6 @@ public sealed class WebhookUrlSeal(IDataProtectionProvider provider)
         return protector.Protect(Encoding.UTF8.GetBytes(webhook.AddressAsWritten));
     }
 
-    /// <summary>
-    /// The address that was sealed, or nothing when the keys that sealed it are gone.
-    /// </summary>
     public WebhookUrl? Open(byte[] held)
     {
         ArgumentNullException.ThrowIfNull(held);

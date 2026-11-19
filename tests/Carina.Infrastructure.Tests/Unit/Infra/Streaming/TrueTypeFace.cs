@@ -3,10 +3,6 @@ using System.Text;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Streaming;
 
-/// <summary>
-/// Reads from a TrueType file the little the caption tests ask of a face: its family name, its em, the
-/// advance of every glyph, and which glyph a character maps to.
-/// </summary>
 public sealed class TrueTypeFace
 {
     private const int WindowsPlatform = 3;

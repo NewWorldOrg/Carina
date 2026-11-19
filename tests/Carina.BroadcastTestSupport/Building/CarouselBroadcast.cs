@@ -1,11 +1,5 @@
 namespace Carina.BroadcastTestSupport;
 
-/// <summary>
-/// Writes a transport stream of one programme carrying a data broadcast, packet by packet in the order it is
-/// asked for: the association table, the programme map, the programme's clock, and a carousel's download
-/// info, blocks and event messages, and a stream that carries only event messages and references of the programme
-/// time.
-/// </summary>
 public sealed class CarouselBroadcast
 {
     public const int ProgramNumber = 1024;
@@ -156,7 +150,4 @@ public sealed class CarouselBroadcast
     }
 }
 
-/// <summary>
-/// One module of a synthetic carousel: its id, its version and the entity it carries.
-/// </summary>
 public sealed record CarouselModule(int Id, int Version, byte[] Body);

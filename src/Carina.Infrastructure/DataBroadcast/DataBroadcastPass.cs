@@ -1,10 +1,5 @@
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// What one pass over the ended recordings did with their data broadcast: how many it read and what became of
-/// them, how many it left under a root out of reach, whether it stopped because something was being recorded,
-/// watched or about to be recorded, and how many records it put back to be taken again.
-/// </summary>
 public sealed record DataBroadcastPass
 {
     private DataBroadcastPass(
@@ -45,10 +40,6 @@ public sealed record DataBroadcastPass
 
     public bool Yielded { get; }
 
-    /// <summary>
-    /// How many records were put to coming: not yet due on a recording that has ended, failed with tries left, or
-    /// made and no longer kept.
-    /// </summary>
     public int Requeued { get; }
 
     public int Settled => Made + Missing + Failed;

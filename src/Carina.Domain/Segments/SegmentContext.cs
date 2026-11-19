@@ -3,11 +3,6 @@ using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// What is known of the recording judged besides its readings: its station and series, where the guide
-/// puts its programme's start and end in the recording's own time, the programme's genres, the stretches
-/// the catalog heard in it, the logo learned for its station, and the earlier episodes of its series.
-/// </summary>
 public sealed record SegmentContext
 {
     public SegmentContext(
@@ -64,15 +59,9 @@ public sealed record SegmentContext
 
     public string Station => SegmentModel.StationKey(NetworkId, ServiceId);
 
-    /// <summary>
-    /// The same context hearing <paramref name="catalog"/> in place of what it heard.
-    /// </summary>
     public SegmentContext Hearing(IReadOnlyList<CatalogHeard> catalog)
         => new(NetworkId, ServiceId, Series, ProgrammeStarts, ProgrammeEnds, Genres, catalog, Logo, Past);
 
-    /// <summary>
-    /// The same context remembering <paramref name="past"/> in place of the earlier episodes it remembered.
-    /// </summary>
     public SegmentContext Remembering(IReadOnlyList<PastEpisode> past)
         => new(NetworkId, ServiceId, Series, ProgrammeStarts, ProgrammeEnds, Genres, Catalog, Logo, past);
 

@@ -1,10 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Reads frames handed over in the shape <see cref="FrameLight"/> names, in pieces of any length,
-/// and writes the light of each as soon as the whole of it has arrived. The first frame is read as
-/// having changed by nothing.
-/// </summary>
 public sealed class PictureReader
 {
     private byte[] frame = new byte[FrameLight.Pixels];

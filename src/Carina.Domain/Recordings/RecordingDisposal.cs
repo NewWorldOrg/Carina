@@ -1,8 +1,5 @@
 namespace Carina.Domain.Recordings;
 
-/// <summary>
-/// Why a recording is not thrown away as asked.
-/// </summary>
 public enum RecordingDisposalRefusal
 {
     NoSuchRecording = 1,
@@ -12,10 +9,6 @@ public enum RecordingDisposalRefusal
     BeingEncoded = 3,
 }
 
-/// <summary>
-/// What asking to throw a recording away comes to before anything is removed: the recording to throw away, or why it
-/// stays.
-/// </summary>
 public sealed record RecordingDisposal
 {
     private RecordingDisposal(Recording? recording, RecordingDisposalRefusal? refusal)

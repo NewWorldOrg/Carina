@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class MigrationRuleAndChannelProposals : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(
@@ -93,7 +91,6 @@ public partial class MigrationRuleAndChannelProposals : Migration
             sql: "subject IN ('ProgrammeGuide', 'DuplicateAvoidance', 'QualityTimeSeries', 'RecordingHistory', 'EnclosedCharacters')");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropTable(

@@ -12,12 +12,6 @@ using Npgsql;
 
 namespace Carina.Infrastructure.Tests;
 
-/// <summary>
-/// A scratch PostgreSQL database of its own made by every migration, for the statements that read what only the
-/// migrations make, such as the view the recorder reads its ticks from and the defaults older rows were given. The
-/// container is the one the infrastructure builds over it. Each class that takes it gets a database of its own, which
-/// is dropped when the class is done.
-/// </summary>
 public sealed class MigratedRepositoryDatabase : IAsyncLifetime
 {
     private const string ConnectionStringVariable = "CARINA_DB_CONNECTION";
@@ -41,10 +35,6 @@ public sealed class MigratedRepositoryDatabase : IAsyncLifetime
 
     public ServiceProvider Infrastructure() => Infrastructure(_ => { });
 
-    /// <summary>
-    /// The container the infrastructure builds over this database, with what <paramref name="replace"/> registers last
-    /// standing in for what the infrastructure registered.
-    /// </summary>
     public ServiceProvider Infrastructure(Action<IServiceCollection> replace)
         => RepositoryDatabase.Container(connectionString, SealingKeys.Fresh(), replace);
 

@@ -9,10 +9,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// Reads the recording, reservation outcome, encode and quality ledgers for the rows a notice may be
-/// taken from, with the names their words need.
-/// </summary>
 public sealed class NoticeSourceReader(CarinaDbContext context, IEncodeArtefactWeigher artefacts) : INoticeSourceReader
 {
     public async Task<IReadOnlyList<NoticeSource>> SinceAsync(DateTime since, CancellationToken cancellationToken)

@@ -6,15 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <summary>
-/// Lets go of the setting that turned CM, OP and ED learning on and off, since learning now always runs, and of the
-/// watermarks an encode learned of each station, since an encode now takes its chapters from the segments alone. It
-/// once also put the latest version made by hand in use; the built-in version of a release is now kept and put in use
-/// when the application starts. Going back brings the setting back with learning on; the watermarks come back empty.
-/// </summary>
 public partial class LearningIsAlwaysOnAndEncodesLearnNoWatermarks : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -30,7 +23,6 @@ public partial class LearningIsAlwaysOnAndEncodesLearnNoWatermarks : Migration
             table: "segment_settings");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

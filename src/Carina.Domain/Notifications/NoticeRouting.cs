@@ -2,10 +2,6 @@ namespace Carina.Domain.Notifications;
 
 public static class NoticeRouting
 {
-    /// <summary>
-    /// The destinations a notice of <paramref name="kind"/> goes to: each one that is turned on and that some set of
-    /// rules turned on names for that kind, once, in the order the destinations are handed over.
-    /// </summary>
     public static IReadOnlyList<NotificationDestinationId> DestinationsFor(
         NoticeKind kind,
         IReadOnlyList<NotificationRule> rules,
@@ -28,10 +24,6 @@ public static class NoticeRouting
         ];
     }
 
-    /// <summary>
-    /// The destinations a notice of a programme asked to be told of goes to: each one it names that is turned on, once,
-    /// in the order the destinations are handed over. The sets of rules play no part.
-    /// </summary>
     public static IReadOnlyList<NotificationDestinationId> DestinationsFor(
         ProgrammeWatch watch,
         IReadOnlyList<NotificationDestination> destinations)

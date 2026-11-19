@@ -1,9 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The intercept and the weights of the standardised features one kind of segment is scored with
-/// against the programme. A feature without a weight weighs nothing.
-/// </summary>
 public sealed class SegmentClassWeights : IEquatable<SegmentClassWeights>
 {
     public SegmentClassWeights(double bias, IReadOnlyDictionary<string, double> features)

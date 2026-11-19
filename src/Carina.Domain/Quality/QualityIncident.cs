@@ -38,9 +38,6 @@ public sealed class QualityIncident
 
     public bool HasSettled => State is QualityIncidentState.Resolved;
 
-    /// <summary>
-    /// Whether the incident is detected and not yet told about, so the pass that finds it tells of it.
-    /// </summary>
     public bool AwaitsNotice => State is QualityIncidentState.Detected;
 
     public static QualityIncident Detect(
@@ -67,10 +64,6 @@ public sealed class QualityIncident
             null,
             null);
 
-    /// <summary>
-    /// Opens an incident for a supply that went quiet, held against the allowance of its own when it has one and
-    /// against the threshold every supply shares otherwise.
-    /// </summary>
     public static QualityIncident WentQuiet(
         QualityIncidentId id,
         SupplySilenceFinding finding,

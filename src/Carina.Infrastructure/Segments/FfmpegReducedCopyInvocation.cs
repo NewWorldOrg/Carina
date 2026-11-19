@@ -1,13 +1,5 @@
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// The arguments for the run that decodes a reduced copy into what its learning data is made from, and
-/// nothing more: its two channels put back from their sum and their difference at 8 kHz in two channels of
-/// 16-bit samples, its frames in grey at every frame, and its tiles of the corners in grey at the first
-/// frame of each second, neither resized. All three go into Matroska on the standard output, every block
-/// carrying the copy's own time. Each file is named as a file, so no name is read as a protocol. One thread
-/// a decoder and for the filters, and no card.
-/// </summary>
 public static class FfmpegReducedCopyInvocation
 {
     public const string HandedBack = "pipe:1";

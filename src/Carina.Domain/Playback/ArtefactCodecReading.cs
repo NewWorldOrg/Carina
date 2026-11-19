@@ -2,15 +2,8 @@ using Carina.Domain.Encodings;
 
 namespace Carina.Domain.Playback;
 
-/// <summary>
-/// What the picture of an artefact on disk is coded in and how its track is tagged, as read from the file
-/// itself rather than from the profile that made it.
-/// </summary>
 public sealed record ArtefactCodecReading
 {
-    /// <summary>
-    /// The tag of an H.265 picture track that Safari plays. It does not play one tagged <c>hev1</c>.
-    /// </summary>
     public const string TagSafariPlays = "hvc1";
 
     private ArtefactCodecReading(bool read, EncodeCodec? codec, string? tag, string note)

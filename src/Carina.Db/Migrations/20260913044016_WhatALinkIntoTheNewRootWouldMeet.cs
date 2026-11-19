@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class WhatALinkIntoTheNewRootWouldMeet : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(
@@ -29,7 +27,6 @@ public partial class WhatALinkIntoTheNewRootWouldMeet : Migration
             sql: "subject IN ('TheNewRoot', 'WhereEncodesGo', 'CarryingIntoTheNewRoot')");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(

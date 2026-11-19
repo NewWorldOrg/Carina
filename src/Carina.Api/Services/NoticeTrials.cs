@@ -2,10 +2,6 @@ using Carina.Domain.Notifications;
 
 namespace Carina.Api.Services;
 
-/// <summary>
-/// Counts the trials asked for from a screen, so that one destination and the whole of them are tried no more often
-/// than a window allows.
-/// </summary>
 public sealed class NoticeTrials(NotificationDeliverySettings settings, TimeProvider clock)
 {
     private readonly Lock guard = new();
@@ -14,9 +10,6 @@ public sealed class NoticeTrials(NotificationDeliverySettings settings, TimeProv
 
     private readonly Dictionary<NotificationDestinationId, Queue<DateTime>> byDestination = [];
 
-    /// <summary>
-    /// Counts one trial of <paramref name="destination"/> and says whether it may be sent now.
-    /// </summary>
     public bool Admit(NotificationDestinationId destination)
     {
         ArgumentNullException.ThrowIfNull(destination);

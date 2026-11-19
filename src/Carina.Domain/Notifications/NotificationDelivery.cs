@@ -2,10 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// One notice on its way to one destination: waiting to be sent, sent, waiting to be tried again after a failure, or
-/// given up.
-/// </summary>
 public sealed class NotificationDelivery
 {
     public const int MostListed = 50;
@@ -34,9 +30,6 @@ public sealed class NotificationDelivery
 
     public bool IsWaiting => State is NotificationDeliveryState.Queued or NotificationDeliveryState.Failed;
 
-    /// <summary>
-    /// Whether the next attempt has come by <paramref name="at"/>.
-    /// </summary>
     public bool IsDueAt(DateTime at) => NextAttemptAt is not { } next || next <= at;
 
     public static int Listed(int? perPage) => ListingGuards.Clamped(perPage, MostListed, MostListed);
@@ -108,10 +101,6 @@ public sealed class NotificationDelivery
         LastFailure = null;
     }
 
-    /// <summary>
-    /// Notes an attempt that failed in a way worth another try. The delivery waits for the next attempt, or is given
-    /// up when none is left.
-    /// </summary>
     public void Fail(NoticeFailure failure, DateTime at, TimeSpan? asked = null)
     {
         RefuseUnlessWaiting();

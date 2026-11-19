@@ -3,10 +3,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.Api.Responder.Segments;
 
-/// <summary>
-/// A stretch of a recording in the recording's own time, to the hundredth of a second, what it is, and how likely
-/// that is, as the weighted mean of what it was put together from.
-/// </summary>
 public sealed record RecordingSegmentResponder(double StartsAtSec, double EndsAtSec, SegmentKind Kind, double? Probability)
 {
     public static RecordingSegmentResponder Of(SegmentSpan stretch)
@@ -23,11 +19,6 @@ public sealed record RecordingSegmentResponder(double StartsAtSec, double EndsAt
     public static double Seconds(TimeSpan at) => Math.Round(at.TotalSeconds, 2, MidpointRounding.AwayFromZero);
 }
 
-/// <summary>
-/// The stretches of a recording in its own time: how long the recording was written for; where its stretches come
-/// from and how they stand; the version of the model that detected them, when it detected them and how much of the
-/// programme breaks took; and the stretches, none when the sequence was thrown away.
-/// </summary>
 public sealed record RecordingSegmentsResponder(
     double LengthSec,
     SegmentSource Source,

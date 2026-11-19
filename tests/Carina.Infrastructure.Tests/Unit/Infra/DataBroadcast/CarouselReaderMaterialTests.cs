@@ -8,10 +8,6 @@ using Carina.Infrastructure.DataBroadcast;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.DataBroadcast;
 
-/// <summary>
-/// Reads the data broadcast out of a synthetic broadcast ffmpeg wrote, with a carousel put into it, on the clock
-/// ffmpeg stamped it with, across that clock coming around.
-/// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
 public sealed class CarouselReaderMaterialTests : IDisposable

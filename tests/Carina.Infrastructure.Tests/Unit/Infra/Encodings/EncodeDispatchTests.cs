@@ -629,9 +629,6 @@ public sealed class EncodeDispatchTests
             null,
             null);
 
-    /// <summary>
-    /// A look that claims a job tells the screens the jobs moved.
-    /// </summary>
     [Fact]
     public async Task ALookThatStartedAJobTellsTheScreensTheJobsMoved()
     {

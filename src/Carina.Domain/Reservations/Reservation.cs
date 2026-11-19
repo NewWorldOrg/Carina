@@ -44,10 +44,6 @@ public sealed class Reservation
 
     public Margin MarginAfter { get; private set; } = null!;
 
-    /// <summary>
-    /// Whether the recording this reservation turns into is encoded once it ends. A reservation a rule
-    /// made carries what that rule asked for; one made by hand defaults to true.
-    /// </summary>
     public bool EncodeWhenRecorded { get; private set; }
 
     public string SnapshotName { get; private set; } = string.Empty;
@@ -100,10 +96,6 @@ public sealed class Reservation
 
     public bool IsRuleBorn => RuleId is not null;
 
-    /// <summary>
-    /// Whether the recorder may claim this reservation: one secured that nothing has claimed yet. A contended
-    /// reservation does not start recording when its window opens. The claim statement in the store says the same.
-    /// </summary>
     public bool IsReadyToBeClaimed => !IsPinned && State is ReservationState.Scheduled;
 
     public ReservationStanding Standing => RecordingOutcome switch
@@ -300,26 +292,13 @@ public sealed class Reservation
         };
     }
 
-    /// <summary>
-    /// Whether the recorder is to hold this reservation at <paramref name="at"/>, preparing <paramref name="ahead"/>
-    /// before its window opens: one being recorded until its recording ends, or one secured whose window has opened by
-    /// then and not yet closed. The query the recorder reads in the store says the same.
-    /// </summary>
     public bool IsDueAt(DateTime at, TimeSpan ahead)
         => RecordingOutcome is null
            && (IsPinned
                || (State is ReservationState.Scheduled && EffectiveStartAt <= at + ahead && at < EffectiveEndAt));
 
-    /// <summary>
-    /// Whether the claim made at <paramref name="claimedAt"/> may be given back: only by the start that made it, and
-    /// never once a recording came of it. The release statement in the store says the same.
-    /// </summary>
     public bool MayBeReleasedFrom(DateTime claimedAt) => StartedAt == claimedAt && RecordingOutcome is null;
 
-    /// <summary>
-    /// Whether this reservation is still waiting within <paramref name="window"/>: secured or contended with no
-    /// recording outcome, and either claimed or meeting the window. The query in the store says the same.
-    /// </summary>
     public bool IsPendingWithin(ReservationWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);
@@ -329,11 +308,6 @@ public sealed class Reservation
                && (IsPinned || (EndAt >= window.From && StartAt <= window.To));
     }
 
-    /// <summary>
-    /// What asking to throw this reservation away at <paramref name="at"/> comes to: a reservation a recording came of
-    /// goes with that recording, one claimed and still turning into a recording waits for it, and one still to be
-    /// recorded is cancelled rather than thrown away. The delete statement in the store says the same.
-    /// </summary>
     public ReservationDiscard Discarding(bool aRecordingCameOfIt, DateTime at)
     {
         if (aRecordingCameOfIt)
@@ -356,11 +330,6 @@ public sealed class Reservation
             : ReservationDiscard.Discarded;
     }
 
-    /// <summary>
-    /// Why this reservation does not take <paramref name="move"/> at <paramref name="at"/>, or null when it does. A
-    /// reservation being recorded takes nothing; a restore brings back only a cancelled reservation whose window is
-    /// still open; anything else changes only a reservation still waiting for its tuner.
-    /// </summary>
     public ReservationRevisionRefusal? RefusalToRevise(ReservationMove move, DateTime at)
     {
         if (IsPinned)
@@ -378,19 +347,11 @@ public sealed class Reservation
             : ReservationRevisionRefusal.NotStanding;
     }
 
-    /// <summary>
-    /// Whether this reservation holds no tuner yet and its window opens after <paramref name="at"/>, so the guide
-    /// and the broadcast groups may still move it.
-    /// </summary>
     public bool IsYetToBeginAt(DateTime at) => !IsPinned && EffectiveStartAt > at;
 
     public bool IsGroupedAs(BroadcastGroupKey? key, BroadcastGroupRole role)
         => Equals(BroadcastGroupKey, key) && BroadcastGroupRole == role;
 
-    /// <summary>
-    /// Plans the reservation of another segment of the broadcast this one belongs to, after this one's example: the
-    /// same rule, priority, margins and wish, on the times and snapshot the guide announces for the segment.
-    /// </summary>
     public Reservation PlanBeside(ReservationId id, BroadcastTarget sibling, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(sibling);
@@ -414,10 +375,6 @@ public sealed class Reservation
             EncodeWhenRecorded);
     }
 
-    /// <summary>
-    /// Whether this reservation carries the priority, margins and wish <paramref name="rule"/> asks for. The ledger
-    /// keeps no mark of a person's change, so a value that differs is the only witness of one.
-    /// </summary>
     public bool IsAsTheRuleAsks(Rule rule)
     {
         ArgumentNullException.ThrowIfNull(rule);
@@ -428,10 +385,6 @@ public sealed class Reservation
                && EncodeWhenRecorded == rule.EncodeWhenRecorded;
     }
 
-    /// <summary>
-    /// Whether this reservation was made by a rule other than <paramref name="rule"/>, so that rule taking the
-    /// programme would take it from its maker.
-    /// </summary>
     public bool IsHeldByAnotherRuleThan(RuleId rule)
     {
         ArgumentNullException.ThrowIfNull(rule);
@@ -439,19 +392,9 @@ public sealed class Reservation
         return IsRuleBorn && !rule.Equals(RuleId);
     }
 
-    /// <summary>
-    /// Whether a rule that takes this broadcast again brings this reservation back: one a rule made and the guide
-    /// took out, whose window is still open. One a person cancelled stays cancelled.
-    /// </summary>
     public bool MayBeRevivedByRule(DateTime at)
         => Cancellation is ReservationCancellation.ProgrammeGone && IsRuleBorn && EffectiveEndAt > at;
 
-    /// <summary>
-    /// Whether a rule may take this reservation back on <paramref name="occasion"/>, as far as the reservation
-    /// itself says: one a rule made, secured or contended, not yet recording, and, while the rule still stands,
-    /// starting more than <paramref name="grace"/> after <paramref name="at"/>. Whether the guide of its stream has
-    /// been read whole is asked of the guide, not of the reservation.
-    /// </summary>
     public bool MayBeWithdrawnByRule(RuleWithdrawal occasion, TimeSpan grace, DateTime at)
         => IsRuleBorn
            && State is ReservationState.Scheduled or ReservationState.Conflict
@@ -527,10 +470,6 @@ public sealed class Reservation
         State = ReservationState.Missed;
     }
 
-    /// <summary>
-    /// Lets go of a claim that came to nothing: the window has closed and no recording was ever written
-    /// down under it. The caller releases the claim in the recording ledger's columns as well.
-    /// </summary>
     public void Abandon()
     {
         RefuseUnless(State is ReservationState.Scheduled or ReservationState.Conflict);
@@ -575,10 +514,6 @@ public sealed class Reservation
         EndAtConfirmed = endAtConfirmed;
     }
 
-    /// <summary>
-    /// Moves this reservation onto the times and snapshot the guide now announces for the same
-    /// broadcast, and says what moved. A reservation already holding a tuner does not move.
-    /// </summary>
     public void Follow(
         DateTime programmeStartsAt,
         DateTime endAt,
@@ -610,11 +545,6 @@ public sealed class Reservation
         CapturedAt = snapshot.CapturedAt;
     }
 
-    /// <summary>
-    /// Moves this reservation onto another listing of the same broadcast and says what moved. The
-    /// reservation keeps its identity, priority, margins, rule and wishes; a reservation already
-    /// holding a tuner does not move.
-    /// </summary>
     public void Retarget(
         ProgrammeRef programme,
         DateTime endAt,

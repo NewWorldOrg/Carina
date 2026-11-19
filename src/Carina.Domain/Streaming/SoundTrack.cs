@@ -43,9 +43,6 @@ public static class SoundTracks
         => InOrder.Cast<SoundTrack?>().FirstOrDefault(track =>
             string.Equals(NameOf(track!.Value), name, StringComparison.Ordinal));
 
-    /// <summary>
-    /// The sounds offered by this many streams carried whole: one for each, as far as the secondary.
-    /// </summary>
     public static IReadOnlyList<SoundTrack> OutOf(int sounds)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(sounds);

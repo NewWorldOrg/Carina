@@ -58,9 +58,6 @@ public sealed record ScanScope
 
     public bool Covers(TuneSystem system) => Systems.Contains(system);
 
-    /// <summary>
-    /// The part of this scope a tuner in service can receive, or null when none of it is.
-    /// </summary>
     public ScanScope? Within(IReadOnlySet<TuneSystem> receivable)
     {
         ArgumentNullException.ThrowIfNull(receivable);

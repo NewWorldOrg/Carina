@@ -1614,12 +1614,6 @@ public sealed class RecordingsSchemaTests(MigratedScratchDatabase database)
         Assert.Equal("ck_recording_descrambled", refused.ConstraintName);
     }
 
-    /// <summary>
-    /// The span a recording carried over has to last, held three ways: the classifier of the migration, the recording's
-    /// own way of being carried over, and the recording ledger's check on its window. A recording one microsecond long,
-    /// the shortest the ledger keeps, is carried and written; one that ends on the instant it begins is refused by all
-    /// three.
-    /// </summary>
     [Fact(DisplayName = "BR-MS-001: a recording one microsecond long is carried by the classifier, made by the recording and kept by the ledger, recorded in full")]
     public async Task ARecordingOneMicrosecondLongIsCarriedAndKept()
     {

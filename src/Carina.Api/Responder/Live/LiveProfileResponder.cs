@@ -15,10 +15,6 @@ public sealed record LiveProfileResponder(
     bool Unasked,
     IReadOnlyList<VideoCodec> Formats)
 {
-    /// <summary>
-    /// A profile, named with the format it is encoded in when none is asked for and every format this machine
-    /// transcodes it in.
-    /// </summary>
     public static LiveProfileResponder Of(LiveProfile profile, LiveProfile unasked, IReadOnlyList<VideoCodec> formats)
     {
         ArgumentNullException.ThrowIfNull(profile);

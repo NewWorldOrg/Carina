@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class WhenASupplyGoesQuiet : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropIndex(
@@ -42,7 +40,6 @@ public partial class WhenASupplyGoesQuiet : Migration
             sql: "(breached = 'SupplySilence') = (silence IS NOT NULL)\nAND (silence IS NULL OR silence IN ('RecordingProgress', 'RecordingMeasurement', 'SignalSamples', 'GuideVisits'))");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropIndex(

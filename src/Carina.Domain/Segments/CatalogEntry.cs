@@ -2,13 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// A sound heard more than once, kept in the catalog by a representative fingerprint, with the kind it
-/// is taken for and the counts that kind was estimated from: its stretches, and the series and stations
-/// its whole stretches are spread over (<see cref="CatalogKinds"/>), and the version of the estimation it
-/// was last estimated with. An entry is started once two stretches of it are found, is estimated again
-/// whenever stretches are added and once more when the estimation changes, and is never removed.
-/// </summary>
 public sealed class CatalogEntry
 {
     public const int MostFrames = SegmentMatcher.MostFrames;
@@ -45,16 +38,8 @@ public sealed class CatalogEntry
 
     public int KindsVersion { get; private set; }
 
-    /// <summary>
-    /// Whether the entry was last estimated with an earlier version of the estimation than
-    /// <see cref="CatalogKinds.Version"/>, and waits to be estimated again.
-    /// </summary>
     public bool AwaitsReestimation => KindsVersion < CatalogKinds.Version;
 
-    /// <summary>
-    /// The entry of the sound whose fingerprint is <paramref name="frames"/>, estimated from its first
-    /// stretches.
-    /// </summary>
     public static CatalogEntry Start(
         CatalogEntryId id,
         ReadOnlySpan<uint> frames,
@@ -71,10 +56,6 @@ public sealed class CatalogEntry
         return entry;
     }
 
-    /// <summary>
-    /// The entry of the sound whose fingerprint is <paramref name="frames"/>, taken as
-    /// <paramref name="pattern"/> estimated from its first stretches.
-    /// </summary>
     internal static CatalogEntry Start(
         CatalogEntryId id,
         ReadOnlySpan<uint> frames,
@@ -132,10 +113,6 @@ public sealed class CatalogEntry
 
     public uint[] Frames() => CatalogFingerprint.Read(Fingerprint);
 
-    /// <summary>
-    /// Estimates the entry again from every one of its stretches with <see cref="CatalogKinds.Version"/> of
-    /// the estimation, and gives each stretch what it alone is taken for.
-    /// </summary>
     public void Reestimate(IReadOnlyList<PlacedOccurrence> occurrences, SeriesLinks links, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(occurrences);
@@ -145,10 +122,6 @@ public sealed class CatalogEntry
         Take(occurrences, CatalogKinds.Estimate(Length, occurrences, links), at);
     }
 
-    /// <summary>
-    /// Takes the entry for <paramref name="pattern"/>, estimated from every one of its stretches with
-    /// <see cref="CatalogKinds.Version"/> of the estimation, and gives each stretch what it alone is taken for.
-    /// </summary>
     internal void Take(IReadOnlyList<PlacedOccurrence> occurrences, CatalogPattern pattern, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(occurrences);

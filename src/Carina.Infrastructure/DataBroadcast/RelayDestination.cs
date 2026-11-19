@@ -4,12 +4,6 @@ using Carina.Infrastructure.Net;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// Which addresses a data broadcast document may be relayed to, read from the address alone: http or https, or ws or
-/// wss for a WebSocket, on port 80 or 443, with no user named in it, and where the host is written as an address, a
-/// public one. A host written as a name is judged again by the addresses it resolves to when the connection is
-/// opened.
-/// </summary>
 public static class RelayDestination
 {
     public const int LongestAddress = 4096;

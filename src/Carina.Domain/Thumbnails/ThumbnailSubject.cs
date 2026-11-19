@@ -56,8 +56,5 @@ public sealed record ThumbnailSubject
 
     public TimeSpan Written { get; }
 
-    /// <summary>
-    /// Where gaps sit in the recording's file, which a picture is not taken from.
-    /// </summary>
     public IReadOnlyList<RecordingSeam> Seams { get; }
 }

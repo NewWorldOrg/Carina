@@ -13,11 +13,6 @@ using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Encodings;
 
-/// <summary>
-/// Writes the chapters of a standing artefact again with the ffmpeg the application runs and reads them
-/// back off it: a synthetic broadcast with a pod of advertisements is encoded with a head to skip, the
-/// detection moves, and the artefact carries the new chapters with the same picture and sound.
-/// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
 public sealed class ArtefactChapterRewritesMaterialTests
@@ -149,10 +144,6 @@ public sealed class ArtefactChapterRewritesMaterialTests
         return (job, length);
     }
 
-    /// <summary>
-    /// Puts a text track of captions into the artefact the way a standing artefact has one put in, turned off
-    /// by default.
-    /// </summary>
     private static async Task CaptionedAsync(EncodeHarness harness, string artefact)
     {
         string captions = harness.Room.Under("captions.vtt");
@@ -220,10 +211,6 @@ public sealed class ArtefactChapterRewritesMaterialTests
         return said.Said;
     }
 
-    /// <summary>
-    /// A source whose first picture is declared to lie a fixed way into it. Where the source's clock
-    /// begins is still read off the file itself.
-    /// </summary>
     private sealed class AHeadOfItsOwn(ISourceHeadReader read, TimeSpan skip) : ISourceHeadReader
     {
         public async Task<SourceHeadReading> ReadAsync(string source, ServiceId service, CancellationToken cancellationToken)

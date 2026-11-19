@@ -6,17 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <summary>
-/// Drops what a person's answer for the stretches of a recording was kept in: the answers, the kind of a catalog
-/// entry an answer decided, the threshold an evaluation recommended and when the answer an artefact's chapters came
-/// from was given. Every entry heard in a recording that had an answer is put back to be estimated again, an entry an
-/// answer decided is not known until it is, and an artefact whose chapters came from an answer forgets where they
-/// came from, so that they are compared with the detection again. Going back brings the table and the columns back
-/// empty.
-/// </summary>
 public partial class SegmentsAreNotAnsweredByHand : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -89,7 +80,6 @@ public partial class SegmentsAreNotAnsweredByHand : Migration
             sql: "((chapters_verdict IS NULL) = (chapters_decided_at IS NULL))\nAND ((chapters_verdict IS NULL) = (chapters_detector IS NULL))\nAND ((chapters_verdict IS NULL) = (chapters_break_share IS NULL))\nAND (chapters_verdict IS NULL OR status <> 'Queued')\nAND (chapters_verdict IS NULL OR chapters_verdict IN ('NotAsked', 'Marked', 'NothingFound', 'Discarded', 'Unreadable'))\nAND (chapters_detector IS NULL OR chapters_detector IN ('Nobody', 'Ffmpeg', 'Segments'))\nAND (chapters_break_share IS NULL OR chapters_break_share BETWEEN 0 AND 1)\nAND (chapters_decided_at IS NULL OR chapters_decided_at >= started_at)\nAND (chapters_model_version IS NULL OR chapters_model_version >= 1)\nAND (chapters_model_version IS NULL OR chapters_detector IS NOT DISTINCT FROM 'Segments')\nAND (chapters_detector IS DISTINCT FROM 'Segments'\n    OR ((chapters_model_version IS NOT NULL) = (chapters_verdict <> 'NotAsked')))");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

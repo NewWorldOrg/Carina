@@ -5,9 +5,6 @@ using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Machines;
 
-/// <summary>
-/// Reads the capabilities of the ffmpeg the application runs.
-/// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
 public sealed class MachineCapabilityReaderMaterialTests

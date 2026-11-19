@@ -11,13 +11,6 @@ using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// One reading of one channel off the tuner, shared by every profile being made from it.
-/// </summary>
-/// <remarks>
-/// The reception is held per channel and the transcoders hang off it, so a viewer changing quality
-/// on a new session key reuses the same reading.
-/// </remarks>
 internal sealed class LiveReception
 {
     private readonly Lock gate = new();
@@ -78,20 +71,12 @@ internal sealed class LiveReception
 
     internal ServiceId Service => service;
 
-    /// <summary>
-    /// Ends once this reading has let go of what it reads from: once the supply it asked for has answered
-    /// and, when it was opened, once it has been carried to its end and given back.
-    /// </summary>
     internal Task Life { get; private set; } = Task.CompletedTask;
 
     internal Task Holding { get; private set; } = Task.CompletedTask;
 
     internal LiveSupplyEnding? Ending => stream?.Ending;
 
-    /// <summary>
-    /// Whether the last seat has left this reading, so that what it reads from is being let go of or
-    /// already has been.
-    /// </summary>
     internal bool IsClosed
     {
         get
@@ -114,10 +99,6 @@ internal sealed class LiveReception
         }
     }
 
-    /// <summary>
-    /// Whether a transcoder of this channel has found that the service carries no caption stream, in
-    /// which case the ones raised after it are not asked to draw captions.
-    /// </summary>
     internal bool CaptionsMissing
     {
         get
@@ -137,11 +118,6 @@ internal sealed class LiveReception
         }
     }
 
-    /// <summary>
-    /// Shows the channel's data broadcast to the fan-out, and hands back what shows it. The first time it is asked
-    /// for, and again once the one before it has stopped, a data broadcast is raised that takes a seat of its own.
-    /// One that has stopped is replaced even before it has said so here, and its seat is let go of with it.
-    /// </summary>
     internal DataBroadcastSession? ShowDataBroadcastTo(LiveFanout fanout)
     {
         DataBroadcastSession shown;
@@ -213,15 +189,9 @@ internal sealed class LiveReception
         LetGo();
     }
 
-    /// <summary>
-    /// Opens the supply once however many sessions ask, and hands every asker the same answer.
-    /// </summary>
     internal Task<LiveSupplyStart> OpenAsync(CancellationToken cancellationToken)
         => Opening().WaitAsync(cancellationToken);
 
-    /// <summary>
-    /// Starts opening the supply without waiting for its answer.
-    /// </summary>
     internal void Open() => Opening();
 
     private Task<LiveSupplyStart> Opening()
@@ -247,10 +217,6 @@ internal sealed class LiveReception
         Action<LiveSupplyEnding> ended)
         => Take(into, locked, ended, settings.LongestWaitToBeFed, settings.MostBytesWaitingToBeFed);
 
-    /// <summary>
-    /// Takes the seat out of the reading and calls off what is being written into it, and hands back
-    /// the task that ends once nothing more is being written.
-    /// </summary>
     internal Task Drop(LiveSeat seat)
     {
         lock (gate)
@@ -330,10 +296,6 @@ internal sealed class LiveReception
         }
     }
 
-    /// <summary>
-    /// Takes the data broadcast's seat out of the reading and closes what it writes into once what it is writing
-    /// has been written, so that the data broadcast is read to its end.
-    /// </summary>
     private void LetGoOfTheDataBroadcast(LiveSeat seat)
     {
         Drop(seat);
@@ -351,10 +313,6 @@ internal sealed class LiveReception
         raised.Stop();
     }
 
-    /// <summary>
-    /// A seat at the reading, let go of at once when the reading has already closed, since nothing would be
-    /// written into it or end it.
-    /// </summary>
     private LiveSeat Take(
         Stream into,
         Action locked,
@@ -407,10 +365,6 @@ internal sealed class LiveReception
         return opened;
     }
 
-    /// <summary>
-    /// Waits for the supply to answer, however it answered, and then for what it handed over to be carried
-    /// to its end.
-    /// </summary>
     private async Task LivedAsync(Task<LiveSupplyStart> answered)
     {
         try
@@ -425,9 +379,6 @@ internal sealed class LiveReception
         await carrying;
     }
 
-    /// <summary>
-    /// Says, for as long as this reading is attached to, that what it is reading is still being read.
-    /// </summary>
     private async Task HoldOpenAsync(ILiveTransportStream held)
     {
         try
@@ -443,10 +394,6 @@ internal sealed class LiveReception
         }
     }
 
-    /// <summary>
-    /// Waits one interval between holds on a deadline of its own, which is let go of before the wait
-    /// ends, whether it ran out or was called off.
-    /// </summary>
     private async Task BetweenHoldsAsync()
     {
         using CancellationTokenSource interval = new(settings.BetweenHolds, clock);
@@ -463,10 +410,6 @@ internal sealed class LiveReception
         }
     }
 
-    /// <summary>
-    /// Hands what is read to every seat, and lets the supply go only once the holding beside it has
-    /// ended.
-    /// </summary>
     private async Task CarryAsync(ILiveTransportStream from, Task holding)
     {
         byte[] mouthful = ArrayPool<byte>.Shared.Rent(LiveFeed.Mouthful);
@@ -542,15 +485,6 @@ internal sealed class LiveReception
     }
 }
 
-/// <summary>
-/// One transcoder's place at a reading of the channel, with the mouthfuls it has not taken yet
-/// queued in front of it.
-/// </summary>
-/// <remarks>
-/// The seat is refused further mouthfuls once the oldest one it has not taken has waited longer
-/// than its patience, once the bytes it has not taken would come to more than it is held, or once
-/// writing into it has failed.
-/// </remarks>
 internal sealed class LiveSeat
 {
     private const long NothingWaiting = long.MinValue;
@@ -648,10 +582,6 @@ internal sealed class LiveSeat
 
     internal void Ended(LiveSupplyEnding why) => ended(why);
 
-    /// <summary>
-    /// Closes what the transcoder reads from once the mouthfuls already queued have been written,
-    /// or at once if nothing more is being written into it.
-    /// </summary>
     internal void NoMore()
     {
         Interlocked.Exchange(ref noMore, 1);

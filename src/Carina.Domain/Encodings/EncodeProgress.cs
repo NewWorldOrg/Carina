@@ -1,9 +1,5 @@
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// Where a running job has got to. The portion done is at most all of it, and the time left is at
-/// least none.
-/// </summary>
 public sealed record EncodeProgress
 {
     private EncodeProgress(TimeSpan reached, TimeSpan? whole, double speed, bool ended)

@@ -99,9 +99,6 @@ public sealed class RecordingQuery
 
     public int PerPage { get; }
 
-    /// <summary>
-    /// The place the page carries on from, in place of a page number.
-    /// </summary>
     public RecordingCursor? After { get; }
 
     public static RecordingQuery? For(

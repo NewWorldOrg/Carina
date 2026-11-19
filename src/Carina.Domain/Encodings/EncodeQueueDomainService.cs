@@ -2,19 +2,12 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// One recording asked to be encoded by hand: where the artefact goes, with which profile when not the destination's
-/// own, and whether an artefact it already has is to be made again.
-/// </summary>
 public sealed record EncodeJobAsked(
     RecordingId RecordingId,
     EncodeProfileId? ProfileId,
     EncodeDestinationId DestinationId,
     bool MakeItAgain);
 
-/// <summary>
-/// Why a recording asked to be encoded by hand was not queued.
-/// </summary>
 public enum EncodeQueueRefusal
 {
     NoSuchDestination = 1,
@@ -36,11 +29,6 @@ public enum EncodeQueueRefusal
     AlreadyEncoded = 9,
 }
 
-/// <summary>
-/// The answer to queuing a recording by hand: the job to be added, or why not, with what was read on the way
-/// there to name in the answer. <see cref="ProfileId"/> is the profile asked for, or the destination's own;
-/// <see cref="Earlier"/> is the job already waiting or running, or the latest completed one.
-/// </summary>
 public sealed record EncodeQueueing
 {
     private EncodeQueueing(
@@ -87,22 +75,12 @@ public sealed record EncodeQueueing
         => new(null, refusal, destination, profileId, profile, recording, earlier);
 }
 
-/// <summary>
-/// Decides whether a recording asked for by hand is queued, reading the destination, the profile, the recording and
-/// the jobs it already has. A retired destination or profile takes nothing new. A recording still being written, or
-/// one that failed, is refused. A recording with a job waiting or running is not queued twice, and one with a
-/// completed job, whatever its profile, is refused unless its artefact is asked to be made again: a recording has
-/// one artefact at most.
-/// </summary>
 public sealed class EncodeQueueDomainService(
     IEncodeJobRepository jobs,
     IEncodeProfileRepository profiles,
     IEncodeDestinationRepository destinations,
     IRecordingDirectory recordings)
 {
-    /// <summary>
-    /// The job to queue at <paramref name="at"/>, which is handed back to be added, or why there is none.
-    /// </summary>
     public async Task<EncodeQueueing> QueueAsync(EncodeJobAsked asked, DateTime at, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(asked);

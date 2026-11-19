@@ -1,9 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The 15-second grid adverts are laid on. A length is a multiple of it when it lies within the tolerance
-/// of a whole number of steps from one to <see cref="MostSteps"/>, on either side of it.
-/// </summary>
 public static class SegmentGrid
 {
     public const int MostSteps = 12;
@@ -19,10 +15,6 @@ public static class SegmentGrid
         return over <= Step - over ? over : Step - over;
     }
 
-    /// <summary>
-    /// The length from <paramref name="shortest"/> to <paramref name="longest"/> nearest a whole number
-    /// of steps: the first such number inside, or the nearer end.
-    /// </summary>
     public static TimeSpan Nearest(TimeSpan shortest, TimeSpan longest)
     {
         if (longest < shortest)
@@ -48,10 +40,6 @@ public static class SegmentGrid
         return from <= to && Off(Nearest(from, to)) <= tolerance;
     }
 
-    /// <summary>
-    /// Whether a length from <paramref name="shortest"/> to <paramref name="longest"/> is as long as an advert lasts: a
-    /// multiple of the grid of at most <see cref="SegmentFeatures.LongestAdvertSteps"/> steps.
-    /// </summary>
     public static bool IsAsLongAsAnAdvert(TimeSpan shortest, TimeSpan longest, TimeSpan tolerance)
         => IsAMultiple(shortest, longest, tolerance)
            && Math.Round(Nearest(shortest, longest) / Step, MidpointRounding.AwayFromZero) <= SegmentFeatures.LongestAdvertSteps;

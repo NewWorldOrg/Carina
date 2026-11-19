@@ -1,8 +1,5 @@
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// How a run answered where the breaks in a recording are.
-/// </summary>
 public enum ChapterVerdict
 {
     NotAsked = 1,

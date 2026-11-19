@@ -3,10 +3,6 @@ using System.Security.Cryptography;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// The message encryption of Web Push (RFC 8291, the <c>aes128gcm</c> content coding of RFC 8188): what is written
-/// is sealed so that only the browser whose key and secret are given reads it. A message is always one record.
-/// </summary>
 public static class PushEncryption
 {
     public const int RecordSize = 4096;

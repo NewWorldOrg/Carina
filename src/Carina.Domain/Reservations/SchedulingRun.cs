@@ -37,9 +37,6 @@ public sealed class SchedulingRun
 
     public int SeatsLeftOut { get; }
 
-    /// <summary>
-    /// The reservations that held a tuner before this run and contend for one after it.
-    /// </summary>
     public IReadOnlyList<ReservationId> Displaced { get; }
 
     public bool Settled => Refusal is SchedulingRefusal.None;
@@ -55,9 +52,6 @@ public sealed class SchedulingRun
         return new SchedulingRun(SchedulingRefusal.None, plan, seatsLeftOut, []);
     }
 
-    /// <summary>
-    /// The same run, naming who lost their tuner to it.
-    /// </summary>
     public SchedulingRun Displacing(IReadOnlyList<ReservationId> displaced)
     {
         ArgumentNullException.ThrowIfNull(displaced);

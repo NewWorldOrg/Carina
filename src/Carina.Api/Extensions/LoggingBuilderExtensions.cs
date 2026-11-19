@@ -23,9 +23,6 @@ public static class LoggingBuilderExtensions
         .. CategoriesThatNameTheAddressCalled,
     ];
 
-    /// <summary>
-    /// Has every line written to the console begin with the moment it was written, in UTC.
-    /// </summary>
     public static ILoggingBuilder AddConsoleLinesWithTheirTime(this ILoggingBuilder logging)
     {
         ArgumentNullException.ThrowIfNull(logging);
@@ -37,10 +34,6 @@ public static class LoggingBuilderExtensions
         });
     }
 
-    /// <summary>
-    /// Keeps the framework from writing the lines that name the path a request came on or the address a request went
-    /// to, whatever level is configured.
-    /// </summary>
     public static ILoggingBuilder KeepRequestLinesOut(this ILoggingBuilder logging)
     {
         ArgumentNullException.ThrowIfNull(logging);

@@ -34,10 +34,6 @@ public static class LiveChannels
         LiveChannel.Sound,
     ];
 
-    /// <summary>
-    /// The channels a viewer whose backlog is full goes without, as it goes without pictures: the expendable
-    /// ones, which the backlog counts, and the data broadcast, which it does not.
-    /// </summary>
     public static IReadOnlyList<LiveChannel> CutWhenBehind { get; } =
     [
         .. Expendable,

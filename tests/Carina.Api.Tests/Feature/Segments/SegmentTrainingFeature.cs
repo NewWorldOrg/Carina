@@ -15,10 +15,6 @@ using Microsoft.Extensions.Hosting;
 
 namespace Carina.Api.Tests.Feature.Segments;
 
-/// <summary>
-/// The status of detection beside the day's round of learning, the machine idle; learning comes to what a test
-/// sets.
-/// </summary>
 internal sealed class SegmentTrainingFeature : IAsyncDisposable
 {
     public static readonly DateTime Now = new(2026, 11, 8, 12, 0, 0, DateTimeKind.Utc);
@@ -77,10 +73,6 @@ internal sealed class SegmentTrainingFeature : IAsyncDisposable
         await factory.DisposeAsync();
     }
 
-    /// <summary>
-    /// Learning that comes to the figures a test sets for the candidate and for the version in use, judged as
-    /// learning judges them.
-    /// </summary>
     internal sealed class CannedTrainer : ISegmentTrainer
     {
         public SegmentEvaluation Candidate { get; set; } = Evaluation(0.85, 0.9, 12);

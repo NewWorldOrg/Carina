@@ -2,10 +2,6 @@ using Carina.Domain.Channels;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// One recording judged: its station, what the catalog is sure of in it, and the detection made of it without the
-/// catalog.
-/// </summary>
 public sealed record SegmentComparison
 {
     public SegmentComparison(NetworkId networkId, ServiceId serviceId, CatalogTruth truth, SegmentDetection detection)
@@ -34,8 +30,5 @@ public sealed record SegmentComparison
 
     public SegmentDetection Detection { get; }
 
-    /// <summary>
-    /// The stretches a viewer is shown: none of a detection thrown away.
-    /// </summary>
     public IReadOnlyList<SegmentSpan> Shown => Detection.State is SegmentDetectionState.Discarded ? [] : Detection.Segments;
 }

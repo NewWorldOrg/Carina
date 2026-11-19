@@ -1,8 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The version of the calculations a piece of learning data was made with, and what they read.
-/// </summary>
 public sealed record ExtractionVersion
 {
     public ExtractionVersion(int number, ExtractionOrigin origin)

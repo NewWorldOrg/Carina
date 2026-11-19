@@ -14,16 +14,6 @@ public sealed record EncodeIntake(
     EncodeUnaskedStanding Standing,
     bool Automatically);
 
-/// <summary>
-/// One look at the recording ledger for recordings that have ended and have never been offered to
-/// the queue, at most a look's worth at a time.
-/// </summary>
-/// <remarks>
-/// With the auto-run turned off, nothing is looked at and the answer says so; the setting is read on
-/// every look. A recording that failed is left out, and one the ledger already holds any job for is
-/// passed over. When the machine cannot settle where the artefact goes and what shape it takes,
-/// nothing is queued and the answer says what is missing.
-/// </remarks>
 public sealed class EncodeIntakeRound(
     IEncodeIntakeReader intake,
     IEncodeJobRepository jobs,

@@ -4,11 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// Reads when what learning reads last changed from the moments its tables keep: when an entry of the catalog was
-/// last estimated, when a stretch was matched, when a skip event or a seek happened, and when the record of a recording read
-/// to its end last changed.
-/// </summary>
 public sealed class LearningMaterialChanges(CarinaDbContext context) : ILearningMaterialChanges
 {
     public async Task<DateTime?> LastChangedAsync(CancellationToken cancellationToken)

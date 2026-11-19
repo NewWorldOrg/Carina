@@ -20,16 +20,6 @@ public sealed record OrphanRecovered(int Found, int Readopted, int Resumed, int 
     public bool SaysAnything => Resumed > 0 || Marked > 0 || LeftOpen > 0;
 }
 
-/// <summary>
-/// Takes back the recordings the ledger still calls running when the driver greets this side as an
-/// instance other than the one those recordings were left on, holding the rows with no outcome
-/// against the session list that greeting was followed by.
-/// </summary>
-/// <remarks>
-/// It asks the driver to start a session again under the recording's own name and output root, so
-/// the recording carries on into the file it already has. It never marks a recording complete, and
-/// a recording it gives up on keeps its file.
-/// </remarks>
 public sealed class OrphanRecoveryService(
     IServiceScopeFactory scopes,
     IDriverClient driver,
@@ -222,11 +212,6 @@ public sealed class OrphanRecoveryService(
             recording.Id.Wire);
     }
 
-    /// <summary>
-    /// Reports why a session was not opened again. A refusal because a session of this recording's name,
-    /// or a writer on this recording, is already there is reported as the stream watcher having opened
-    /// it; the break stays open either way for the next pass to close.
-    /// </summary>
     private void WhyItWasNotOpened(Recording recording, DriverCall<SessionSnapshot> answer)
     {
         if (answer.Problem?.Title is SessionRefusalTitles.DuplicateSession
@@ -250,10 +235,6 @@ public sealed class OrphanRecoveryService(
             answer.Problem?.Title);
     }
 
-    /// <summary>
-    /// Leaves a recording whose session the driver ended at the end it was opened with to the pass
-    /// that watches the stream.
-    /// </summary>
     private void LeaveForTheWatch(Recording recording)
         => logger.LogInformation(
             "Recording {Recording} was stopped by the driver at the end it was opened with, so it is left for "
@@ -298,10 +279,6 @@ public sealed class OrphanRecoveryService(
             weighed);
     }
 
-    /// <summary>
-    /// Ends a recording the driver stopped writing because its disk had no room left, naming the full
-    /// disk, without putting it back on a stream. The file is kept.
-    /// </summary>
     private async Task FailOnAFullDiskAsync(
         Recording recording,
         RecordingSessionCount? last,
@@ -432,10 +409,6 @@ public sealed class OrphanRecoveryService(
         return tuning.Typed();
     }
 
-    /// <summary>
-    /// Reads the recording, applies one change and writes it. When the row was written by something else
-    /// meanwhile, the change is dropped.
-    /// </summary>
     private async Task<bool> ApplyAsync(
         RecordingId id,
         Func<Recording, bool> change,

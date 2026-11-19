@@ -44,9 +44,6 @@ public sealed record ConstantQuantiser
     public override string ToString() => $"qp{Quantiser}";
 }
 
-/// <summary>
-/// How finely the card quantises an AV1 picture, from the finest to the coarsest index the format has.
-/// </summary>
 public sealed record QualityIndex
 {
     public const int Finest = 0;
@@ -71,9 +68,6 @@ public sealed record QualityIndex
     public override string ToString() => $"q{Index}";
 }
 
-/// <summary>
-/// What the card is handed for one profile in each format, set so that the profile looks alike in all three.
-/// </summary>
 public sealed record CardRateControl
 {
     public CardRateControl(ConstantQuantiser h264, ConstantQuantiser h265, QualityIndex av1)

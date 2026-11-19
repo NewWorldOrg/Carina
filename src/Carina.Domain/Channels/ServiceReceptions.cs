@@ -4,10 +4,6 @@ namespace Carina.Domain.Channels;
 
 public static class ServiceReceptions
 {
-    /// <summary>
-    /// Reads a service's reception from its candidate channels against the tuners in service: the selected
-    /// channel's system when one is selected, otherwise any candidate's.
-    /// </summary>
     public static ServiceReception Of(IReadOnlyList<CandidateChannel> candidates, TunerCapacity? capacity)
     {
         ArgumentNullException.ThrowIfNull(candidates);

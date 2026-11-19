@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class WhereARecordingCarriedOnAfterAGap : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -34,7 +32,6 @@ public partial class WhereARecordingCarriedOnAfterAGap : Migration
             sql: "jsonb_typeof(gaps) = 'array' AND missed_ms >= 0 AND (missed_ms = 0) = (jsonb_array_length(gaps) = 0)");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

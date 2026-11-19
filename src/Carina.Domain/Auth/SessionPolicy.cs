@@ -38,15 +38,8 @@ public sealed record SessionPolicy
 
     public TimeSpan BetweenLastUsedWrites { get; }
 
-    /// <summary>
-    /// Whether a session may stay idle for <paramref name="idleTimeout"/> and still be cut off by the idle window
-    /// before the absolute lifetime ends it.
-    /// </summary>
     public static bool IdleFitsWithin(TimeSpan idleTimeout, TimeSpan absoluteLifetime) => idleTimeout <= absoluteLifetime;
 
-    /// <summary>
-    /// Whether a session in use is written as used before the idle window closes on it.
-    /// </summary>
     public static bool IdleOutlastsTheWrites(TimeSpan idleTimeout, TimeSpan betweenLastUsedWrites)
         => idleTimeout > betweenLastUsedWrites;
 }

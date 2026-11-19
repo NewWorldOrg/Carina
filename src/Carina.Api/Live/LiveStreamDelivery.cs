@@ -54,10 +54,6 @@ public static class LiveStreamDelivery
                 (_, _) => CarryAsync(context, channel, sessions));
     }
 
-    /// <summary>
-    /// The channel opened by the ticket in the path. A name ending in .m3u8 is answered with a playlist, for a player
-    /// that cannot open an endless stream; any other name is handed the stream as it is.
-    /// </summary>
     public static async Task InvokeWithTheTicketInThePath(
         HttpContext context,
         int networkId,
@@ -105,10 +101,6 @@ public static class LiveStreamDelivery
     private static bool AsksForAPlaylist(string? name)
         => name is not null && name.EndsWith(PlaylistExtension, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// The playlist of the channel at the profile this machine opens at and with the main sound, which is what an
-    /// external player is handed.
-    /// </summary>
     private static async Task PlaylistAsync(
         HttpContext context,
         LiveChannelKey channel,

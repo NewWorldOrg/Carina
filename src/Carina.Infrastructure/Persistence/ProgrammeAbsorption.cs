@@ -113,10 +113,6 @@ public static class ProgrammeAbsorption
         SELECT count(*) FILTER (WHERE added), count(*) FILTER (WHERE NOT added) FROM written
         """;
 
-    /// <summary>
-    /// Marks the programmes a reading named, only for the services whose whole announced schedule that
-    /// reading heard. It runs on its own, apart from the upsert, and moves the mark every time.
-    /// </summary>
     public static readonly string HeardSql = $"""
         UPDATE programme SET last_heard_at = @{HeardAtParameter}
         FROM jsonb_to_recordset(@{HeardParameter}) AS named(

@@ -1,46 +1,10 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// What one round of learning made: the candidate, how it did, how the version in use did on the same
-/// recordings, and whether the candidate takes its place.
-/// </summary>
 public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Evaluation, SegmentEvaluation InUse, AdoptionVerdict Verdict)
 {
-    /// <summary>
-    /// Whether the candidate is kept: it was judged on at least one recording. A candidate judged on none had nothing
-    /// to learn from.
-    /// </summary>
     public bool IsKept => Evaluation.Evidence.Recordings is not 0;
 }
 
-/// <summary>
-/// Learns a candidate from every recording handed over and judges it on those the catalog is sure of something in
-/// (<see cref="CatalogTruth"/>). Each recording is read with the catalog as it would have heard it
-/// (<see cref="LearningCatalog"/>), sure of none of it, so that no segment is fixed and neighbouring segments are read
-/// as one (<see cref="JoinedPiece"/>) across its stretches as across what it does not know, and labelled by
-/// <see cref="SegmentLabels"/>, its segments and those runs alike, each learned with the features detection scores it by
-/// (<see cref="SegmentSamples"/>), its seeks read once against its boundary candidates and the version in use's detection
-/// of it (<see cref="ViewerSeeks"/>), the same detection keeping the programme by elimination off what it surely takes for
-/// an opening or an ending; labels of the programme, of breaks, of
-/// openings and of endings are learned from, and with an opening or an ending among them the candidate tells four
-/// kinds apart. Its weights and offsets are pulled towards the version in use's (<see cref="SegmentRegression"/>), so
-/// that a kind with few labels stays near what that version finds. Beside a version in use that tells four kinds apart, the candidate keeps that version's opening, or
-/// its ending, as it is when nothing is labelled to learn it from, so that a round with nothing to learn one of them
-/// from never takes it away; the same holds in every fold of the leave-one-out. Every setting of the search is judged
-/// by leave-one-out in time: each recording judged is detected again with the entries set aside for it
-/// (<see cref="LearningCatalog.SetAsideFor"/>) heard nowhere in it, which leaves it hearing nothing of the catalog,
-/// and its earlier episodes remembered without the part of what they were taken to hold that lies over a stretch of
-/// one of them (<see cref="LearningCatalog.Forgetting"/>), with a model fitted to every other recording's labels, none of them
-/// standing on an entry set aside for it, and compared with what the catalog is sure of in it. The setting chosen keeps the
-/// openings and the endings the version in use finds, as a candidate must to be put in use, then finds the most boundaries
-/// within two seconds, then the most seconds of adverts (<see cref="SegmentAdoption.Prefers"/>); when no setting keeps them,
-/// the one best at boundaries is chosen all the same, and the round says it loses them. A tie keeps the setting tried first. With
-/// nothing judged, the first setting is the only one tried. The candidate is fitted to every label with the chosen
-/// setting, and its figures are those of its leave-one-out. The version in use is judged on the same recordings, each
-/// detected as it stands without the entries set aside for it, beside what viewers did with its buttons over the last
-/// <see cref="ReturnsOver"/>; a candidate has offered none. Nothing is drawn at random, and the recordings are taken
-/// in the order they started, so the same recordings, catalog and labels give the same candidate.
-/// </summary>
 public static class SegmentLearning
 {
     public static readonly TimeSpan ReturnsOver = TimeSpan.FromDays(7);
@@ -62,9 +26,6 @@ public static class SegmentLearning
         return run.Result();
     }
 
-    /// <summary>
-    /// The same learning as <see cref="Learn"/>, to be taken a step at a time.
-    /// </summary>
     public static SegmentLearningRun Begin(
         IReadOnlyList<LearningRecording> recordings,
         LearningCatalog catalog,
@@ -85,11 +46,6 @@ public static class SegmentLearning
         return new SegmentLearningRun(new Round(learners, judged, judging, active, settings, now));
     }
 
-    /// <summary>
-    /// What is learned from when <paramref name="left"/> is judged, beside every other recording's labels as they
-    /// are: the labels of each other recording that hears an entry set aside for the one judged, read again without
-    /// those entries.
-    /// </summary>
     private static Dictionary<int, IReadOnlyList<SegmentSample>> Relabelled(Labelled[] labelled, int left)
     {
         IReadOnlySet<CatalogEntryId> setAside = labelled[left].Learner.SetAside;
@@ -133,16 +89,8 @@ public static class SegmentLearning
 
     private sealed record Trial(SegmentModel Model, IReadOnlyList<SegmentComparison> Compared, SegmentMetrics? Metrics);
 
-    /// <summary>
-    /// One reading of the search made ready to try its settings with: every recording labelled, and each recording
-    /// judged read again without the entries set aside for it.
-    /// </summary>
     private sealed record Prepared(Labelled[] Labelled, IReadOnlyList<RecordingPieces> Judged);
 
-    /// <summary>
-    /// The steps of one round: the version in use judged, then each reading of the search prepared and each of its
-    /// settings tried, the best kept.
-    /// </summary>
     internal sealed class Round(
         Learner[] learners,
         int[] judged,
@@ -248,13 +196,6 @@ public static class SegmentLearning
 
     internal sealed record Labelled(Learner Learner, RecordingPieces Pieces, IReadOnlyList<SegmentSample> Samples);
 
-    /// <summary>
-    /// One recording as a round reads it: what it heard of the catalog when it was made, which its readings and the
-    /// catalog's labels stand on; everything the catalog hears in it now, which says what the catalog is sure of in it
-    /// and keeps the programme by elimination off every stretch the catalog has, a first airing included; and the
-    /// entries set aside when it is judged, which it is read again without, its earlier episodes forgetting what they
-    /// were taken to hold over a stretch of one of them.
-    /// </summary>
     internal sealed class Learner
     {
         private readonly LearningCatalog catalog;
@@ -293,19 +234,9 @@ public static class SegmentLearning
         public RecordingPieces Read(SegmentThresholds thresholds, IReadOnlySet<CatalogEntryId>? without = null)
             => SegmentDetector.Read(Recording.Evidence, without is null ? Context(null) : catalog.Forgetting(Context(without), without), thresholds);
 
-        /// <summary>
-        /// Whether this recording hears a stretch of one of <paramref name="entries"/>.
-        /// </summary>
         public bool Hears(IReadOnlySet<CatalogEntryId> entries)
             => entries.Count is not 0 && heard.Any(stretch => stretch.Entry is CatalogEntryId entry && entries.Contains(entry));
 
-        /// <summary>
-        /// This recording read to learn from and its samples: read hearing what it heard of the catalog when it was made,
-        /// its stretches cutting segments where they start and end, but sure of none of them, so that none fixes a
-        /// segment and neighbouring segments are read as one across them. A run of segments read as one that takes no
-        /// label with all the catalog heard takes none without some of it either, so only the runs that take one are
-        /// kept.
-        /// </summary>
         public Labelled Labelled(SegmentThresholds thresholds)
         {
             RecordingPieces read = SegmentDetector.Read(Recording.Evidence, Recording.Context.Hearing([.. heard.Select(Unsure)]), thresholds);
@@ -315,12 +246,6 @@ public static class SegmentLearning
             return new Labelled(this, kept, Samples(kept));
         }
 
-        /// <summary>
-        /// The samples <paramref name="pieces"/> of this recording are learned from, labelled as if the catalog did
-        /// not hear <paramref name="without"/>, against the seeks and the version in use's detection read without it too,
-        /// read once for each set of entries whatever setting is tried; every stretch the catalog has in the recording, those of
-        /// <paramref name="without"/> included, still keeps the segments it lies over from being taken for the programme.
-        /// </summary>
         public IReadOnlyList<SegmentSample> Samples(RecordingPieces pieces, IReadOnlySet<CatalogEntryId>? without = null)
         {
             if (without is null || without.Count is 0)
@@ -339,22 +264,10 @@ public static class SegmentLearning
             return SegmentSamples.Of(pieces, Context(without), Recording.Actions, everything, apart.Seeks, apart.Detection);
         }
 
-        /// <summary>
-        /// The seeks of this recording read against the boundary candidates and the detection of the version in use, as
-        /// it reads the recording hearing what it heard of the catalog when it was made; read once, when first asked for.
-        /// </summary>
         private ViewerSeeks Seeks => seeks ??= ReadSeeks();
 
-        /// <summary>
-        /// The recording read as the version in use reads it, hearing what it heard of the catalog when it was made, and
-        /// that version's detection of it; read once, when first asked for.
-        /// </summary>
         private (RecordingPieces Read, SegmentDetection Detection) InUse => inUse ??= ReadInUse();
 
-        /// <summary>
-        /// The recording read as the version in use reads it without <paramref name="without"/>, its earlier episodes
-        /// forgetting what they were taken to hold over a stretch of one of them, and that version's detection of it.
-        /// </summary>
         private (RecordingPieces Read, SegmentDetection Detection) ReadInUse(IReadOnlySet<CatalogEntryId>? without = null)
         {
             RecordingPieces read = Read(active.Thresholds, without);
@@ -369,9 +282,6 @@ public static class SegmentLearning
                 ? ViewerSeeks.None
                 : ViewerSeeks.Read(Recording.Seeks, reading.Read.Candidates, reading.Detection, TimeSpan.FromSeconds(active.Thresholds.GridToleranceSec));
 
-        /// <summary>
-        /// <paramref name="stretch"/> with its confidence not known, which fixes nothing (<see cref="SegmentFeatures"/>).
-        /// </summary>
         private static CatalogHeard Unsure(CatalogHeard stretch)
             => new(stretch.Starts, stretch.Ends, stretch.Kind, stretch.Occurrences, stretch.Series, stretch.Stations, entry: stretch.Entry);
 
@@ -417,12 +327,6 @@ public static class SegmentLearning
     }
 }
 
-/// <summary>
-/// One round of <see cref="SegmentLearning"/> taken a step at a time, so that whoever runs it can give way, or stop
-/// and throw what was done away, between steps: the version in use judged first, then each reading of the search
-/// made ready, then each of its settings tried. Once every step has been taken, <see cref="Result"/> is what
-/// <see cref="SegmentLearning.Learn"/> gives.
-/// </summary>
 public sealed class SegmentLearningRun
 {
     private readonly SegmentLearning.Round round;
@@ -434,9 +338,6 @@ public sealed class SegmentLearningRun
 
     public bool Done => round.Done;
 
-    /// <summary>
-    /// Takes the next step, and says whether every step has now been taken.
-    /// </summary>
     public bool Step(CancellationToken cancellationToken)
     {
         round.Step(cancellationToken);

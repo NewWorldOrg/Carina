@@ -6,10 +6,6 @@ using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// Where a recorded file's own clock begins, as ffprobe reads it from the file's head when asked
-/// with <see cref="FfprobeInvocation.Start"/>.
-/// </summary>
 public static class FfprobeFileStart
 {
     public const string Key = "start_time";

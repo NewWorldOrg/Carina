@@ -3,11 +3,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.Api.Responder.Segments;
 
-/// <summary>
-/// How much learning data is kept: the recordings it was taken from, including those thrown away since, the
-/// whole seconds of them read, the bytes the segment tables take in the database, and the ended recordings
-/// still waiting to be read.
-/// </summary>
 public sealed record LearningDataResponder(int Recordings, long Seconds, long Bytes, int Waiting)
 {
     public static LearningDataResponder Of(LearningDataAmount amount)
@@ -22,9 +17,6 @@ public sealed record LearningDataResponder(int Recordings, long Seconds, long By
     }
 }
 
-/// <summary>
-/// How many entries the catalog of repeated sound holds of each kind.
-/// </summary>
 public sealed record CatalogResponder(int Cm, int Opening, int Ending, int ProgrammeFixture, int StationFixture, int Unknown)
 {
     public static CatalogResponder Of(CatalogCounts counts)
@@ -35,10 +27,6 @@ public sealed record CatalogResponder(int Cm, int Opening, int Ending, int Progr
     }
 }
 
-/// <summary>
-/// The version of the model in use: its number, where it stands, whether it was chosen by hand, and when it was
-/// made and put in use.
-/// </summary>
 public sealed record SegmentVersionResponder(int Number, SegmentModelVersionState State, bool ByHand, DateTime TrainedAt, DateTime? AdoptedAt)
 {
     public static SegmentVersionResponder Of(SegmentModelVersion version)
@@ -49,11 +37,6 @@ public sealed record SegmentVersionResponder(int Number, SegmentModelVersionStat
     }
 }
 
-/// <summary>
-/// What an evaluation stands on: the recordings the catalog is sure of an advert in and the outer edges of the pods of
-/// those adverts, not the joins between the adverts in a pod nor an edge with an advert's length outside it, whether that
-/// is enough to put a version in use, and how many of each it takes.
-/// </summary>
 public sealed record SegmentEvidenceResponder(int Recordings, int Boundaries, bool Enough, int RecordingsNeeded, int BoundariesNeeded)
 {
     public static SegmentEvidenceResponder Of(EvaluationEvidence evidence)
@@ -69,19 +52,8 @@ public sealed record SegmentEvidenceResponder(int Recordings, int Boundaries, bo
     }
 }
 
-/// <summary>
-/// The share of the seconds of one kind the catalog is sure of that were detected as it; null where the catalog is
-/// sure of none.
-/// </summary>
 public sealed record SegmentKindMetricsResponder(SegmentKind Kind, double? Recall);
 
-/// <summary>
-/// How the version in use detects the recordings it was judged on, against what the catalog is sure of in them: the
-/// share of the boundaries, the outer edges of each pod of adverts and of each opening and ending, found within two
-/// seconds and within one, the seconds found of each kind it was measured
-/// on, and the share of skips on its buttons viewers came back from over the last seven days, with how many skips
-/// that is of.
-/// </summary>
 public sealed record SegmentMetricsResponder(
     double? BoundaryRecallWithin2s,
     double? BoundaryRecallWithin1s,
@@ -102,10 +74,6 @@ public sealed record SegmentMetricsResponder(
     }
 }
 
-/// <summary>
-/// The figure a station or a version is compared by: the share of the boundaries the catalog is sure of, the outer
-/// edges of each pod of adverts and of each opening and ending, found within two seconds.
-/// </summary>
 public sealed record SegmentMetricsSummaryResponder(double? BoundaryRecallWithin2s)
 {
     public static SegmentMetricsSummaryResponder Of(SegmentMetrics metrics)
@@ -116,9 +84,6 @@ public sealed record SegmentMetricsSummaryResponder(double? BoundaryRecallWithin
     }
 }
 
-/// <summary>
-/// How the version in use detects one station's recordings, and how many of them it was judged on.
-/// </summary>
 public sealed record SegmentStationResponder(int NetworkId, int ServiceId, int Recordings, SegmentMetricsSummaryResponder Metrics)
 {
     public static SegmentStationResponder Of(StationMetrics station)
@@ -133,17 +98,8 @@ public sealed record SegmentStationResponder(int NetworkId, int ServiceId, int R
     }
 }
 
-/// <summary>
-/// Why a version was taken out of use by going back to the one before it: when, the share of skips viewers
-/// came back from on it and on the version before, and how many skips that was of.
-/// </summary>
 public sealed record SegmentRolledBackResponder(DateTime At, double ReturnedAfterSkipShare, double PreviousShare, int Skips);
 
-/// <summary>
-/// One version kept: its number, where it stands, whether it was chosen by hand, when it was made, put in use
-/// and taken out of use, why when a rollback took it out, and its figure when it was evaluated on a recording or,
-/// for the version in use, measured by the latest round.
-/// </summary>
 public sealed record SegmentVersionHistoryResponder(
     int Number,
     SegmentModelVersionState State,
@@ -172,11 +128,6 @@ public sealed record SegmentVersionHistoryResponder(
     }
 }
 
-/// <summary>
-/// The figures a round of learning compares a candidate and the version in use by: the share of the boundaries the
-/// catalog is sure of, the outer edges of each pod of adverts and of each opening and ending, found within two seconds, and the share of the seconds of adverts it is sure of detected as
-/// breaks.
-/// </summary>
 public sealed record SegmentRoundMetricsResponder(double? BoundaryRecallWithin2s, double? BreakRecall)
 {
     public static SegmentRoundMetricsResponder Of(SegmentMetrics metrics)
@@ -187,12 +138,6 @@ public sealed record SegmentRoundMetricsResponder(double? BoundaryRecallWithin2s
     }
 }
 
-/// <summary>
-/// The latest round of learning: the day it was for, when it was taken and what became of it; when it learned a
-/// candidate, the candidate's number, the verdict on it, the figures of the version in use on the same recordings,
-/// and what the candidate's evaluation stands on and its figures, as the round kept them, or, for a round kept before
-/// it kept them, as the candidate keeps them while it is still kept.
-/// </summary>
 public sealed record SegmentLearningRoundResponder(
     DateOnly Day,
     DateTime TakenAt,
@@ -224,15 +169,8 @@ public sealed record SegmentLearningRoundResponder(
     }
 }
 
-/// <summary>
-/// The threshold a skip button is offered from.
-/// </summary>
 public sealed record SkipThresholdResponder(double Current);
 
-/// <summary>
-/// Where CM, OP and ED detection stands, with the latest round of learning, none before the first, and the first
-/// moment the next round may begin.
-/// </summary>
 public sealed record SegmentStatusResponder(
     LearningDataResponder LearningData,
     CatalogResponder Catalog,

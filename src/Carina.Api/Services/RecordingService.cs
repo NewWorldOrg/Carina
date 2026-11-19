@@ -44,10 +44,6 @@ public enum RecordingFailure
 
 public sealed record ThumbnailRemade(Recording Recording, ThumbnailRemake Remake);
 
-/// <summary>
-/// What became of one recording handed in to have its picture drawn again: it is back in the queue the
-/// thumbnail pass reads, or it is not, for the reason named.
-/// </summary>
 public enum ThumbnailRemakeOutcome
 {
     Queued = 1,
@@ -59,10 +55,6 @@ public enum ThumbnailRemakeOutcome
     Refused = 4,
 }
 
-/// <summary>
-/// One row of the answer to queueing pictures to be drawn again: the recording as it was asked, what became
-/// of it, and why when it was not queued.
-/// </summary>
 public sealed record ThumbnailRemakeRow(RecordingId Id, ThumbnailRemakeOutcome Outcome, string Message)
 {
     public static ThumbnailRemakeRow Queued(RecordingId id)
@@ -75,11 +67,6 @@ public sealed record ThumbnailRemakeRow(RecordingId Id, ThumbnailRemakeOutcome O
         => new(id, ThumbnailRemakeOutcome.Refused, ThumbnailRemakes.SaidOfOneThatThrew);
 }
 
-/// <summary>
-/// The rules of queueing pictures to be drawn again for several recordings: how many are taken in one
-/// request, and how the single recording's refusals read as the outcome of a row. They sit beside the
-/// service because a file of their own named for thumbnails would count as part of the feature.
-/// </summary>
 public static class ThumbnailRemakes
 {
     public const int MostAtOnce = 100;

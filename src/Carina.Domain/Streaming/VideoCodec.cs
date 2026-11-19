@@ -1,8 +1,5 @@
 namespace Carina.Domain.Streaming;
 
-/// <summary>
-/// The format a picture transcoded as it plays is encoded in.
-/// </summary>
 public enum VideoCodec
 {
     H264 = 1,
@@ -20,9 +17,6 @@ public static class VideoCodecs
 
     public const string Av1IsCalled = "av1";
 
-    /// <summary>
-    /// The format a picture is encoded in when nobody asks for one, and the only one the processor encodes.
-    /// </summary>
     public const VideoCodec Unasked = VideoCodec.H264;
 
     public static readonly IReadOnlyList<VideoCodec> InOrder = [VideoCodec.H264, VideoCodec.H265, VideoCodec.Av1];

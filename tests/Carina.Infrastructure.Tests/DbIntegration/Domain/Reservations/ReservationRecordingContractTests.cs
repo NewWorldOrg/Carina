@@ -650,10 +650,6 @@ public sealed class ReservationRecordingContractTests(MigratedRepositoryDatabase
     private static IReservationRecordingContract Contract(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<IReservationRecordingContract>();
 
-    /// <summary>
-    /// Every instant a window of the matrix opens, looked at from as far ahead as the recorder prepares, and every
-    /// instant one closes, each with the second before it.
-    /// </summary>
     private static IReadOnlyList<(DateTime At, TimeSpan Ahead)> Edges(IReadOnlyList<Reservation> matrix)
     {
         IEnumerable<(DateTime At, TimeSpan Ahead)> opening =
@@ -682,10 +678,6 @@ public sealed class ReservationRecordingContractTests(MigratedRepositoryDatabase
         return await Contract(scope).ReleaseAsync(id, claimedAt, CancellationToken.None);
     }
 
-    /// <summary>
-    /// Lays the whole matrix down as rows written straight into the store, then reads every row back as the
-    /// reservation it is, so both arms judge the same row.
-    /// </summary>
     private async Task<IReadOnlyList<Reservation>> LaidAsync()
     {
         await ExecuteAsync("DELETE FROM reservation");

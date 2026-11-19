@@ -2582,11 +2582,6 @@ public sealed class RuleApplicationServiceTests
             Programmes.Programmes.Add(announced);
         }
 
-        /// <summary>
-        /// A whole reading of the service after the broadcaster stopped announcing this programme: the
-        /// programme is gone, and what is still announced beside it carries a later mark than the one that
-        /// named it.
-        /// </summary>
         public void Dropped(int carried)
         {
             Programmes.Programmes.RemoveAll(programme =>
@@ -2607,9 +2602,6 @@ public sealed class RuleApplicationServiceTests
             Programmes.Programmes.Add(beside);
         }
 
-        /// <summary>
-        /// A reservation a rule made and the guide then took out, as it would be read back from the ledger.
-        /// </summary>
         public Reservation StandingCancelled(int carried, DateTime startAt, DateTime endAt)
         {
             Programme announced = Programmes.Programmes.Single(programme => programme.EventId.Value == carried);

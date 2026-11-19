@@ -1,10 +1,5 @@
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// Where the normal play time of a data stream stands against the <see cref="StreamClock"/>: at the moment
-/// <see cref="Stc"/> the programme time reads <see cref="Npt"/>, and from there it runs at the rate of the
-/// scale's numerator over its denominator.
-/// </summary>
 public sealed record NptReference
 {
     public const long NptModulus = 1L << 33;

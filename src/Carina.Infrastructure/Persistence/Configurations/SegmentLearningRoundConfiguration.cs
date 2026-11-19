@@ -5,15 +5,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Carina.Infrastructure.Persistence.Configurations;
 
-/// <summary>
-/// The rounds of learning taken, one row per day, so that a round already taken is not taken again after the
-/// process starts again, each with the candidate it kept, so that a round knows what is new since the last one
-/// that learned, and with what became of it, the verdict on its candidate, the figures of the version in use it was
-/// judged against and that version's number, and the candidate's own figures and what they stand on, so that the
-/// settings screen can say why the version in use did or did not change, and what the version in use is measured
-/// by, after the candidate is let go. Rows kept before these were kept leave them empty, but for the number, which a
-/// row kept before it with figures has when one version was in use at the time.
-/// </summary>
 public sealed class SegmentLearningRoundConfiguration : IEntityTypeConfiguration<SegmentLearningRound>
 {
     public const string TableName = "segment_learning_round";

@@ -13,27 +13,12 @@ public enum OrphanTreatment
     LeaveForTheWatch = 4,
 }
 
-/// <summary>
-/// What was seen of one recording the ledger still calls running, at the moment the driver greeted
-/// this side: the driver's boot identity, and the standing read off the session list that instance
-/// answered with, including whether the driver ended the recording's session at the end it was opened with.
-/// </summary>
 public readonly record struct OrphanSighting(
     bool DriverIsAnotherInstance,
     bool SessionStands,
     bool StillOnAir,
     bool EndedAtItsOpenedEnd = false);
 
-/// <summary>
-/// Decides which of four things is done with a recording nobody was watching.
-/// </summary>
-/// <remarks>
-/// A session of the recording's own name standing on the driver is taken back up, whichever
-/// instance the driver says it is. Where none stands, a broadcast still on the air carries on into
-/// the file it already has, and one that is over is marked for what was left of it, except one whose
-/// session the driver ended at its opened end, which is left in flight for the stream watcher to
-/// judge. Recovery never marks a recording complete.
-/// </remarks>
 public static class OrphanRecovery
 {
     public static readonly IReadOnlyList<RecordingOutcome> OutcomesItCanWrite =
@@ -57,11 +42,6 @@ public static class OrphanRecovery
         return sighting.EndedAtItsOpenedEnd ? OrphanTreatment.LeaveForTheWatch : OrphanTreatment.MarkWhatWasLeftBehind;
     }
 
-    /// <summary>
-    /// A broadcast is still on the air while the guide has not withdrawn it and the window this
-    /// recording was promised has not closed. A guide that knows nothing about it leaves the window to
-    /// decide.
-    /// </summary>
     public static bool StillOnAir(GuideStanding guide, bool windowIsStillOpen)
         => guide is not GuideStanding.NoLongerAnnounced && windowIsStillOpen;
 

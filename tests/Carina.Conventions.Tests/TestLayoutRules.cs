@@ -4,11 +4,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Carina.Conventions.Tests;
 
-/// <summary>
-/// Holds the layout CLAUDE.md gives under "Tests": the folder a test class sits in, the subject it is named
-/// after and the category it carries. Every test class of the four layered test projects sits in a folder of the
-/// layout. The rules read the syntax tree and no build output.
-/// </summary>
 public static class TestLayoutRules
 {
     public const string Feature = "Feature";
@@ -17,9 +12,6 @@ public static class TestLayoutRules
 
     public const string DbIntegration = "DbIntegration";
 
-    /// <summary>
-    /// What an area keeps outside the folder of its own name: a folder, written with a closing slash, or one file.
-    /// </summary>
     public static readonly IReadOnlyList<AreaSource> SourcesOutsideTheFolderOfTheArea =
     [
         new("Auth", "src/Carina.Api/Authentication/"),
@@ -108,9 +100,6 @@ public static class TestLayoutRules
         new("Version", "src/Carina.Api/Common/DeclaredVersion.cs"),
     ];
 
-    /// <summary>
-    /// The schema tests that are not named after the area alone: the area and the name of the class without its ending.
-    /// </summary>
     public static readonly IReadOnlyList<AreaSchema> SchemasNotNamedAfterTheArea =
     [
         new("Channels", "LogoVisitSchema"),
@@ -488,7 +477,6 @@ public static class TestLayoutRules
             _ => $"nothing the database project declares for {area}: no type, no migration, no schema of the area",
         };
 
-    /// <summary>The folders under <c>src/Carina.Api</c> that a test under <c>Unit/App</c> mirrors: those after <c>App</c>.</summary>
     private static IReadOnlyList<string> Mirrored(IReadOnlyList<string> folders) => [.. folders.Skip(2)];
 
     private static bool IsDeclaredInTheFolderItMirrors(Reading reading, string subject, IReadOnlyList<string> folders)
@@ -508,7 +496,6 @@ public static class TestLayoutRules
            || reading.DomainPorts[subject].Contains(PortOf(subject), StringComparer.Ordinal)
            || ImplementersInTheInfrastructure(reading, PortOf(subject)).Any();
 
-    /// <summary>The classes the infrastructure declares that implement the domain interface <paramref name="port"/>.</summary>
     private static IEnumerable<string> ImplementersInTheInfrastructure(Reading reading, string port)
         => reading.DomainPorts
             .Where(implemented => implemented.Contains(port, StringComparer.Ordinal)
@@ -820,7 +807,6 @@ public static class TestLayoutRules
                || relative.EndsWith(".Designer.cs", StringComparison.Ordinal);
     }
 
-    /// <summary>What <see cref="Read"/> found under one root: the product code's names and the test classes.</summary>
     public sealed class Reading
     {
         internal Reading(
@@ -853,21 +839,17 @@ public static class TestLayoutRules
 
         internal IReadOnlySet<string> ServingRequests { get; }
 
-        /// <summary>The classes of the product that run in the background: those built on a hosted service.</summary>
         internal IReadOnlySet<string> Jobs { get; }
 
         internal IReadOnlySet<string> Areas { get; }
 
-        /// <summary>The folders directly under <c>src/Carina.Api</c>, which the tests under <c>Unit/App</c> may mirror.</summary>
         internal IReadOnlySet<string> ApiFolders { get; }
 
-        /// <summary>For each class of the product, the interfaces declared under the domain that it implements.</summary>
         internal ILookup<string, string> DomainPorts { get; }
 
         internal IReadOnlyList<TestFile> Tests { get; }
     }
 
-    /// <summary>A folder or a file that belongs to an area although it is not under the folder of the area's name.</summary>
     public sealed record AreaSource(string Area, string Location)
     {
         internal bool Holds(string relative)
@@ -876,7 +858,6 @@ public static class TestLayoutRules
                 : string.Equals(relative, "/" + Location, StringComparison.Ordinal);
     }
 
-    /// <summary>A schema test of an area whose name is not the area's own: <c>Name</c> is the class name without <c>Tests</c>.</summary>
     public sealed record AreaSchema(string Area, string Name);
 
     internal sealed record TestFile(
@@ -898,19 +879,13 @@ public static class TestLayoutRules
 
     internal sealed record Seat(Standing Standing, Place? Place, string Area);
 
-    /// <summary>
-    /// A folder of the layout. <c>Kind</c> is the category its classes carry, or null where any kind of the layout
-    /// may sit. A place whose subject is <see cref="Subject.Whole"/> has no area folder below it and names nothing.
-    /// </summary>
     internal sealed record Place(string Project, IReadOnlyList<string> Folders, string? Kind, Subject Subject)
     {
-        /// <summary>Whether <paramref name="folders"/> of <paramref name="project"/> are this place's folders or below them.</summary>
         public bool Covers(string project, IReadOnlyList<string> folders)
             => string.Equals(project, Project, StringComparison.Ordinal)
                && folders.Count >= Folders.Count
                && folders.Take(Folders.Count).SequenceEqual(Folders, StringComparer.Ordinal);
 
-        /// <summary>Whether a test class may sit in <paramref name="folders"/> that this place covers.</summary>
         public bool Holds(IReadOnlyList<string> folders)
             => Subject == Subject.Whole ? folders.Count == Folders.Count : folders.Count > Folders.Count;
     }

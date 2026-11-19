@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class LogoSweepVisits : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(
@@ -48,7 +46,6 @@ public partial class LogoSweepVisits : Migration
             sql: "purpose IN ('Unspecified', 'Recording', 'Live', 'Survey', 'Scan', 'SurveyNow', 'Logo')\nAND purpose <> 'Recording'");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropTable(

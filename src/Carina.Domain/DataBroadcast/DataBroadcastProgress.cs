@@ -1,9 +1,5 @@
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// The state of a recording's data broadcast record with the failures counted against it and, once made,
-/// how many modules it holds.
-/// </summary>
 public sealed record DataBroadcastProgress
 {
     public const int TriesAtMost = 3;
@@ -45,10 +41,6 @@ public sealed record DataBroadcastProgress
 
     public bool IsRetryDue => State is DataBroadcastState.Failed && Attempts < TriesAtMost;
 
-    /// <summary>
-    /// Whether the record can be played: ready while it is made and <paramref name="kept"/>, coming while it is being
-    /// taken, tried again or taken again for not being kept, and none otherwise.
-    /// </summary>
     public DataBroadcastStanding StandingWith(bool kept) => State switch
     {
         DataBroadcastState.Made => kept ? DataBroadcastStanding.Ready : DataBroadcastStanding.Coming,
@@ -91,9 +83,6 @@ public sealed record DataBroadcastProgress
         return new DataBroadcastProgress(DataBroadcastState.Coming, Attempts, null);
     }
 
-    /// <summary>
-    /// The record taken again because it is made and no longer kept.
-    /// </summary>
     public DataBroadcastProgress Lost()
     {
         Expect(DataBroadcastState.Made, "Only a record that is made is lost.");
@@ -101,10 +90,6 @@ public sealed record DataBroadcastProgress
         return new DataBroadcastProgress(DataBroadcastState.Coming, 0, null);
     }
 
-    /// <summary>
-    /// The record taken again from a recording descrambled after it was taken, whether it was made, missing, or
-    /// failed, tried as many times again as a record ever is.
-    /// </summary>
     public DataBroadcastProgress Descrambled()
     {
         if (State is not (DataBroadcastState.Made or DataBroadcastState.Missing or DataBroadcastState.Failed))

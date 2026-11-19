@@ -5,15 +5,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The parameters of one version of the model segments are classified by: the weights of the logistic
-/// regression, an offset per station (keyed <c>network id:service id</c>) and per series name, the
-/// thresholds, and the mean and standard deviation each feature is standardised with. Every feature the
-/// weights name has a scale. A kind weighed against the programme is scored by its own weights, and a break
-/// by both offsets besides, which tell how much more often a station or a series breaks for adverts.
-/// <see cref="BuiltIn"/> is the version a release ships, made by hand. What the catalog hears is fixed when the
-/// sequence is decided (<see cref="SegmentSequence"/>), not weighed.
-/// </summary>
 public sealed class SegmentModel : IEquatable<SegmentModel>
 {
     public SegmentModel(
@@ -40,16 +31,6 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
         Standardisation = SortedMaps.Copied(standardisation, StringComparer.Ordinal);
     }
 
-    /// <summary>
-    /// The version this release ships, made by hand, and changed only from one release to the next. It hears silence
-    /// from -55 dBFS, below the pauses inside an advert that would cut it in two. A piece between two silent cuts,
-    /// out of the logo, whose length is a multiple of the 15-second grid up to a minute, as long as an advert lasts,
-    /// is a break, the more so with another such advert beside it, since a pod of adverts is cut at every advert. An
-    /// opening or an ending is told by what it is like in any series, its first episode included: a piece that starts
-    /// where an opening does, or ends where an ending does, keeps its loudness as a song does, centred on 10 dB so that
-    /// a song whose loudness moves is still one, lasts as long as a whole one and is not as long as an advert; earlier
-    /// episodes having one at the same place add to that.
-    /// </summary>
     public static SegmentModel BuiltIn { get; } = new(
         new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
         {
@@ -115,27 +96,13 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
         return string.Create(CultureInfo.InvariantCulture, $"{networkId.Value}:{serviceId.Value}");
     }
 
-    /// <summary>
-    /// The chance a score stands for, by the logistic function.
-    /// </summary>
     public static double Chance(double score) => score >= 0 ? 1 / (1 + Math.Exp(-score)) : Math.Exp(score) / (1 + Math.Exp(score));
 
-    /// <summary>
-    /// The score of a segment being a break rather than programme.
-    /// </summary>
     public double BreakScore(SegmentFeatureValues features, string station, string? series) => Score(SegmentKind.Break, features, station, series);
 
-    /// <summary>
-    /// How likely a segment is to be each kind the version tells apart.
-    /// </summary>
     public SegmentChances Chances(SegmentFeatureValues features, string station, string? series)
         => SegmentChances.Of(Weights.Classes.Keys.ToDictionary(kind => kind, kind => Score(kind, features, station, series)));
 
-    /// <summary>
-    /// The score of a segment being <paramref name="kind"/> rather than programme: the intercept, each weighted
-    /// feature standardised (one not known counts as its mean), and for a break the offsets of the station and
-    /// the series; nothing for the programme itself.
-    /// </summary>
     public double Score(SegmentKind kind, SegmentFeatureValues features, string station, string? series)
     {
         ArgumentNullException.ThrowIfNull(features);

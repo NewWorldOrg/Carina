@@ -2,12 +2,6 @@ using Carina.Domain.Captions;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Whether captions are shown in each second of a recording's own time, read from the captions taken
-/// from its file and placed the way they are placed over the recording played as it is. A second shows
-/// captions when a picture is on screen at any moment of it; a picture stays until the next change, and
-/// the last one to the end of what was read.
-/// </summary>
 public static class CaptionPresence
 {
     public const byte Hidden = 0;
@@ -16,10 +10,6 @@ public static class CaptionPresence
 
     public const int PerChunk = LearningData.ChunkSeconds;
 
-    /// <summary>
-    /// The seconds of the first <paramref name="length"/> of the recording, a part per chunk from the first,
-    /// a part second at the end counted as a second.
-    /// </summary>
     public static IReadOnlyList<LearningDataPart> Parts(CaptionRecord record, TimeSpan length)
     {
         ArgumentNullException.ThrowIfNull(record);

@@ -9,12 +9,6 @@ using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// The set of output roots as the storage surface answers it: what the driver declares, and after
-/// it the roots this process holds for writing, each measured the way the driver measures its own:
-/// the room on the disk, and whether a rename lands in it. A driver that cannot be reached leaves
-/// the set unanswered, and a name both sides declare stays the driver's and is reported.
-/// </summary>
 public sealed class OutputRootDeclarations(
     StorageMonitor driver,
     EncodeSettings settings,

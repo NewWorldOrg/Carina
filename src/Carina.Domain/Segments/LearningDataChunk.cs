@@ -1,13 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The learning data of the chunk of a recording that covers its own time from <see cref="Starts"/>
-/// for <see cref="LearningData.ChunkSeconds"/>: fingerprints, loudness and channel differences at
-/// their fixed steps from <see cref="Starts"/>, the light of every frame from the one
-/// <see cref="Clock"/> starts at, and the corner outline of every second. The last chunk of a
-/// recording may hold fewer of each, and no chunk holds more than its length takes. Each of
-/// <see cref="Kinds"/> is kept on its own as a <see cref="LearningDataPart"/>.
-/// </summary>
 public sealed class LearningDataChunk
 {
     public static readonly IReadOnlyList<LearningDataKind> Kinds =

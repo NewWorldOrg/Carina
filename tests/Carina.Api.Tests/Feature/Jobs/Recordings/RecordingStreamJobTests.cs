@@ -22,9 +22,6 @@ namespace Carina.Api.Tests.Feature.Jobs.Recordings;
 [Trait("Category", "Feature")]
 public sealed class RecordingStreamJobTests
 {
-    /// <summary>
-    /// The watch reaches for the stream once and waits no time at all between attempts.
-    /// </summary>
     private static readonly RecordingWatchSettings AtOnce = new(
         TimeSpan.FromMilliseconds(20),
         TimeSpan.FromMilliseconds(20),
@@ -32,10 +29,6 @@ public sealed class RecordingStreamJobTests
         TimeSpan.FromMilliseconds(20),
         3);
 
-    /// <summary>
-    /// The counts a recording has reached are on the ledger while it is still being written, and the
-    /// app going away and coming back does not reset them.
-    /// </summary>
     [Fact]
     public async Task TheCountsARecordingReachedAreStillOnItAfterTheAppWentAndCameBack()
     {
@@ -47,8 +40,6 @@ public sealed class RecordingStreamJobTests
 
         await feature.UntilTheFileGrowsPast(file, SyntheticDriverHost.AChunkOrThree);
 
-        // A pass writes nothing down for an instant that is not past the one the recording was last
-        // counted at, and this clock stands still until a test turns it.
         feature.Clock.Turn(TimeSpan.FromSeconds(30));
 
         using var patience = new CancellationTokenSource(Eventually.Patience);
@@ -93,11 +84,6 @@ public sealed class RecordingStreamJobTests
         Assert.Equal([Path.GetFileName(file)], feature.FilesWritten());
     }
 
-    /// <summary>
-    /// A stream that ends itself is never a recording that finished. The driver ends the session as a
-    /// failure; the ledger keeps the recording in flight with no outcome and writes the break down with
-    /// its reason; this side reaches for the stream again; and the recording keeps its one file.
-    /// </summary>
     [Fact]
     public async Task AStreamThatEndsItselfIsNeverCountedAsARecordingThatFinished()
     {
@@ -128,8 +114,6 @@ public sealed class RecordingStreamJobTests
 
         Assert.True(whenTheStreamEnded > 0, "The stream ended before a single byte had been written.");
 
-        // A pass judges nothing at an instant that is not past the one it last read, and this clock
-        // stands still until a test turns it. The window is ten minutes, so the recording is not over.
         feature.Clock.Turn(TimeSpan.FromSeconds(30));
 
         RecordingStreamSupervisor supervisor = feature.App.Services.GetRequiredService<RecordingStreamSupervisor>();

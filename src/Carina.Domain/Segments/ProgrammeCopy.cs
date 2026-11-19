@@ -6,9 +6,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// What the learning data keeps of the programme a recording is of.
-/// </summary>
 public sealed record ProgrammeCopy
 {
     public ProgrammeCopy(
@@ -100,11 +97,6 @@ public sealed record ProgrammeCopy
             SeriesNames.Of(recording.SnapshotName));
     }
 
-    /// <summary>
-    /// What says which series the recording of this programme is of: its station, its series name made again by
-    /// today's rules, from its programme's name when the copy was kept before series names were made, when it
-    /// started, and when its programme starts by the guide.
-    /// </summary>
     public SeriesMember MemberAs(RecordingId recordingId)
     {
         ArgumentNullException.ThrowIfNull(recordingId);

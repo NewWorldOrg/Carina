@@ -6,10 +6,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Api.Services;
 
-/// <summary>
-/// A module version of a recording's data broadcast with the tag it is answered under, or the tag alone where the
-/// asker already holds it.
-/// </summary>
 public sealed record KeptModule(string ETag, ModuleVersion? Version);
 
 public enum DataBroadcastFailure
@@ -19,11 +15,6 @@ public enum DataBroadcastFailure
     None = 2,
 }
 
-/// <summary>
-/// Places the data broadcast kept for a recording on the source a playback offer plays, the way the captions are
-/// placed, and hands over one module version of it. Nothing here writes; a record the row says is made and the shelf
-/// no longer holds reads as coming until the next pass takes it again.
-/// </summary>
 public sealed class DataBroadcastService(
     IRecordingDirectory recordings,
     IDataBroadcastRecords records,
@@ -64,11 +55,6 @@ public sealed class DataBroadcastService(
             DataBroadcastTimeline.Of(record, zero.Shift, zero.Length, from));
     }
 
-    /// <summary>
-    /// One module version of the record kept for a recording whose data broadcast is ready to play, with the tag that
-    /// changes whenever the record is taken again. Where the asker already holds what that tag names, the version is
-    /// not read and only the tag is answered.
-    /// </summary>
     public async Task<ServiceResult<KeptModule, DataBroadcastFailure>> ModuleAsync(
         RecordingId id,
         ModuleVersionKey key,

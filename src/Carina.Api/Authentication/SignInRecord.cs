@@ -6,10 +6,6 @@ using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Authentication;
 
-/// <summary>
-/// Writes one line for each thing that happens at the gate and at the ways in.
-/// A line says what arrived and whether a cookie came with it, and never carries a value.
-/// </summary>
 public sealed class SignInRecord(ILogger<SignInRecord> logger, TimeProvider clock)
 {
     public const string Line =

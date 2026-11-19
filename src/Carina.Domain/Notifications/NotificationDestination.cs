@@ -2,11 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// Where notices are sent: a webhook of one of the kinds this ledger knows, held as the sealed bytes of its address and
-/// the last characters of it for telling one from another; or a browser, held as the sealed bytes of its push
-/// subscription and the SHA-256 of its endpoint, which is what tells one browser from another.
-/// </summary>
 public sealed class NotificationDestination
 {
     public const int UrlTailLength = 4;
@@ -50,9 +45,6 @@ public sealed class NotificationDestination
         DateTime at)
         => Rehydrate(id, name, target, sealedUrl, urlTail, null, enabled: true, null, null, at, at);
 
-    /// <summary>
-    /// A browser to send to, held by the sealed bytes of its subscription and the hash of its endpoint.
-    /// </summary>
     public static NotificationDestination Subscribe(
         NotificationDestinationId id,
         NotificationName name,
@@ -136,10 +128,6 @@ public sealed class NotificationDestination
         LastFailure = null;
     }
 
-    /// <summary>
-    /// Takes another subscription of the same browser in place of the one held, and forgets what came of the last
-    /// send to the old one. The name, and whether it is turned on, stay.
-    /// </summary>
     public void Resubscribe(PushSubscription subscription, byte[] sealedSubscription, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(subscription);
@@ -175,10 +163,6 @@ public sealed class NotificationDestination
         LastFailure = null;
     }
 
-    /// <summary>
-    /// Keeps the failure of the last attempt. A destination the other end rejected is turned off until somebody turns
-    /// it on again.
-    /// </summary>
     public void NoteFailed(NoticeFailure failure, DateTime at)
     {
         LastFailure = NoticeFailures.Named(failure);
@@ -190,15 +174,8 @@ public sealed class NotificationDestination
         }
     }
 
-    /// <summary>
-    /// Keeps that the address does not open with the keys held. The destination stays on, so that writing the
-    /// address again is all it takes to send to it.
-    /// </summary>
     public void NoteUnreadable(DateTime at) => NoteFailed(NoticeFailure.Unreadable, at);
 
-    /// <summary>
-    /// Keeps that the other end turned one notice down while its address still stands. The destination stays on.
-    /// </summary>
     public void NoteTurnedDown(DateTime at)
     {
         LastFailure = NoticeFailure.Rejected;

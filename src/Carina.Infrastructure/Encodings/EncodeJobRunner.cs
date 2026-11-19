@@ -11,24 +11,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Takes one job the ledger holds as running through to its end: finds the recording, chooses the
-/// encoder against what this machine can do, has ffmpeg write the work file, and places the
-/// artefact, or fails the job for one of the reasons the ledger holds. Whatever the end, what the
-/// job still owes a removal for is swept; a stop asked for by the caller leaves the job running in
-/// the ledger.
-/// </summary>
-/// <remarks>
-/// The run writes on the job where it ran, each programme's id and start before its output is read,
-/// and its headway at every tenth and at least every <see cref="HeartbeatEvery"/>. The chapters come
-/// from the recording's detection by the version of the model in use, as <see cref="EncodeChapterChoice"/>
-/// decides; a recording that version has not detected yet is encoded with no chapters, without waiting, and
-/// they are written into the artefact once it has. Where they came from goes into the ledger before the
-/// encode starts, whatever the answer; any chapters are handed to the encode as a metadata file recorded as
-/// a scratch file. Before the artefact is placed, the text of the recording's captions is put into the work
-/// file as a text track when it was taken by then. Once a job has completed, what earlier jobs of the
-/// recording made is replaced; a failure there leaves the job completed and is settled at the next start.
-/// </remarks>
 public sealed class EncodeJobRunner(
     IEncodeJobRepository jobs,
     IEncodeProfileRepository profiles,
@@ -284,10 +266,6 @@ public sealed class EncodeJobRunner(
         }
     }
 
-    /// <summary>
-    /// Writes down that the chapters come from the recording's detection by the version in use, or from nothing,
-    /// and hands back the stretches embedded in the recording's own time, or none.
-    /// </summary>
     private async Task<string?> ChosenAsync(
         EncodeJob job,
         EncodeChapterChoice choice,
@@ -321,13 +299,6 @@ public sealed class EncodeJobRunner(
         return embedded.Count is 0 ? null : ChapterMetadataFile.InRecordingTime(embedded);
     }
 
-    /// <summary>
-    /// Makes the work file a second time, coarser, when it came out larger than the recording, writes down which
-    /// of the two the job keeps, and hands back where that one is. A recording whose size is not known is outgrown
-    /// by nothing, a profile already at the coarsest is not made again, and a second run that fails leaves the
-    /// first. The one not kept, or what a second run that failed left, is removed there and then, before the
-    /// kept one is measured and captioned.
-    /// </summary>
     private async Task<string> NoLargerThanTheSourceAsync(EncodeJob job, EncodeRemakeRun run, CancellationToken cancellationToken)
     {
         long recorded = BytesOf(run.Source);
@@ -413,10 +384,6 @@ public sealed class EncodeJobRunner(
         return keepsTheSecond ? again : run.Work;
     }
 
-    /// <summary>
-    /// Why the second run made no file, named the way a failed job's reason is, so a disk with no room left is
-    /// told apart from the programme refusing.
-    /// </summary>
     private static string WhyTheSecondRunMadeNothing(EncodeRunOutcome ran)
         => ran.Fault switch
         {
@@ -486,11 +453,6 @@ public sealed class EncodeJobRunner(
             timeline.Drift is { } drift ? drift.TotalSeconds.ToString(FfmpegEncodeInvocation.Seconds, CultureInfo.InvariantCulture) : "an unknown distance");
     }
 
-    /// <summary>
-    /// Writes a copy of the work file with the text track of the recording's captions put in, for the placer to
-    /// place in its stead, when the captions were taken with their text by now. Whatever stops that leaves the
-    /// work file as the encode wrote it to be placed, and the job goes on to complete.
-    /// </summary>
     private async Task CaptionAsync(EncodeJob job, string work, CancellationToken cancellationToken)
     {
         if (await captioning.CaptionsToCarryAsync(job.RecordingId, cancellationToken) is not { Record: { } record, MadeAt: DateTime madeAt })

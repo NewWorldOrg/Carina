@@ -18,10 +18,6 @@ public sealed class DataBroadcastSettingsRepository(CarinaDbContext context) : I
             .AsNoTracking()
             .FirstOrDefaultAsync(row => row.Id == DataBroadcastSettings.TheOnlyRow, cancellationToken);
 
-    /// <summary>
-    /// Inserts the one row, or writes the postal code, the prefecture and when they changed over the row held, in a
-    /// single statement.
-    /// </summary>
     public async Task SaveAsync(DataBroadcastSettings settings, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);

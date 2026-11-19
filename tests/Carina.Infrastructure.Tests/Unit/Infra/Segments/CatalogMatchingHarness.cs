@@ -12,10 +12,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
-/// <summary>
-/// The catalog held in memory: entries and stretches as they were kept, a stretch given its identity as it
-/// is kept.
-/// </summary>
 internal sealed class HeldCatalog : ICatalogRepository
 {
     private long identity;
@@ -94,9 +90,6 @@ internal sealed class HeldCatalog : ICatalogRepository
             found.MatchedAt);
 }
 
-/// <summary>
-/// The records and learning data held in memory, read for matching the way the store reads them.
-/// </summary>
 internal sealed class HeldCatalogWorklist(HeldLearningExtractions records, HeldLearningData data) : ICatalogWorklist
 {
     public int Asked { get; private set; }
@@ -202,9 +195,6 @@ internal sealed class CatalogMatchingHarness : IDisposable
             new FixedClock(at ?? Now),
             NullLogger<CatalogMatchingJob>.Instance);
 
-    /// <summary>
-    /// Fingerprints that sound like nothing else, of a recording <see cref="Minutes"/> long.
-    /// </summary>
     public static uint[] Sound(int seed)
     {
         Random random = new(seed);
@@ -224,10 +214,6 @@ internal sealed class CatalogMatchingHarness : IDisposable
         return shared;
     }
 
-    /// <summary>
-    /// The record of a recording of a weekly series, read to its end <paramref name="updatedMinutesAgo"/>
-    /// minutes ago, with its fingerprints kept.
-    /// </summary>
     public async Task<RecordingId> ReadAsync(uint[] fingerprints, int daysAgo, string series, int station = 1, int updatedMinutesAgo = 10)
     {
         RecordingId id = RecordingId.New();

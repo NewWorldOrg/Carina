@@ -5,11 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// Reads the records of the learning data and the data itself for matching against the catalog. Which
-/// records wait to be matched is <see cref="LearningExtraction.AwaitsMatching"/> written out in
-/// <see cref="Awaiting"/>.
-/// </summary>
 public sealed class CatalogWorklist(CarinaDbContext context) : ICatalogWorklist
 {
     public static IQueryable<LearningExtraction> Awaiting(CarinaDbContext context)

@@ -13,16 +13,6 @@ public sealed record BroadcastGroupRun(
     IReadOnlyList<ReservationId> Regrouped,
     IReadOnlyList<Reservation> Made);
 
-/// <summary>
-/// Holds every reservation still standing against the relayed and moved broadcasts the guide links.
-/// </summary>
-/// <remarks>
-/// A reservation on a listing a moved broadcast suppresses is moved onto the primary listing, or
-/// cancelled when another reservation already stands there. A reservation on a segment of a relayed
-/// broadcast has the segments still to come reserved beside it, after its own example. A reservation
-/// already holding a tuner is never moved or regrouped, and still sets the example for the segments
-/// after it.
-/// </remarks>
 public sealed class BroadcastGroupService(
     IReservationRepository reservations,
     ReservationOutcomeDomainService ledger,

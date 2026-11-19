@@ -3,14 +3,8 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Api.Services;
 
-/// <summary>
-/// Places what was taken from a recording's file on the source a playback offer plays, and says in the log when an
-/// artefact was made from a file whose clock began elsewhere.
-/// </summary>
 public sealed class SourcePlacement(SourcePlacementDomainService placement, ILogger<SourcePlacement> logger)
 {
-    /// <param name="begins">Where the file's own clock began when <paramref name="taken"/> was taken from it.</param>
-    /// <param name="taken">What was taken, named in the plural as the log names it.</param>
     public async Task<SourceZero?> PlaceAsync(
         RecordingId id,
         PlaybackOffer offer,

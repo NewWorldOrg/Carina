@@ -2,16 +2,8 @@ using Carina.Domain.Notifications;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// Writes the messages that go to a browser: the words of a notice or of a trial, signed for the push service the
-/// subscription names with the server's own key and the address the screens are reached at.
-/// </summary>
 public sealed class PushMessages(PushServerKey key, NoticeLinkBase links, TimeProvider clock)
 {
-    /// <summary>
-    /// The public half of the server's key as browsers subscribe with it, or nothing where the key is not there to
-    /// be read.
-    /// </summary>
     public string? PublishedKey()
     {
         try
@@ -24,9 +16,6 @@ public sealed class PushMessages(PushServerKey key, NoticeLinkBase links, TimePr
         }
     }
 
-    /// <summary>
-    /// Whether the server's key is there to sign with. Where it is not, nothing can be sent to any browser.
-    /// </summary>
     public bool CanSign() => PublishedKey() is not null;
 
     public PushMessage Telling(PushSubscription subscription, Notice notice, PushHandling handling)

@@ -1,19 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Finds where a segment may start or end in one recording, from the cues a break is cut at: a silence,
-/// sound quieter than the threshold for at least <see cref="ShortestQuiet"/>, at its middle; black,
-/// frames darker than the threshold for as long, at its middle; the logo coming on or going off, each
-/// state held for <see cref="HeldSeconds"/> seconds; the edges of what the catalog heard as a kind it counts as,
-/// since a stretch of a kind it cannot tell ends where its match stopped, which may lie inside an advert; the
-/// programme's start and end by the guide; and the recording's own ends. A change of scene, a frame that moved
-/// from the one before by the threshold or more, is no candidate of its own: a silence with one within
-/// <see cref="CorroboratedWithin"/> of its middle, with black over it, or as quiet on average as
-/// <see cref="EditedDbfs"/>, the silence an edit leaves rather than a pause, is a silent cut. Nothing past
-/// the recording's length is a candidate. Going forward in time, a candidate within
-/// <see cref="MergedWithin"/> of the strongest of those merged before it joins them: a recording end is
-/// the strongest, then a silent cut, a catalog edge, a silence or black, and the rest.
-/// </summary>
 public static class BoundaryCandidates
 {
     public const int HeldSeconds = 5;
@@ -44,9 +30,6 @@ public static class BoundaryCandidates
             ]);
     }
 
-    /// <summary>
-    /// The candidates the recording's sound and picture alone give: its silences, black and its own ends.
-    /// </summary>
     public static IReadOnlyList<BoundaryCandidate> Find(SegmentEvidence evidence, SegmentThresholds thresholds) => Found(evidence, thresholds, []);
 
     private static List<BoundaryCandidate> Found(SegmentEvidence evidence, SegmentThresholds thresholds, List<Raw> known)
@@ -68,9 +51,6 @@ public static class BoundaryCandidates
         return Merged([.. raw.Where(candidate => candidate.At >= TimeSpan.Zero && candidate.At <= evidence.Length)]);
     }
 
-    /// <summary>
-    /// The seconds of the candidates, other than the recording's own ends.
-    /// </summary>
     public static IReadOnlyList<TimeSpan> Snaps(IReadOnlyList<BoundaryCandidate> candidates)
     {
         ArgumentNullException.ThrowIfNull(candidates);

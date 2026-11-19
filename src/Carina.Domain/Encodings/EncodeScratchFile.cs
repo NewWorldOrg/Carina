@@ -42,11 +42,6 @@ public static class EncodeScratchShapes
             : throw new ArgumentOutOfRangeException(nameof(fate), fate, "A scratch file ends in one of the ways named here.");
 }
 
-/// <summary>
-/// A file a job owes a removal for: one it writes on the way, written into the ledger before it
-/// exists on disk, or the artefact it made once a newer one replaced it, written into the ledger
-/// before it is removed. Once the job has ended the ledger says what there is to remove.
-/// </summary>
 public sealed class EncodeScratchFile
 {
     private EncodeScratchFile()
@@ -71,22 +66,12 @@ public sealed class EncodeScratchFile
 
     public bool IsOwedARemoval => RemovedAt is null || Fate is EncodeScratchFate.CouldNotBeRemoved;
 
-    /// <summary>
-    /// Whether a file of this kind is written to put a caption track into, or to write the chapters of, an artefact
-    /// already made, which the encode work still claims after its job has ended.
-    /// </summary>
     public static bool IsWorkOnAStandingArtefact(EncodeScratchKind kind)
         => kind is EncodeScratchKind.Captions
             or EncodeScratchKind.CaptionedWork
             or EncodeScratchKind.Chapters
             or EncodeScratchKind.ChapteredWork;
 
-    /// <summary>
-    /// Whether encode work claims the file while its job stands as <paramref name="job"/>: it has not been removed, and
-    /// the job is still in hand or the file is work on an artefact already made. The query the integrity check reads in
-    /// the store says the same.
-    /// </summary>
-    /// <exception cref="ArgumentException"><paramref name="job"/> is not the job that wrote the file.</exception>
     public bool IsClaimedWhile(EncodeJob job)
     {
         ArgumentNullException.ThrowIfNull(job);

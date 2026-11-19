@@ -40,12 +40,6 @@ public sealed record EncodeTimelineResponder(
     private static double? Seconds(TimeSpan? span) => span is { } some ? Seconds(some) : null;
 }
 
-/// <summary>
-/// One job as the ledger holds it, read at a moment: its standing, how long it has gone without
-/// making headway and whether that counts as stalled, for a waiting job, whether it is held back
-/// by the card being used for someone watching, for a completed one, when a newer artefact of
-/// the recording replaced what it made, and why it made its artefact a second time, if it did.
-/// </summary>
 public sealed record EncodeJobResponder(
     Guid Id,
     string RecordingId,

@@ -6,14 +6,10 @@ using Carina.Domain.Rules;
 
 namespace Carina.Infrastructure.Tests.Fixtures.Reservations;
 
-/// <summary>
-/// The claim columns the recording ledger owns. Only the release is exercised.
-/// </summary>
 internal sealed class HeldClaims : IReservationRecordingContract
 {
     public List<ReservationId> Released { get; } = [];
 
-    /// <summary>Reservations whose claim a recording has since landed under.</summary>
     public HashSet<ReservationId> Kept { get; } = [];
 
     public Task<IReadOnlyList<RecordingTick>> DueAtAsync(
@@ -38,10 +34,6 @@ internal sealed class HeldClaims : IReservationRecordingContract
     }
 }
 
-/// <summary>
-/// A recording ledger holding the recordings a test says are running, each begun for its
-/// reservation on the tuner it names.
-/// </summary>
 internal sealed class RunningRecordings : IRecordingRepository
 {
     private readonly List<Recording> running = [];
@@ -286,10 +278,8 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
                     LeftScrambledAgainst.Contains(reservation.Id))),
         ]);
 
-    /// <summary>Which reservations a recording is written down against.</summary>
     public HashSet<ReservationId> RecordedAgainst { get; } = [];
 
-    /// <summary>Which reservations a recording that is left scrambled is written down against.</summary>
     public HashSet<ReservationId> LeftScrambledAgainst { get; } = [];
 
     public Task<IReadOnlyList<Reservation>> ListClaimedOverAsync(

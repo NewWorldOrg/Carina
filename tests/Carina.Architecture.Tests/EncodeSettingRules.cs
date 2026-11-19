@@ -2,9 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace Carina.Architecture.Tests;
 
-/// <summary>
-/// Reads the encode settings out of their source.
-/// </summary>
 public static class EncodeSettingRules
 {
     private static readonly string[] FreeText = ["string", "string?"];

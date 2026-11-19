@@ -4,11 +4,6 @@ using System.Text;
 
 namespace Carina.Domain.Recordings;
 
-/// <summary>
-/// The place in a list of recordings just after its last row: the value that row is ordered by and its
-/// identifier, in the order and direction the list was asked for. It travels as an opaque string a query
-/// string carries as it is.
-/// </summary>
 public sealed record RecordingCursor
 {
     private const string Version = "1";
@@ -52,9 +47,6 @@ public sealed record RecordingCursor
         return new RecordingCursor(sort, descending, DateTime.SpecifyKind(key, DateTimeKind.Utc), id);
     }
 
-    /// <summary>
-    /// The place just after a recording, in the order a query asked for.
-    /// </summary>
     public static RecordingCursor Past(Recording recording, RecordingQuery query)
     {
         ArgumentNullException.ThrowIfNull(recording);
@@ -63,9 +55,6 @@ public sealed record RecordingCursor
         return After(query.Sort, query.Descending, KeyOf(recording, query.Sort), recording.Id);
     }
 
-    /// <summary>
-    /// The value a recording is ordered by under a sort.
-    /// </summary>
     public static DateTime KeyOf(Recording recording, RecordingSort sort)
     {
         ArgumentNullException.ThrowIfNull(recording);
@@ -73,9 +62,6 @@ public sealed record RecordingCursor
         return sort is RecordingSort.ProgrammeStartsAt ? recording.ProgrammeStartsAt : recording.StartedAtActual;
     }
 
-    /// <summary>
-    /// The place a string written by <see cref="Wire"/> names, or null for anything else.
-    /// </summary>
     public static RecordingCursor? Read(string? wire)
     {
         if (Unwrapped(wire) is not { } inside)

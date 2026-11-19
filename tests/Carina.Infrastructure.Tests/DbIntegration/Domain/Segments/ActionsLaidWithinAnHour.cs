@@ -11,12 +11,6 @@ using NpgsqlTypes;
 
 namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Segments;
 
-/// <summary>
-/// The events a recording kept before a new skip event or seek, laid so that the statements that keep the new one
-/// only while its recording has taken fewer than the most an hour can be held to the event's own answer for the same
-/// rows: which kept events count with the new one, on the instant an hour before it and a microsecond after, with one
-/// short of the most and with the most.
-/// </summary>
 internal static class ActionsLaidWithinAnHour
 {
     public static readonly DateTime Noon = new(2026, 11, 12, 12, 0, 0, DateTimeKind.Utc);

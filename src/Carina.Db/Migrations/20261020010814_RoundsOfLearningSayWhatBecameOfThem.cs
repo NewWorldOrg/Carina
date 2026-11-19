@@ -6,14 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <summary>
-/// Keeps with each round of learning what became of it, the verdict on the candidate it kept and the figures of the
-/// version in use that candidate was judged against, so that the status can say why the version in use did or did not
-/// change. Rounds kept before leave all three empty, since what became of them was not kept. Going back drops the three.
-/// </summary>
 public partial class RoundsOfLearningSayWhatBecameOfThem : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -54,7 +48,6 @@ public partial class RoundsOfLearningSayWhatBecameOfThem : Migration
             sql: "verdict IN ('Adopted', 'ChosenByHand', 'TooLittleEvidence', 'NoBetterAtBoundaries', 'HeldAfterRollback')");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

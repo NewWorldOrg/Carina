@@ -2,10 +2,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Integrity;
 
-/// <summary>
-/// The thumbnail a recording's row says has been drawn, and where in the place thumbnails are drawn into
-/// it has to lie.
-/// </summary>
 public sealed record DrawnPicture
 {
     public DrawnPicture(RecordingId recording, OutputRoot place, string path)

@@ -10,11 +10,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
-/// <summary>
-/// The records and learning data held in memory, read for detection with the filters and order the store reads
-/// them with: a record waits to be detected as <see cref="RecordingDetection.IsAwaited"/> says, and only while its
-/// recording is <see cref="Kept"/>.
-/// </summary>
 internal sealed class HeldDetectionWorklist(HeldLearningExtractions records, HeldLearningData data, HeldRecordingDetections detections) : IDetectionWorklist
 {
     public HashSet<RecordingId> Kept { get; } = [];
@@ -94,10 +89,6 @@ internal sealed class SegmentDetectionHarness : IDisposable
 
     public const byte Loud = 40;
 
-    /// <summary>
-    /// The byte of a corner outline the logo lights: eight blocks in the third row of the top left corner, clear of
-    /// the edge of the picture.
-    /// </summary>
     private const int LogoByte = 8;
 
     public static readonly DateTime Now = new(2026, 11, 1, 3, 0, 0, DateTimeKind.Utc);
@@ -172,11 +163,6 @@ internal sealed class SegmentDetectionHarness : IDisposable
 
     public SegmentDetecting Detecting() => provider.CreateScope().ServiceProvider.GetRequiredService<SegmentDetecting>();
 
-    /// <summary>
-    /// The record of a recording <see cref="Seconds"/> long, still kept, read to its end and matched against the
-    /// catalog ten minutes ago unless said otherwise: loud sound with a silent black cut at each of
-    /// <paramref name="cuts"/>, and, when <paramref name="logo"/> says so, a logo steady in a corner.
-    /// </summary>
     public async Task<RecordingId> ReadAsync(
         int daysAgo,
         string series,
@@ -220,9 +206,6 @@ internal sealed class SegmentDetectionHarness : IDisposable
         return id;
     }
 
-    /// <summary>
-    /// Reads the recording's data again and matches it again a minute from now.
-    /// </summary>
     public void ReadAgain(RecordingId id)
     {
         LearningExtraction record = Records.Row(id)!;

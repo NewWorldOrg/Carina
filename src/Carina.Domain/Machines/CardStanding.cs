@@ -1,9 +1,5 @@
 namespace Carina.Domain.Machines;
 
-/// <summary>
-/// Where the card stands on this machine. <see cref="Usable"/> means a frame was actually encoded
-/// on it.
-/// </summary>
 public enum CardStanding
 {
     Usable = 1,

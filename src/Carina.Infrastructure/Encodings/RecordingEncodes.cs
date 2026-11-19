@@ -5,12 +5,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Answers for one recording out of the encode ledger. A job still waiting or running is work under
-/// way. Taking what the jobs left off the disk sweeps what every ended job still owes a removal
-/// for, a replaced artefact among it, then removes each artefact that stands, once per name. A name
-/// held by a job that did not complete is left alone.
-/// </summary>
 public sealed class RecordingEncodes(
     RecordingEncodeDomainService standing,
     EncodeScratchCleaner cleaner,

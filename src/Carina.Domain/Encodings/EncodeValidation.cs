@@ -76,10 +76,6 @@ public static class EncodeValidation
         return refusals;
     }
 
-    /// <summary>
-    /// What refuses a destination draft: its label, an output root outside the declared set or not held
-    /// by this process for writing, and a default profile that is not defined.
-    /// </summary>
     public static IReadOnlyList<EncodeRefusal> WhatRefusesTheDestination(
         EncodeDestinationDraft draft,
         IReadOnlyList<StorageRootDto> declared,

@@ -240,9 +240,6 @@ public static class MigrationClassifier
         string note)
         => MigrationVerdict.Refuse(population, subject, refusal, note, null, null);
 
-    /// <summary>
-    /// The file each recording is carried from: the one the source system kept as broadcast, never an encoded copy.
-    /// </summary>
     public static IReadOnlyDictionary<long, SourceRecordingFile> AsBroadcastByRecording(
         IReadOnlyList<SourceRecordingFile> rows)
     {

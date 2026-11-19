@@ -9,10 +9,6 @@ public enum DataBroadcastFault
     ClockUnread = 3,
 }
 
-/// <summary>
-/// What reading a recording's file for its data broadcast came to: a record holding at least one module, none
-/// because the recording carries no data broadcast or no module of it was put together, or a failure.
-/// </summary>
 public sealed record DataBroadcastTaking
 {
     private DataBroadcastTaking(DataBroadcastRecord? record, DataBroadcastFault? fault, string note)

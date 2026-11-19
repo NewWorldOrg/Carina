@@ -1,10 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The weights of the logistic regression a version of the model scores segments with, one set per
-/// kind weighed against the programme. With two kinds, programme and break, only the break is weighed;
-/// with four, the break, the opening and the ending each are.
-/// </summary>
 public sealed class SegmentWeights : IEquatable<SegmentWeights>
 {
     private static readonly SegmentKind[] TwoKinds = [SegmentKind.Break];

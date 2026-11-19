@@ -7,15 +7,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// One look at the programmes asked to be told of: each row is turned by the time and by what the guide says,
-/// and what there is to tell of it is taken as a notice for the destinations the row names.
-/// </summary>
-/// <remarks>
-/// The notice, its deliveries and the row's new state are written together or not at all, in the turn the writers
-/// of the destinations take, and the row is read again inside that turn. These notices pass by the sets of rules.
-/// A row that cannot be turned is logged and the others of the same look are turned.
-/// </remarks>
 public sealed class ProgrammeWatchRound(
     IProgrammeWatchRepository watches,
     IAnnouncedProgrammes programmes,

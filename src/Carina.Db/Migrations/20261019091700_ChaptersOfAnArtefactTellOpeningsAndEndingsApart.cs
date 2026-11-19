@@ -6,13 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <summary>
-/// Lets a chapter of an artefact be an opening or an ending beside the programme and a break. The chapters kept
-/// stay as they were. Going back keeps an opening and an ending as a break, which is how they were kept before.
-/// </summary>
 public partial class ChaptersOfAnArtefactTellOpeningsAndEndingsApart : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -27,7 +22,6 @@ public partial class ChaptersOfAnArtefactTellOpeningsAndEndingsApart : Migration
             sql: "kind IN ('Programme', 'Break', 'Opening', 'Ending')");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

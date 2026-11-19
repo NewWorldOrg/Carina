@@ -11,13 +11,6 @@ using Puppis.Contracts;
 
 namespace Carina.Api.Controllers.Live;
 
-/// <summary>
-/// Names the receiver's identifier a live channel's data broadcast document may be given through <c>getIRDID</c>:
-/// the CA system and the ID of the card the driver last heard from. Refused 403 unless the browser asking allows
-/// communication and hands the identifier over, 404 where the channel cannot be watched live here or no card has
-/// answered, and 503 where the driver could not be asked. The answer is never stored on the way, and the ID is never
-/// written to a log. Opened with the reader's own session only, never with a ticket.
-/// </summary>
 [ApiController]
 [Route("api/live/{networkId:int}-{serviceId:int}/data-broadcast/receiver-id")]
 [EndpointEffect(EndpointEffect.Reading)]

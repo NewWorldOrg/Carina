@@ -4,17 +4,8 @@ using Puppis.Contracts;
 
 namespace Carina.Domain.Quality;
 
-/// <summary>
-/// Reads when each tuner last supplied a signal sample, for the supply watch to hold against the time it may stay
-/// quiet.
-/// </summary>
 public sealed class SupplyWatchDomainService(IQualitySignalSampleRepository samples)
 {
-    /// <summary>
-    /// One reading for each tuner in use that holds a session, last heard at the later of when that session opened
-    /// and when a sample was last taken from the tuner; a session the driver says opened later than now counts from
-    /// now.
-    /// </summary>
     public async Task<IReadOnlyList<SupplyReading>> SignalSamplesAsync(
         IReadOnlyList<TunerSnapshot> tuners,
         DateTime now,

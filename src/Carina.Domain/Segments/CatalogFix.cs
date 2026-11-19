@@ -1,9 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The kind the catalog fixes a segment to, and how likely that is: the confidence of the surest entry of that kind
-/// heard over the segment, as the catalog estimated it (<see cref="CatalogKinds"/>).
-/// </summary>
 public sealed record CatalogFix
 {
     public CatalogFix(SegmentKind kind, double chance)

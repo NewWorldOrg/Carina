@@ -3,9 +3,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// A recording whose data broadcast is to be taken: where its file is and the service it carries.
-/// </summary>
 public sealed record DataBroadcastSubject
 {
     public DataBroadcastSubject(RecordingId id, OutputRoot root, RecordingFileName fileName, ServiceId service)

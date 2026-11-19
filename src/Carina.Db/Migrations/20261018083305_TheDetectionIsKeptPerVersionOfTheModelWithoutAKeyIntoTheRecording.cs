@@ -6,13 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <summary>
-/// Makes the tables of the versions of the model and of the detections made with them. No version is kept here: the
-/// built-in version of a release is kept when the application starts.
-/// </summary>
 public partial class TheDetectionIsKeptPerVersionOfTheModelWithoutAKeyIntoTheRecording : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.CreateTable(
@@ -99,7 +94,6 @@ public partial class TheDetectionIsKeptPerVersionOfTheModelWithoutAKeyIntoTheRec
             filter: "state = 'Active'");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropTable(

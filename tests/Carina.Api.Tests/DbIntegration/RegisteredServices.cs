@@ -2,11 +2,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Api.Tests.DbIntegration;
 
-/// <summary>
-/// Puts a stand-in around a service the product registers. The registered implementation is still the one the
-/// container builds, with its own lifetime, and the stand-in is handed it to pass on to. This is the only place a
-/// test builds a type behind a domain interface itself.
-/// </summary>
 internal static class RegisteredServices
 {
     public static void Wrap<T>(IServiceCollection services, Func<T, T> wrap)

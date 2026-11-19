@@ -1,9 +1,5 @@
 namespace Carina.Broadcast.DsmCc;
 
-/// <summary>
-/// What a <see cref="DataBroadcastTap"/> read of a programme's data broadcast, at the moment of the
-/// programme's clock, followed through its wrap, it was read at.
-/// </summary>
 public abstract record DataBroadcastRead
 {
     private DataBroadcastRead(long at)
@@ -45,16 +41,10 @@ public abstract record DataBroadcastRead
             FiresAt = firesAt;
         }
 
-        /// <summary>
-        /// The tag of the stream the message came on.
-        /// </summary>
         public int ComponentTag { get; }
 
         public TimedEventMessage Message { get; }
 
-        /// <summary>
-        /// When the message fires, on the same clock as <see cref="DataBroadcastRead.At"/>.
-        /// </summary>
         public long FiresAt { get; }
     }
 
@@ -72,9 +62,6 @@ public abstract record DataBroadcastRead
 
         public NptReference Reference { get; }
 
-        /// <summary>
-        /// The moment of the programme's clock the reference names, on the same clock as <see cref="DataBroadcastRead.At"/>.
-        /// </summary>
         public long Stc { get; }
     }
 

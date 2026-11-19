@@ -20,11 +20,6 @@ public sealed record PlaybackGrantPolicy
 
     public TimeSpan Lifetime { get; }
 
-    /// <summary>
-    /// The grant of <paramref name="subject"/> to forget before another is opened for it, among those
-    /// <paramref name="held"/>: the one opened first, once the subject holds <see cref="MostHeldPerSubject"/>;
-    /// nothing while it holds fewer.
-    /// </summary>
     public static PlaybackGrant? TheOneToForgetBeforeOpeningFor(Subject subject, IEnumerable<PlaybackGrant> held)
     {
         ArgumentNullException.ThrowIfNull(subject);

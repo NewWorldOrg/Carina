@@ -8,11 +8,6 @@ using Puppis.Contracts;
 
 namespace Carina.Api.Services;
 
-/// <summary>
-/// Lists and defines encode destinations. A destination names a root out of the set the storage
-/// surface declares, read at the moment of saving; nothing is saved while the driver cannot say
-/// what it declares, and only a root this process holds for writing is accepted.
-/// </summary>
 public sealed class EncodeDestinationService(
     IEncodeDestinationRepository destinations,
     IEncodeProfileRepository profiles,

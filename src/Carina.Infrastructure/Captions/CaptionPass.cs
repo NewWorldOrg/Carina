@@ -40,20 +40,10 @@ public sealed record CaptionPass
 
     public int OutOfReach { get; }
 
-    /// <summary>
-    /// Whether the pass stopped early because something was being recorded or watched.
-    /// </summary>
     public bool Yielded { get; }
 
-    /// <summary>
-    /// How many recordings said their captions were ready with no record of them kept, and were put back.
-    /// </summary>
     public int Requeued { get; }
 
-    /// <summary>
-    /// How many of the recordings read were ready already and were taken again because their record was
-    /// kept before the text of captions was taken.
-    /// </summary>
     public int Retaken { get; }
 
     public int Settled => Kept + Absent + Failed;

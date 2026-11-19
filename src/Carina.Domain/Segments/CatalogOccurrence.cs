@@ -5,12 +5,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// A stretch of one recording where the sound of a catalog entry is heard, in the recording's own time,
-/// with the station, series and start of the recording copied from the record of its learning data, so
-/// that it outlives the recording. It names the recording by value. <see cref="KindOverride"/> is what
-/// this stretch alone is taken for when it differs from its entry.
-/// </summary>
 public sealed class CatalogOccurrence
 {
     private string? seriesReadAgain;
@@ -47,18 +41,8 @@ public sealed class CatalogOccurrence
 
     public SoundSpan Span => new(StartsAt, EndsAt);
 
-    /// <summary>
-    /// What says which series the stretch's recording is of, with the series name kept read again
-    /// (<see cref="SeriesNames.Of"/>), so that a stretch kept before a rule of series names changed is of the
-    /// series a stretch found now is of.
-    /// </summary>
     public SeriesMember Member => new(RecordingId, NetworkId, ServiceId, SeriesReadAgain(), RecordingStartedAt);
 
-    /// <summary>
-    /// The stretch found at <paramref name="span"/> of the recording, not yet kept, with the series name of
-    /// the copy made again by today's rules; a copy kept before series names were made has one made from its
-    /// programme's name.
-    /// </summary>
     public static CatalogOccurrence Found(
         CatalogEntryId entryId,
         RecordingId recordingId,

@@ -20,10 +20,6 @@ public sealed record HlsSegment
     public int Bytes { get; }
 }
 
-/// <summary>
-/// Whether a playlist lists the newest segments alone, as a live channel's does, or every segment from the first, as
-/// a recording's does.
-/// </summary>
 public enum HlsPlaylistType
 {
     Sliding = 1,
@@ -31,10 +27,6 @@ public enum HlsPlaylistType
     Event = 2,
 }
 
-/// <summary>
-/// The segments listed, oldest first, with the target in whole seconds, whether the end has come, the codecs and
-/// whether the playlist slides or lists every segment from the first.
-/// </summary>
 public sealed record HlsWindow(
     IReadOnlyList<HlsSegment> Segments,
     int TargetSeconds,

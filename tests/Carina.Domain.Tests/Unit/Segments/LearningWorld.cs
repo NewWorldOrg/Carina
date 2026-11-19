@@ -4,24 +4,6 @@ using Carina.TestSupport;
 
 namespace Carina.Domain.Tests.Unit.Segments;
 
-/// <summary>
-/// Recordings made up for learning, ten minutes each, of one weekly series on one station, the guide's programme
-/// running from 30 seconds in to 30 seconds before the end. Every one has a pod of
-/// two 15-second adverts between silent cuts at 120 seconds, a silent stretch of 37 seconds that is programme at 250,
-/// and 30 seconds between two black frames at 330. In each recording learned from, the catalog hears the two adverts
-/// of its pod, heard elsewhere in an earlier episode of the series alone, so it labels them breaks without being
-/// sure of them; stings of 20 seconds at 70, 290 and 540, heard at the same places of that episode, which it labels
-/// programme;
-/// and 50 seconds of music at 180 whose kind it cannot tell. With adverts it also hears an advert of 75 seconds at
-/// 450 that another series aired the week before, which it is sure of; with openings, an opening of 85 seconds at
-/// 365 heard at the same place of that earlier episode, which it is sure of too; with black adverts, the black
-/// stretch heard elsewhere in that episode, which it labels a break without being sure of it; with break adverts,
-/// that many adverts of 15 seconds between silent cuts from 380 seconds, each aired by another series the week
-/// before, which it is sure of, or as broadcast, each 14.8 seconds between the silences edits leave with the picture
-/// changing less than the threshold at them, and a pause at -51 dBFS 7 seconds into the first. In the recording judged in the end
-/// the catalog hears the pod and the black stretch as adverts another series aired the week before, so it is sure
-/// of both, and the channels are unlike between the black frames.
-/// </summary>
 internal static class LearningWorld
 {
     public const double Length = 600;
@@ -45,10 +27,6 @@ internal static class LearningWorld
         null,
         null);
 
-    /// <summary>
-    /// <see cref="InUse"/> as a version that weighs no feature and offsets nothing would stand in its place, which
-    /// learning pulls towards as it would towards zero.
-    /// </summary>
     public static readonly SegmentModelVersion WeighingNothingInUse = SegmentModelVersion.Rehydrate(
         SegmentModelVersion.FirstNumber,
         SegmentModelVersionState.Active,
@@ -65,9 +43,6 @@ internal static class LearningWorld
         null,
         null);
 
-    /// <summary>
-    /// <see cref="InUse"/> as the first version of four kinds would stand in its place.
-    /// </summary>
     public static readonly SegmentModelVersion FourKindsInUse = SegmentModelVersion.Rehydrate(
         SegmentModelVersion.FirstNumber + 1,
         SegmentModelVersionState.Active,
@@ -79,9 +54,6 @@ internal static class LearningWorld
         null,
         null);
 
-    /// <summary>
-    /// <see cref="InUse"/> as the version of four kinds that hears silence from -55 dBFS would stand in its place.
-    /// </summary>
     public static readonly SegmentModelVersion BelowPausesInUse = SegmentModelVersion.Rehydrate(
         SegmentModelVersion.FirstNumber + 2,
         SegmentModelVersionState.Active,
@@ -93,10 +65,6 @@ internal static class LearningWorld
         null,
         null);
 
-    /// <summary>
-    /// <see cref="InUse"/> as the version of four kinds that tells the opening and the ending in any series would stand
-    /// in its place.
-    /// </summary>
     public static readonly SegmentModelVersion AnySeriesInUse = SegmentModelVersion.Rehydrate(
         SegmentModelVersion.FirstNumber + 3,
         SegmentModelVersionState.Active,
@@ -108,9 +76,6 @@ internal static class LearningWorld
         null,
         null);
 
-    /// <summary>
-    /// <see cref="InUse"/> as the version of four kinds with songs whose loudness moves would stand in its place.
-    /// </summary>
     public static readonly SegmentModelVersion DynamicSongsInUse = SegmentModelVersion.Rehydrate(
         SegmentModelVersion.FirstNumber + 4,
         SegmentModelVersionState.Active,
@@ -122,9 +87,6 @@ internal static class LearningWorld
         null,
         null);
 
-    /// <summary>
-    /// <see cref="InUse"/> as the version of four kinds for pods of adverts would stand in its place.
-    /// </summary>
     public static readonly SegmentModelVersion PodsInUse = SegmentModelVersion.Rehydrate(
         SegmentModelVersion.FirstNumber + 4,
         SegmentModelVersionState.Active,
@@ -148,10 +110,6 @@ internal static class LearningWorld
 
     private static readonly TimeSpan GuideEnds = TimeSpan.FromSeconds(Length - 30);
 
-    /// <summary>
-    /// The recordings learned from, the first <paramref name="count"/> weeks of the series, and the sounds the catalog
-    /// hears in them; each sound is also heard in an episode long before the first when <paramref name="heardLongAgo"/>.
-    /// </summary>
     public static (List<LearningRecording> Recordings, List<CatalogSound> Sounds) Taught(
         int count,
         bool adverts = false,
@@ -204,11 +162,6 @@ internal static class LearningWorld
         return (recordings, sounds);
     }
 
-    /// <summary>
-    /// The recording judged in the end, of week <paramref name="week"/>, and the sounds the catalog is sure of in it:
-    /// its pod and its black stretch, each an advert another series aired the week before, and with an opening, the
-    /// opening of <see cref="Taught"/> heard at the same place of an earlier episode.
-    /// </summary>
     public static (LearningRecording Recording, List<CatalogSound> Sounds) Judged(
         RecordingId id,
         int week,
@@ -232,17 +185,9 @@ internal static class LearningWorld
         return (Recording(id, week, Readings(quiet).Channels(330, 360, 60), actions, past), sounds);
     }
 
-    /// <summary>
-    /// A recording of week <paramref name="week"/> that looks like the one judged and that the catalog hears nothing in.
-    /// </summary>
     public static LearningRecording Unheard(RecordingId id, int week, IReadOnlyList<PastEpisode>? past = null)
         => Recording(id, week, Readings(null).Channels(330, 360, 60), past: past);
 
-    /// <summary>
-    /// A sound of <paramref name="seconds"/> heard in <paramref name="recording"/> of week <paramref name="week"/> at
-    /// <paramref name="atRecording"/>, and in the episode of <paramref name="elsewhere"/> of that week, or of
-    /// <paramref name="otherWeek"/>, at its place; and in an episode long before when <paramref name="heardLongAgo"/>.
-    /// </summary>
     public static CatalogSound Sound(
         double seconds,
         RecordingId recording,
@@ -316,10 +261,6 @@ internal static class LearningWorld
         return readings.Black(329.9, 330.1).Black(359.9, 360.1);
     }
 
-    /// <summary>
-    /// What viewers did with the recording of week <paramref name="week"/> the day after it: closed the button and
-    /// watched the programme through from 150 to 330 seconds and from 360 to the end.
-    /// </summary>
     private static ViewerAction[] Watched(int week)
     {
         DateTime after = Story.Episode(week).RecordingStartedAt.AddDays(1);

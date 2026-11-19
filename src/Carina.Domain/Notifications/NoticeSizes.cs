@@ -2,9 +2,6 @@ using System.Globalization;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// Says the size of a file, and of the file made from it, in the units a person reads.
-/// </summary>
 internal static class NoticeSizes
 {
     private const long Kilobyte = 1024;

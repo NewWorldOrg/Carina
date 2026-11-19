@@ -12,14 +12,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Carina.Api.Controllers.Live;
 
-/// <summary>
-/// Fetches a document or resource a live channel's data broadcast document asks for from a broadcaster's server and
-/// hands it over as a module of the side channel is carried: the byte 0x02, a tag, module id and version of zero,
-/// then the one resource with the address it was finally fetched from as its path, its kind and its bytes, text in
-/// UTF-8. An address the relay refuses, a server that could not be reached and one that did not answer with a
-/// success are answered 502, with the result a transmission would have had and the status the server answered. Opened with the reader's own session
-/// only, never with a ticket.
-/// </summary>
 [ApiController]
 [Route("api/live/{networkId:int}-{serviceId:int}/data-broadcast/fetch")]
 [EndpointEffect(EndpointEffect.Reading)]

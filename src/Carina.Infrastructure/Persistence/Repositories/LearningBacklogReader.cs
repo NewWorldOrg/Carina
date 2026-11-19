@@ -5,18 +5,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// Reads the recordings that have ended for the reading of their learning data. Which records wait to be
-/// read is <see cref="LearningExtraction.AwaitsReading"/> written out in <see cref="Awaiting"/>, the one
-/// query both the reading and the count of what waits are made from.
-/// </summary>
 public sealed class LearningBacklogReader(CarinaDbContext context) : ILearningBacklog
 {
-    /// <summary>
-    /// The recordings that have ended other than in failure, which leaves no file to read, and whose
-    /// learning data waits to be read from their files with <see cref="ExtractionVersion.Current"/>: those
-    /// with no record, and those whose record waits.
-    /// </summary>
     public static IQueryable<Recording> Awaiting(CarinaDbContext context)
     {
         ArgumentNullException.ThrowIfNull(context);

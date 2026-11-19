@@ -30,10 +30,6 @@ public static class EucJpText
 
     public static byte[] Encode(string text) => Encode(text, out _);
 
-    /// <summary>
-    /// The text in EUC-JP over the same tables the decoding reads, a character no table holds being written as the
-    /// geta mark and counted in <paramref name="substitutions"/>.
-    /// </summary>
     public static byte[] Encode(string text, out int substitutions)
     {
         ArgumentNullException.ThrowIfNull(text);

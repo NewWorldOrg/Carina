@@ -3,12 +3,6 @@ using Carina.Broadcast.Tables;
 
 namespace Carina.BroadcastTestSupport;
 
-/// <summary>
-/// Carries the sound of a stream ffmpeg wrote the way some broadcasts carry theirs: in PES of one size that cut
-/// across its frames, each stamped with the time of the first frame that begins inside it. The stream is then
-/// joined part way through a frame, as a live viewer joins a broadcast, and what is left of that frame holds bytes
-/// that read as the header of a frame longer than the frames after it.
-/// </summary>
 public static class SoundJoinedPartWay
 {
     public const int PesBytes = 512;
@@ -64,9 +58,6 @@ public static class SoundJoinedPartWay
     public static int SoundPid(byte[] stream, int mapPid)
         => CarouselSplice.FirstMap(stream, mapPid).Streams.First(carried => carried.StreamType is AdtsSound).Pid;
 
-    /// <summary>
-    /// The PES carried on <paramref name="pid"/>, each put back together from its packets.
-    /// </summary>
     public static IReadOnlyList<byte[]> Pes(byte[] stream, int pid)
     {
         ArgumentNullException.ThrowIfNull(stream);

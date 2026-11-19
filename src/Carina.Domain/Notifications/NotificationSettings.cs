@@ -2,10 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// The one row of the notification settings changed from a screen: how many minutes before a programme begins a
-/// notice of it is sent. No row is held until somebody changes it.
-/// </summary>
 public sealed class NotificationSettings
 {
     public const int TheOnlyRow = 1;

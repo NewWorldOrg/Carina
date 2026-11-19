@@ -3,10 +3,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// The detections held in memory, one per recording and version, a detection kept taking the place of the one
-/// held for the same pair.
-/// </summary>
 public sealed class HeldRecordingDetections : IRecordingDetectionRepository
 {
     private readonly Lock gate = new();

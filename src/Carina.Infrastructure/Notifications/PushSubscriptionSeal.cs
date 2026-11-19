@@ -7,10 +7,6 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// Seals what a browser handed over to be sent notices for the database, and opens it again for the moment of
-/// sending.
-/// </summary>
 public sealed class PushSubscriptionSeal(IDataProtectionProvider provider)
 {
     public const string Purpose = "Carina.Notifications.PushSubscription";
@@ -32,10 +28,6 @@ public sealed class PushSubscriptionSeal(IDataProtectionProvider provider)
             subscription.SecretAsWritten)));
     }
 
-    /// <summary>
-    /// The subscription that was sealed, or nothing when the keys that sealed it are gone or what was sealed is not
-    /// a subscription.
-    /// </summary>
     public PushSubscription? Open(byte[] held)
     {
         ArgumentNullException.ThrowIfNull(held);

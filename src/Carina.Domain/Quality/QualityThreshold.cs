@@ -30,9 +30,6 @@ public sealed class QualityThreshold
 
     public DateTime? MeasuredAt { get; private set; }
 
-    /// <summary>
-    /// The last measurement that decided this level, or null when none has.
-    /// </summary>
     public QualityThresholdMeasurement? Measurement
         => MeasuredValue is { } value
             ? QualityThresholdMeasurement.Of(

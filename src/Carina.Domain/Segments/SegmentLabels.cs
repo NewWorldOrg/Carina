@@ -1,32 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// Labels the segments of one recording to learn from, by the catalog and by what viewers did, never by a
-/// person saying what a stretch is. The catalog labels at its entry's confidence, never above
-/// <see cref="MostCatalogWeight"/>, and an entry whose kind or confidence is not known labels nothing.
-/// Viewers label at a tenth or two: a skip nobody came back from labels what was skipped at
-/// <see cref="SkippedWeight"/>; coming back labels <see cref="ReturnedSpan"/> from where the viewer came
-/// back as programme at <see cref="ReturnedWeight"/>, and takes the skip it came back from, the latest
-/// earlier one of the same kind that landed past where they came back to; closing the button on a break
-/// and watching it labels it programme at <see cref="DismissedWeight"/>. A forward seek labels what it passed as
-/// <see cref="ViewerSeeks"/> reads it, at a tenth or less, and coming back into it labels as coming back from a skip
-/// does; both are viewers' labels. A segment takes a label when its
-/// kind covers more than half of it. In a recording the catalog is sure of an advert in
-/// (<see cref="CatalogTruth.Sure"/>), a segment inside the guide's programme, reaching out of it by no more than
-/// <see cref="GuideTolerance"/>, that no stretch of the catalog touches, whatever its kind, and no viewer's action
-/// lies over, and that is not a multiple of the grid between two silent cuts, which is likelier an advert the catalog
-/// has not heard yet, is the programme at <see cref="UncoveredWeight"/>, or at <see cref="UncoveredWithLogoWeight"/>
-/// where the station's logo shows through at least <see cref="LogoSeenThrough"/> of it; with no logo known for
-/// the station it stays at the lower weight. Nor is a segment the version in use takes for an opening or an ending at
-/// <see cref="ThemeTakenSurely"/> or more over more than half of it the programme by elimination, since that is likelier
-/// an opening or an ending the catalog has not heard yet. The catalog wins over viewers and viewers over a segment no stretch touches; within one source
-/// the heavier label wins, a tie going to the programme. A segment more than half outside the guide's programme
-/// is never a label. Neighbouring segments read as one (<see cref="JoinedPiece"/>) take the catalog's kind only when its
-/// stretches of that kind cover all of them but <see cref="MostUncoveredOfJoined"/>, since a run reaching past a sound
-/// the catalog places is no example of it, and a viewer's as a segment does, since a skip starts where the viewer
-/// pressed the button, partway into what it offered; they are never the programme by elimination, being read as one
-/// only where an advert, an opening or an ending may lie across them, which is likelier one the catalog has not heard yet.
-/// </summary>
 public static class SegmentLabels
 {
     public const double MostCatalogWeight = 0.9;
@@ -45,33 +18,14 @@ public static class SegmentLabels
 
     public const double LogoSeenThrough = 0.8;
 
-    /// <summary>
-    /// How likely the version in use takes an opening or an ending to be for a segment it covers to be no programme by
-    /// elimination.
-    /// </summary>
     public const double ThemeTakenSurely = 0.8;
 
     public static readonly TimeSpan ReturnedSpan = TimeSpan.FromSeconds(10);
 
-    /// <summary>
-    /// How much of neighbouring segments read as one the catalog's stretches of a kind may leave uncovered and still
-    /// label them: as far as boundary candidates are merged, at each of the two ends.
-    /// </summary>
     public static readonly TimeSpan MostUncoveredOfJoined = BoundaryCandidates.MergedWithin * 2;
 
-    /// <summary>
-    /// How far a segment may reach out of the guide's programme and still count as inside it for the programme by
-    /// elimination: as far as boundary candidates are merged, so that a segment cut at a silence just before the
-    /// guide's start or just after its end is not taken for one outside it.
-    /// </summary>
     public static readonly TimeSpan GuideTolerance = BoundaryCandidates.MergedWithin;
 
-    /// <summary>
-    /// The labels of <paramref name="pieces"/> by what <paramref name="context"/> hears of the catalog and what
-    /// viewers did. A segment is touched by the catalog when a stretch of <paramref name="touching"/> lies over any of
-    /// it, by default the stretches the context hears; a stretch set aside from what the context hears still
-    /// touches the segments it lies over, so that it never leaves programme behind.
-    /// </summary>
     public static IReadOnlyList<SegmentLabel?> Of(
         IReadOnlyList<SegmentPiece> pieces,
         SegmentContext context,
@@ -99,12 +53,6 @@ public static class SegmentLabels
         ];
     }
 
-    /// <summary>
-    /// The labels of <paramref name="joined"/> by what <paramref name="context"/> hears of the catalog and what viewers
-    /// did, each read as one segment from the start of its first to the end of its last, which the catalog labels only
-    /// when its stretches of a kind leave no more than <see cref="MostUncoveredOfJoined"/> of it uncovered; none is the
-    /// programme by elimination.
-    /// </summary>
     public static IReadOnlyList<SegmentLabel?> OfJoined(
         IReadOnlyList<JoinedPiece> joined,
         SegmentContext context,
@@ -132,12 +80,6 @@ public static class SegmentLabels
 
     private static bool AllButTheEnds(TimeSpan covered, TimeSpan length) => length - covered <= MostUncoveredOfJoined;
 
-    /// <summary>
-    /// The programme a segment is taken for when the recording holds an advert the catalog is sure of and neither
-    /// a stretch of <paramref name="touched"/> nor what a viewer did lies over the segment, inside the guide's
-    /// programme but for <see cref="GuideTolerance"/>, off the grid or with an edge that is no silent cut; none when
-    /// <paramref name="touched"/> is none, which is when the recording holds no such advert.
-    /// </summary>
     private static SegmentLabel? Uncovered(SegmentPiece piece, CatalogHeard[]? touched, Stretch[] viewed, Stretch[] themes)
     {
         if (touched is null
@@ -155,10 +97,6 @@ public static class SegmentLabels
         return new SegmentLabel(SegmentKind.Programme, weight, SegmentLabelSource.Uncovered);
     }
 
-    /// <summary>
-    /// The openings and the endings <paramref name="inUse"/> finds at <see cref="ThemeTakenSurely"/> or more; none when
-    /// it is thrown away.
-    /// </summary>
     private static IEnumerable<Stretch> SurelyThemes(SegmentDetection? inUse)
         => inUse is null || inUse.State is SegmentDetectionState.Discarded
             ? []
@@ -209,11 +147,6 @@ public static class SegmentLabels
         return [.. viewed];
     }
 
-    /// <summary>
-    /// What the seeks passed, each of the kind <see cref="ViewerSeeks.KindOf"/> gives it by <paramref name="catalog"/>
-    /// at its own weight, and <see cref="ReturnedSpan"/> from where a viewer came back as the programme at
-    /// <see cref="ReturnedWeight"/>.
-    /// </summary>
     private static IEnumerable<Stretch> Sought(ViewerSeeks seeks, IReadOnlyList<CatalogHeard> catalog)
         =>
         [

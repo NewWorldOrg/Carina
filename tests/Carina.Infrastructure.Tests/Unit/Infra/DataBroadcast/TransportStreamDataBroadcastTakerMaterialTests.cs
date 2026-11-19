@@ -14,10 +14,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.DataBroadcast;
 
-/// <summary>
-/// Takes the record of the data broadcast out of a synthetic broadcast ffmpeg wrote, with a carousel put into it,
-/// and holds it against the frames live viewing makes of the same bytes.
-/// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
 public sealed class TransportStreamDataBroadcastTakerMaterialTests : IDisposable

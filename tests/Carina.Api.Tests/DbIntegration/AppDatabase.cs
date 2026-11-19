@@ -19,11 +19,6 @@ using Npgsql;
 
 namespace Carina.Api.Tests.DbIntegration;
 
-/// <summary>
-/// A scratch PostgreSQL database made by every migration, with the built-in version of the model kept as the
-/// application keeps it when it starts, and the application raised over it with no background work, so a test can
-/// take an application service from the container the application builds.
-/// </summary>
 public sealed class AppDatabase : IAsyncLifetime
 {
     public static readonly DateTime Installed = new(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -52,10 +47,6 @@ public sealed class AppDatabase : IAsyncLifetime
         return connection;
     }
 
-    /// <summary>
-    /// Raises the application over this database, reading the time from <paramref name="clock"/>, with what
-    /// <paramref name="also"/> changes in its container.
-    /// </summary>
     public RaisedApplication Application(TimeProvider clock, string publicOrigin, Action<IServiceCollection>? also = null)
     {
         ArgumentNullException.ThrowIfNull(clock);

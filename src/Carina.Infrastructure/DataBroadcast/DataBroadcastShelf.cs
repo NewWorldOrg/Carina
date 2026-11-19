@@ -5,11 +5,6 @@ using Carina.Infrastructure.Captions;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// Where the data broadcast taken from recordings is kept: the directory the captions are kept in, one file a
-/// recording named after it. A record is written beside its final name and moved over it, so a reader sees the
-/// old one or the new one and never half of either.
-/// </summary>
 public sealed class DataBroadcastShelf(CaptionSettings settings) : IDataBroadcastRecords
 {
     public const string Extension = ".databroadcast";
@@ -44,9 +39,6 @@ public sealed class DataBroadcastShelf(CaptionSettings settings) : IDataBroadcas
         }
     }
 
-    /// <summary>
-    /// The record kept for a recording, or null when none is kept or what is kept is not a record.
-    /// </summary>
     public async Task<DataBroadcastRecord?> ReadAsync(RecordingId id, CancellationToken cancellationToken)
     {
         if (PathOf(id) is not { } kept || !File.Exists(kept))
@@ -82,9 +74,6 @@ public sealed class DataBroadcastShelf(CaptionSettings settings) : IDataBroadcas
     public Task<ModuleVersion?> ModuleAsync(RecordingId id, ModuleVersionKey key, CancellationToken cancellationToken)
         => WithKeptAsync(id, reading => DataBroadcastRecordFormat.FindAsync(reading, key, cancellationToken));
 
-    /// <summary>
-    /// Whether a record is kept for the recording: a file under its name whose head is the head of a record.
-    /// </summary>
     public bool Holds(RecordingId id) => PathOf(id) is { } kept && HeadsARecord(kept);
 
     public void Forget(RecordingId id) => Unlink(Kept(id));

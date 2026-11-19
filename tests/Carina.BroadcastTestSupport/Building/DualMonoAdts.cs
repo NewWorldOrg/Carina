@@ -31,10 +31,6 @@ public static class DualMonoAdts
         return [.. Header(HeaderLength + block.Length, ChannelsTheFrameDescribes), .. block];
     }
 
-    /// <summary>
-    /// The header of a low complexity frame at 48 kHz, <paramref name="frameLength"/> bytes long with the header
-    /// counted, carrying the channels <paramref name="channelConfiguration"/> names.
-    /// </summary>
     public static byte[] Header(int frameLength, int channelConfiguration)
         => new BitWriter()
             .Bits(0xFFF, 12)

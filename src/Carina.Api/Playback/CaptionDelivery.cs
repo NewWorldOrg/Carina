@@ -11,11 +11,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Api.Playback;
 
-/// <summary>
-/// The captions of a recording for ten minutes of the source it is played from, each at the second of that
-/// source. It is opened with the reader's own session and never with a ticket, because no player outside
-/// the browser draws them.
-/// </summary>
 public static class CaptionDelivery
 {
     public const string Path = "/api/videos/{id}/captions";
@@ -100,10 +95,6 @@ public static class CaptionDelivery
             context.RequestAborted);
     }
 
-    /// <summary>
-    /// The second of the source asked for, or nothing asked as its beginning, or null when what is asked is not a
-    /// second a window can start at.
-    /// </summary>
     public static TimeSpan? From(string? asked)
     {
         if (string.IsNullOrWhiteSpace(asked))

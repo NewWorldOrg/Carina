@@ -5,9 +5,6 @@ namespace Carina.Api.Services;
 
 public sealed record NotificationDeliveriesListed(int PerPage, IReadOnlyList<NoticeOnItsWay> Deliveries);
 
-/// <summary>
-/// Reads the latest notices that went, or are on their way, to one destination.
-/// </summary>
 public sealed class NotificationDeliveryService(
     INotificationDeliveryRepository deliveries,
     INotificationDestinationRepository destinations)

@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class ACaptionStateForEveryRecording : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.AddColumn<int>(
@@ -43,7 +41,6 @@ public partial class ACaptionStateForEveryRecording : Migration
             sql: "caption_state IN ('Pending', 'Ready', 'Absent', 'Failed')\nAND (caption_state = 'Pending' OR recording_outcome IS NOT NULL)\nAND (caption_state = 'Pending') = (captions_made_at IS NULL)\nAND (caption_state = 'Ready') = (caption_pictures IS NOT NULL)\nAND (caption_pictures IS NULL OR caption_pictures > 0)\nAND (caption_state = 'Failed') = (caption_attempts > 0)\nAND caption_attempts >= 0");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropCheckConstraint(

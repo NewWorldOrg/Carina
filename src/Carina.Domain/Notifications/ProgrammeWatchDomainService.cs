@@ -3,27 +3,12 @@ using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// A programme of the guide, judged fit to be asked to be told of: what the guide and the station say of it, the
-/// minutes before it begins that it is told of, and when it was judged.
-/// </summary>
 public sealed record ProgrammeWatchCandidate(ProgrammeId Programme, WatchedBroadcast Broadcast, int LeadMinutes, DateTime At);
 
-/// <summary>
-/// A programme judged fit to be asked for, or why it is not.
-/// </summary>
 public sealed record ProgrammeWatchConsidered(ProgrammeWatchCandidate? Candidate, ProgrammeWatchRefusal? Refusal);
 
-/// <summary>
-/// The row made for a programme asked for, with the settled row of the same programme it takes the place of, or why
-/// no row is made.
-/// </summary>
 public sealed record ProgrammeWatchPlaced(ProgrammeWatch? Watch, ProgrammeWatch? Replaced, ProgrammeWatchRefusal? Refusal);
 
-/// <summary>
-/// Decides whether a programme may be asked to be told of, looking it up in the guide, and then which destinations it
-/// is told to and whether a row of the same programme stands in its way.
-/// </summary>
 public sealed class ProgrammeWatchDomainService(
     IAnnouncedProgrammes programmes,
     IBroadcastServiceRepository stations,
@@ -62,11 +47,6 @@ public sealed class ProgrammeWatchDomainService(
             null);
     }
 
-    /// <summary>
-    /// Makes the row of a programme judged fit, told to the destinations named or, with none named, to every one turned
-    /// on. A row of the same programme that waits, or was told of and is not over, stands in its way; any other row of it
-    /// is handed back to be replaced.
-    /// </summary>
     public async Task<ProgrammeWatchPlaced> PlaceAsync(
         ProgrammeWatchCandidate candidate,
         IReadOnlyList<Guid>? named,

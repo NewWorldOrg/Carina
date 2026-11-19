@@ -5,12 +5,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// The name of a file this domain writes under an output root. A work file and the one an attempt writes
-/// when it makes its artefact a second time, the chapters an attempt reads, the text of captions a track is made from, the artefact with that track put in and the artefact
-/// with its chapters written again are named for the recording, the job and the attempt; the artefact is
-/// named for the recording and the profile.
-/// </summary>
 public sealed class EncodeFileName : CommonValueObject<string>
 {
     public const int MaxLength = RecordingFileName.MaxLength;
@@ -47,9 +41,6 @@ public sealed class EncodeFileName : CommonValueObject<string>
             $"{recording.Wire}.{job.Wire}.attempt{attempt}{WorkExtension}"));
     }
 
-    /// <summary>
-    /// The work file an attempt writes when it makes its artefact a second time, beside the first.
-    /// </summary>
     public static EncodeFileName Remade(RecordingId recording, EncodeJobId job, int attempt)
         => Attempted(recording, job, attempt, RemadeExtension + WorkExtension);
 
@@ -70,28 +61,15 @@ public sealed class EncodeFileName : CommonValueObject<string>
     public static EncodeFileName Captioned(RecordingId recording, EncodeJobId job, int attempt)
         => Attempted(recording, job, attempt, CaptionedExtension);
 
-    /// <summary>
-    /// The text of captions a track is made from for an artefact that stands already, named also for the try,
-    /// so that no two tries share a name.
-    /// </summary>
     public static EncodeFileName CaptionTrack(RecordingId recording, EncodeJobId job, int attempt, EncodeScratchFileId tried)
         => Attempted(recording, job, attempt, Tried(tried) + CaptionTrackExtension);
 
-    /// <summary>
-    /// A standing artefact with a text track of captions put in, named also for the try.
-    /// </summary>
     public static EncodeFileName Captioned(RecordingId recording, EncodeJobId job, int attempt, EncodeScratchFileId tried)
         => Attempted(recording, job, attempt, Tried(tried) + CaptionedExtension);
 
-    /// <summary>
-    /// The chapters a standing artefact is written again with, named also for the try.
-    /// </summary>
     public static EncodeFileName Chapters(RecordingId recording, EncodeJobId job, int attempt, EncodeScratchFileId tried)
         => Attempted(recording, job, attempt, Tried(tried) + ChaptersExtension);
 
-    /// <summary>
-    /// A standing artefact with its chapters written again, named also for the try.
-    /// </summary>
     public static EncodeFileName Chaptered(RecordingId recording, EncodeJobId job, int attempt, EncodeScratchFileId tried)
         => Attempted(recording, job, attempt, Tried(tried) + ChapteredExtension);
 

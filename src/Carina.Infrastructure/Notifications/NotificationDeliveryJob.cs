@@ -6,10 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Notifications;
 
-/// <summary>
-/// The loop that sends the notices that wait, one pass at a time, and now and then clears away the notices, and the
-/// settled programmes asked to be told of, too old to keep.
-/// </summary>
 public sealed class NotificationDeliveryJob(
     IServiceScopeFactory scopes,
     NotificationDeliverySettings settings,

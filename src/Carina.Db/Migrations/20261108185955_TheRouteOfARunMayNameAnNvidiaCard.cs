@@ -4,11 +4,6 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <summary>
-/// Lets the route of a run name the NVIDIA card as what was asked for and what ran, beside the processor and the
-/// VAAPI card. Going back forgets the route of every run that named it, since the check before this one cannot hold
-/// the name.
-/// </summary>
 public partial class TheRouteOfARunMayNameAnNvidiaCard : Migration
 {
     private const string Route = """
@@ -29,7 +24,6 @@ public partial class TheRouteOfARunMayNameAnNvidiaCard : Migration
         AND (encoder_asked IS NULL OR ((swerve IS NULL) = (encoder_asked = encoder_ran)))
         """;
 
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -44,7 +38,6 @@ public partial class TheRouteOfARunMayNameAnNvidiaCard : Migration
             sql: Route);
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

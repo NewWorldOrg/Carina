@@ -4,10 +4,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.Api.Services;
 
-/// <summary>
-/// Reads and changes the segment settings changed from a screen. A change names the threshold a skip button is
-/// offered from, and is made against the settings as they stand once no other change is being made.
-/// </summary>
 public sealed class SegmentSettingsService(
     ISegmentSettingsRepository rows,
     IAtomicWrite writes,

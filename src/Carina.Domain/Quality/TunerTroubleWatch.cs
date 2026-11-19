@@ -10,10 +10,6 @@ public static class TunerTroubleWatch
 {
     public const double LockedShareOfATroubledTuner = 0;
 
-    /// <summary>
-    /// Opens one incident for each tuner's trouble that has none standing under the same kind, and resolves each
-    /// standing one whose tuner no longer has that kind of trouble.
-    /// </summary>
     public static TunerTroubleWatchPlan Plan(IReadOnlyList<TunerTrouble> troubles, IReadOnlyList<QualityIncident> standing)
     {
         ArgumentNullException.ThrowIfNull(troubles);
@@ -34,9 +30,6 @@ public static class TunerTroubleWatch
         return new TunerTroubleWatchPlan(opening, resolving);
     }
 
-    /// <summary>
-    /// Names each tuner an unsettled incident says is in trouble, with the worst kind of trouble said of it.
-    /// </summary>
     public static IReadOnlyDictionary<string, TunerTroubleKind> Troubled(IReadOnlyList<QualityIncident> standing)
     {
         ArgumentNullException.ThrowIfNull(standing);

@@ -170,10 +170,6 @@ public sealed class QualitySessionMeasurement
         MeasuredUpdatedAt = at;
     }
 
-    /// <summary>
-    /// Ends the measurement at the time given, or at its start when that time reads earlier: the start is the driver's
-    /// clock and the end the app's, and a session does not end before it starts.
-    /// </summary>
     public void Close(DateTime at)
     {
         UtcTimes.Required(at, nameof(at));

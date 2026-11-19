@@ -6,11 +6,6 @@ using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 
 namespace Carina.Infrastructure.Tests.Fixtures.Encodings;
 
-/// <summary>
-/// Standing artefacts whose chapters are compared with the segments, held in memory around an
-/// <see cref="EncodeHarness"/>: the worklist hands out what a test puts in it, the ledger says an artefact stands
-/// with nothing in hand until a test says otherwise, and the room holds as much as a test gives it.
-/// </summary>
 internal sealed class ChapterRewriteHarness : IDisposable
 {
     public static readonly TimeSpan HeadSkip = TimeSpan.FromSeconds(0.5);
@@ -51,10 +46,6 @@ internal sealed class ChapterRewriteHarness : IDisposable
 
     public DateTime Now => Encodes.Clock.GetUtcNow().UtcDateTime;
 
-    /// <summary>
-    /// A completed job whose artefact stands with the chapters given on its own clock, made from a recording of
-    /// the length given with <see cref="HeadSkip"/> skipped; its artefact holds the bytes given.
-    /// </summary>
     public EncodeJob Stood(TimeSpan recorded, IReadOnlyList<ChapterSegment> carried, byte[] artefact)
     {
         RecordingId recording = RecordingId.New();
@@ -84,10 +75,6 @@ internal sealed class ChapterRewriteHarness : IDisposable
         return job;
     }
 
-    /// <summary>
-    /// Puts the job in the worklist beside a detection of its recording by the first version, standing as told,
-    /// its stretches given in the recording's own time.
-    /// </summary>
     public RecordingDetection Awaiting(EncodeJob job, SegmentDetectionState state, DateTime? lastRewrittenAt, params SegmentSpan[] stretches)
     {
         double breaks = stretches.Where(stretch => stretch.Kind is SegmentKind.Break).Sum(stretch => stretch.Length.Ticks);

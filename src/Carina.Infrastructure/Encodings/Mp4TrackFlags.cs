@@ -2,11 +2,6 @@ using System.Buffers.Binary;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Turns off the flag that says a subtitle track of an MP4 file is enabled, so that a player shows the
-/// track only when somebody chooses it. Only the three flag bytes of each subtitle track's header are
-/// written; every other byte of the file, and every other track, is left as it is.
-/// </summary>
 public static class Mp4TrackFlags
 {
     public const string SubtitleHandler = "sbtl";
@@ -19,9 +14,6 @@ public static class Mp4TrackFlags
 
     private const int HandlerAt = 8;
 
-    /// <summary>
-    /// The number of subtitle tracks whose flag was turned off.
-    /// </summary>
     public static int TurnOffSubtitles(string path)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);

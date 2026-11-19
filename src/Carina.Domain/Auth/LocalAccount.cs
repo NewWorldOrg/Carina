@@ -65,11 +65,6 @@ public sealed class LocalAccount
         PasswordChangedAt = at;
     }
 
-    /// <summary>
-    /// Why the password cannot be changed from <paramref name="current"/> to <paramref name="replacement"/>: the
-    /// current password is empty or not this account's, or the replacement is out of length; nothing when it can.
-    /// Nothing is hashed for a current password that is empty.
-    /// </summary>
     public PasswordChangeRefusal? RefusesToChange(string current, string replacement, IPasswordHasher hasher)
     {
         ArgumentNullException.ThrowIfNull(replacement);
@@ -83,9 +78,6 @@ public sealed class LocalAccount
         return FitsAsAPassword(replacement) ? null : PasswordChangeRefusal.OutOfLength;
     }
 
-    /// <summary>
-    /// Whether <paramref name="offered"/> is worth comparing with a stored hash at all: an empty password never is.
-    /// </summary>
     public static bool IsAPassword([NotNullWhen(true)] string? offered) => !string.IsNullOrEmpty(offered);
 
     public static bool FitsAsAPassword(string replacement)

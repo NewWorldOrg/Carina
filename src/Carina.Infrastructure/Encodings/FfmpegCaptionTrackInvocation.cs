@@ -1,10 +1,5 @@
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Copies an artefact's picture and sound, its chapters and what it says about itself into a new file, with
-/// any subtitle track it had left behind and the text of its captions put in as one <see cref="Codec"/> track
-/// in <see cref="Language"/>; and reads back what a file carries, to compare the two.
-/// </summary>
 public static class FfmpegCaptionTrackInvocation
 {
     public const string Codec = "mov_text";

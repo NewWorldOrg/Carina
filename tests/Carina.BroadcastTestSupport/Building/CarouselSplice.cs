@@ -4,12 +4,6 @@ using Carina.Broadcast.Tables;
 
 namespace Carina.BroadcastTestSupport;
 
-/// <summary>
-/// Puts a data carousel into a transport stream ffmpeg wrote: every programme map of the programme is written
-/// again listing the carousel's stream beside what ffmpeg listed, and the carousel's sections are carried, over
-/// and over, one packet after every so many of the stream's own. Each time round, the carousel is asked for
-/// afresh by how many times it has gone round before.
-/// </summary>
 public static class CarouselSplice
 {
     public const int CarouselPid = CarouselBroadcast.CarouselPid;

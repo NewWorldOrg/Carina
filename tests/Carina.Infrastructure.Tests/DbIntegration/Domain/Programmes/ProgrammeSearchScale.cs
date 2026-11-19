@@ -79,10 +79,6 @@ public sealed class ProgrammeSearchScale : IAsyncLifetime
         return new CarinaDbContext(builder.Options);
     }
 
-    /// <summary>
-    /// The container the infrastructure builds over this database, with what <paramref name="replace"/> registers last
-    /// standing in for what the infrastructure registered.
-    /// </summary>
     public ServiceProvider Infrastructure(Action<IServiceCollection> replace)
         => RepositoryDatabase.Container(connectionString, SealingKeys.Fresh(), replace);
 

@@ -3,10 +3,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Infrastructure.Configuration;
 
-/// <summary>
-/// Reads a setting of the form <c>name=/path;name=/path</c> into the roots and the paths they are
-/// mounted at, for both the roots recordings are read from and the roots artefacts are written into.
-/// </summary>
 internal static class MountedRoots
 {
     private const char BetweenRoots = ';';

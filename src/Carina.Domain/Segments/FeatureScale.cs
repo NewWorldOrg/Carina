@@ -1,8 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The mean and standard deviation a feature is standardised with, carried by a version of the model.
-/// </summary>
 public sealed record FeatureScale
 {
     public FeatureScale(double mean, double sd)

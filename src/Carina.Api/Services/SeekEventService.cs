@@ -13,16 +13,8 @@ public enum SeekEventFailure
     TooMany = 3,
 }
 
-/// <summary>
-/// One seek as it was sent: whether it went forward or came back and how it was made when each names one the seek
-/// takes, and the two moments in seconds of the recording's own time.
-/// </summary>
 public sealed record SentSeek(SeekAction? Event, SeekMeans? Means, double? FromSec, double? ToSec);
 
-/// <summary>
-/// Takes a seek a viewer made on a recording whose row is still there, whether or not the recording is still being
-/// written, keeping nothing of who made it.
-/// </summary>
 public sealed class SeekEventService(
     IRecordingDirectory recordings,
     ViewerActionIntakeDomainService intake,

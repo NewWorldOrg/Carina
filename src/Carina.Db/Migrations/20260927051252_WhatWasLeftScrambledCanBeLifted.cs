@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class WhatWasLeftScrambledCanBeLifted : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -42,7 +40,6 @@ public partial class WhatWasLeftScrambledCanBeLifted : Migration
             sql: "descrambled_at IS NULL\nOR (recording_outcome IS NOT NULL\n    AND recording_reasons_name_any(outcome_detail, ARRAY['ScramblingUnresolved']::text[])\n    AND descrambled_at >= stopped_at_actual)");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

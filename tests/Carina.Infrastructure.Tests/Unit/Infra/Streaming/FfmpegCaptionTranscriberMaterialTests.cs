@@ -16,11 +16,6 @@ using Xunit.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Streaming;
 
-/// <summary>
-/// Takes the captions out of synthetic broadcasts with the ffmpeg the application runs: the moment each
-/// change is kept at is the moment the broadcast stamped it, across the clock coming around and across a
-/// jump, and it is the moment the live drawing beside a picture gives the same change.
-/// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
 public sealed class FfmpegCaptionTranscriberMaterialTests(ITestOutputHelper output) : IDisposable

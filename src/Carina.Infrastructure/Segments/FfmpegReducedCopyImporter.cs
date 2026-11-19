@@ -14,33 +14,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// Imports the learning data of one recording from a reduced copy of it.
-/// </summary>
 public interface IReducedCopyImporter
 {
-    /// <summary>
-    /// Reads the copy from its head to its end, keeping the data as it is made and, when the copy carries
-    /// captions, whether captions are shown in each second, and settles the record of taking the data out,
-    /// which is reading with <see cref="ExtractionVersion.CurrentFromReducedCopy"/>. An import the caller
-    /// stops leaves the record where it stood.
-    /// </summary>
     Task ImportAsync(ReducedCopy copy, CancellationToken cancellationToken);
 }
 
-/// <summary>
-/// Imports a reduced copy with one ffmpeg started yielding, which reads the copy's files itself and hands back
-/// what <see cref="FfmpegReducedCopyInvocation"/> names. What it hands back is read by a
-/// <see cref="MatroskaReader"/> and placed by a <see cref="LearningDataTimeline"/> on the recording's own
-/// time, <see cref="ReducedCopy.StartsAt"/> after the copy's, each picture of the corners spread back by
-/// <see cref="CornerTiles"/> first, and every chunk is kept as soon as it is whole. The
-/// record ends done when the copy was read to its end, partial when what ffmpeg handed back stopped inside a
-/// block, and failed when ffmpeg is missing, did not find the copy's picture or sound, or broke off. Captions
-/// the copy carries are placed the way the captions taken from a recording are, and kept before the record is
-/// settled; captions that cannot be read are left out and said so. Only the tail of what ffmpeg says on its
-/// error stream is kept, as the reason for a failure. An import whose record something else has changed
-/// stops and leaves it as it is. Nothing in the copy is written.
-/// </summary>
 public sealed class FfmpegReducedCopyImporter(
     MachineSettings machine,
     LearningRecords records,

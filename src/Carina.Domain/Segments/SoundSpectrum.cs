@@ -1,11 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// How strong a window of sound is in each of <see cref="Bands"/> bands spaced evenly on a
-/// logarithmic scale from <see cref="LowestHertz"/> to <see cref="HighestHertz"/>: the window is
-/// weighted by a Hann window and transformed, and the power of the frequencies falling in a band
-/// is summed. The <see cref="Window"/> samples are transformed as half as many complex ones.
-/// </summary>
 public sealed class SoundSpectrum
 {
     public const int Window = 2048;

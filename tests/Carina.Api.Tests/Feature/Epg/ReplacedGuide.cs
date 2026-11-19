@@ -6,7 +6,6 @@ using Carina.TestSupport;
 
 namespace Carina.Api.Tests.Feature.Epg;
 
-/// <summary>A guide in which a programme heard later replaced part of the schedule it was first heard with.</summary>
 internal static class ReplacedGuide
 {
     public const string TheDay = "from=2026-08-18T00:00:00Z&to=2026-08-19T00:00:00Z";

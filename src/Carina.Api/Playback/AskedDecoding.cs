@@ -14,10 +14,6 @@ public enum DecodingAnswer
     NotOneOfThese = 3,
 }
 
-/// <summary>
-/// The picture codings a browser says it decodes, read from the query it asked with. Naming AV1 is taken at its
-/// word and changes nothing, because nothing is encoded in AV1 to be handed over as it is.
-/// </summary>
 public sealed record AskedDecoding
 {
     public const string H264IsCalled = VideoCodecs.H264IsCalled;

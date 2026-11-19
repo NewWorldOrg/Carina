@@ -1,8 +1,5 @@
 namespace Carina.Domain.Reservations;
 
-/// <summary>
-/// Why a reservation does not take the revision it was asked for.
-/// </summary>
 public enum ReservationRevisionRefusal
 {
     AlreadyRecording = 1,

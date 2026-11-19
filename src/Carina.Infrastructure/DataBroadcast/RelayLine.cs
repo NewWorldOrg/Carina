@@ -10,17 +10,8 @@ using Carina.Infrastructure.Net;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// How far one kind of relayed exchange goes: how many a channel has under way at once, how long one may take
-/// including the wait for its turn, the most it takes back, and how many redirects it follows.
-/// </summary>
 public sealed record RelayLimits(int AtOnce, TimeSpan Time, int LargestReceived, int Redirects);
 
-/// <summary>
-/// One exchange to make: the lane it waits its turn in, its limits, where it goes (nothing where the address was
-/// already refused), how, with what body of which media type, and which redirect it follows from where. The media
-/// type is one <see cref="MediaTypeHeaderValue"/> has read.
-/// </summary>
 public sealed record RelayAsk(
     string Lane,
     RelayLimits Limits,
@@ -30,23 +21,11 @@ public sealed record RelayAsk(
     string? BodyType,
     Func<Uri, Uri, bool> Follows);
 
-/// <summary>
-/// What one exchange came to: the result, and where the server answered, its status, the body, the type it named
-/// and the address it was finally asked at.
-/// </summary>
 public sealed record RelayExchange(RelayResult Result, int? Status, byte[]? Body, MediaTypeHeaderValue? Type, Uri? At)
 {
     public static RelayExchange Failed(RelayResult result) => new(result, null, null, null, null);
 }
 
-/// <summary>
-/// The connection both relays to broadcasters' servers go out on. Only a public address on port 80 or 443 is
-/// connected to, and never this installation: not a host it is reached by, whatever the address writes after it,
-/// nor an address this machine answers at. Addresses are judged on what a name resolves to as the connection is
-/// opened, so a name that is pointed inwards between two asks is still refused. Redirects are followed only where
-/// the asker says so and judged again. Nothing is retried, no cookie is kept, and the relay introduces itself by the
-/// one name it is given.
-/// </summary>
 public sealed class RelayLine : IDisposable
 {
     private readonly IRelayNetwork network;

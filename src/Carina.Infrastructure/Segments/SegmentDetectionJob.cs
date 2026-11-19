@@ -7,26 +7,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// What one detection did: what in spare time stood in the way when nothing was detected, null when nothing was
-/// asked of spare time; and the detection kept.
-/// </summary>
 public sealed record SegmentDetectionLook(SpareTimeVerdict? Verdict, RecordingDetection? Detected);
 
-/// <summary>
-/// Detects the segments of recordings with the version of the model in use, one at a time, on the two paths
-/// matching against the catalog takes, and after it. A recording followed to its end and matched at once
-/// (<see cref="MatchedAtOnce"/>) is detected at once, whatever is being recorded or watched. Every other
-/// recording that <see cref="RecordingDetection.IsAwaited"/> and is still kept — one that had data before,
-/// one matched again, one whose catalog changed under it (<see cref="LearningExtraction.CatalogChanged"/>), and every
-/// one when the version in use changes — waits for <see cref="SpareTime"/> and is
-/// detected the most recently started first, one a look: after
-/// <see cref="SegmentDetectionSettings.BeforeFirstLook"/>, then every
-/// <see cref="SegmentDetectionSettings.BetweenLooks"/>, or after
-/// <see cref="SegmentDetectionSettings.AfterADetection"/> once a look has detected one. A detection takes the
-/// place of the one kept for the same recording and version; none is removed. A recording whose
-/// detection fails is passed over until the process starts again, so that it does not hold back the rest.
-/// </summary>
 public sealed class SegmentDetectionJob(
     IServiceScopeFactory scopes,
     LearningRecords records,
@@ -50,10 +32,6 @@ public sealed class SegmentDetectionJob(
         }
     }
 
-    /// <summary>
-    /// The first path: detects at once the recording matched at once, when it waits to be detected by the version
-    /// in use.
-    /// </summary>
     public async Task<SegmentDetectionLook> DetectMatchedAsync(RecordingId id, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -74,10 +52,6 @@ public sealed class SegmentDetectionJob(
             : new SegmentDetectionLook(null, null);
     }
 
-    /// <summary>
-    /// The second path: in spare time, detects the most recently started recording still kept that waits to be
-    /// detected by the version in use.
-    /// </summary>
     public async Task<SegmentDetectionLook> LookAsync(CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
@@ -175,10 +149,6 @@ public sealed class SegmentDetectionJob(
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 
-    /// <summary>
-    /// Waits for <paramref name="waiting"/>, or until a recording is told to the first path; false once the
-    /// process is stopping.
-    /// </summary>
     private async Task<bool> WaitAsync(TimeSpan waiting, CancellationToken stoppingToken)
     {
         using CancellationTokenSource either = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);

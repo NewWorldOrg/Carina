@@ -1,8 +1,5 @@
 namespace Carina.TestSupport;
 
-/// <summary>
-/// Removes the directories a test made for itself, every one of them even when removing another fails.
-/// </summary>
 public static class TemporaryDirectories
 {
     public static void RemoveAll(params DirectoryInfo[] directories)

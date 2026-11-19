@@ -3,11 +3,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The record of taking the learning data out of one recording: where it stands, how far it read,
-/// what it could not read and why it stopped, beside the copy of the programme. It names the
-/// recording by value.
-/// </summary>
 public sealed class LearningExtraction
 {
     public const int MostRetries = 3;
@@ -46,29 +41,15 @@ public sealed class LearningExtraction
 
     public DateTime UpdatedAt { get; private set; }
 
-    /// <summary>
-    /// When what the record holds was last matched against the catalog; null when it never was.
-    /// </summary>
     public DateTime? MatchedAt { get; private set; }
 
     public bool CanRetry => State is LearningExtractionState.Failed && Failures <= MostRetries;
 
-    /// <summary>
-    /// Whether what the record holds waits to be matched against the catalog: it was read to its end or as far
-    /// as it could be, and has not been matched since it last changed.
-    /// </summary>
     public bool AwaitsMatching
         => State is LearningExtractionState.Done or LearningExtractionState.Partial && (MatchedAt is null || MatchedAt < UpdatedAt);
 
-    /// <summary>
-    /// Whether the record is matched against the catalog as soon as the follow of its recording comes to its end: it
-    /// was read to the end and waits to be matched.
-    /// </summary>
     public bool IsMatchedAtOnce => State is LearningExtractionState.Done && AwaitsMatching;
 
-    /// <summary>
-    /// Whether learning learns from the record: some of its recording was read, with a version of the extraction.
-    /// </summary>
     public bool IsLearnedFrom => ReadThrough > TimeSpan.Zero && Version is not null;
 
     private bool MadeFromAReducedCopy => Version?.Origin is ExtractionOrigin.ReducedCopy;
@@ -151,10 +132,6 @@ public sealed class LearningExtraction
         };
     }
 
-    /// <summary>
-    /// Marks what the record holds as matched against the catalog, leaving when the record last changed as it
-    /// was. A moment before that counts as that moment.
-    /// </summary>
     public void Matched(DateTime at)
     {
         DateTime when = UtcTimes.Required(at, nameof(at));
@@ -167,11 +144,6 @@ public sealed class LearningExtraction
         MatchedAt = when > UpdatedAt ? when : UpdatedAt;
     }
 
-    /// <summary>
-    /// Marks what the record holds as matched at <paramref name="at"/> when the record still stands as it did when it
-    /// was read for the matching, last changed at <paramref name="readAsOf"/>, and waits to be matched; false, changing
-    /// nothing, when it changed meanwhile, so that it is matched again.
-    /// </summary>
     public bool MatchedAsRead(DateTime readAsOf, DateTime at)
     {
         if (!AwaitsMatching || UpdatedAt != readAsOf)
@@ -184,11 +156,6 @@ public sealed class LearningExtraction
         return true;
     }
 
-    /// <summary>
-    /// Takes what the record holds as matched again at <paramref name="at"/>, the catalog having changed under it, so
-    /// that its detection is made again (<see cref="RecordingDetection.IsAwaited"/>); false, changing nothing, when it
-    /// waits to be matched, which has it detected again anyway, or was matched no earlier than that.
-    /// </summary>
     public bool CatalogChanged(DateTime at)
     {
         DateTime when = UtcTimes.Required(at, nameof(at));
@@ -217,11 +184,6 @@ public sealed class LearningExtraction
         Restart(LearningExtractionState.Reading, version, when);
     }
 
-    /// <summary>
-    /// Follows from its head, with <paramref name="current"/>, the recording being recorded: a record that waits is
-    /// followed, and one a follow left following when the process stopped is followed again from the head; false,
-    /// changing nothing, for a record in any other state, which is not followed.
-    /// </summary>
     public bool FollowFromTheHead(ExtractionVersion current, DateTime at)
     {
         switch (State)
@@ -239,10 +201,6 @@ public sealed class LearningExtraction
         }
     }
 
-    /// <summary>
-    /// Puts a record left <paramref name="leftIn"/>, following or reading, when the process stopped back to wait to be
-    /// read; false, changing nothing, when the record is not in that state.
-    /// </summary>
     public bool PutBack(LearningExtractionState leftIn, ExtractionVersion current, DateTime at)
     {
         if (State != leftIn)
@@ -255,10 +213,6 @@ public sealed class LearningExtraction
         return true;
     }
 
-    /// <summary>
-    /// Takes the record as failed when a reading ended leaving it reading; false, changing nothing, when it is not
-    /// reading.
-    /// </summary>
     public bool FailLeftReading(ExtractionFailure failure, string reason, DateTime at)
     {
         if (State is not LearningExtractionState.Reading)
@@ -271,18 +225,9 @@ public sealed class LearningExtraction
         return true;
     }
 
-    /// <summary>
-    /// Whether the record stands where a reading that holds it <paramref name="held"/> with <paramref name="version"/>
-    /// last left it, read through <paramref name="readThrough"/> with <paramref name="gaps"/> gaps found, so that the
-    /// reading may write on. A record anyone else moved since is not written over.
-    /// </summary>
     public bool StandsWhereLeft(LearningExtractionState held, ExtractionVersion version, TimeSpan readThrough, int gaps)
         => State == held && Equals(Version, version) && ReadThrough == readThrough && Gaps.Count == gaps;
 
-    /// <summary>
-    /// Reads on: takes <paramref name="sound"/> when the record has none yet, the gaps <paramref name="found"/>, and
-    /// <paramref name="reached"/> when it lies further than the record has read.
-    /// </summary>
     public void ReadOn(ExtractionSound? sound, IReadOnlyList<LearningDataGap> found, TimeSpan reached, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(found);
@@ -303,9 +248,6 @@ public sealed class LearningExtraction
         }
     }
 
-    /// <summary>
-    /// Settles a reading: done when it came to the end of its recording, partway when it stopped before it.
-    /// </summary>
     public void Settle(bool readToTheEnd, DateTime at)
     {
         if (readToTheEnd)
@@ -318,11 +260,6 @@ public sealed class LearningExtraction
         FinishPartway(at);
     }
 
-    /// <summary>
-    /// Whether the learning data of a recording that ended at <paramref name="recordingEnded"/> waits to be
-    /// read from its file: the record waits, failed with a try left, or holds data made another way than
-    /// <paramref name="current"/> or left partway before the recording ended.
-    /// </summary>
     public bool AwaitsReading(ExtractionVersion current, DateTime? recordingEnded)
     {
         ArgumentNullException.ThrowIfNull(current);
@@ -337,10 +274,6 @@ public sealed class LearningExtraction
         };
     }
 
-    /// <summary>
-    /// Reads from its head, with <paramref name="current"/>, a recording whose learning data
-    /// <see cref="AwaitsReading"/>.
-    /// </summary>
     public void ReadAwaited(ExtractionVersion current, DateTime? recordingEnded, DateTime at)
     {
         if (!AwaitsReading(current, recordingEnded))
@@ -364,12 +297,6 @@ public sealed class LearningExtraction
         Read(current, at);
     }
 
-    /// <summary>
-    /// Whether the learning data waits to be imported from a reduced copy of the recording with
-    /// <paramref name="reduced"/>: the record waits, failed reading the file, failed importing with a try
-    /// left, was left partway reading the file, or holds data made from a reduced copy by other
-    /// calculations than <paramref name="reduced"/>. Data read from the file is not imported over.
-    /// </summary>
     public bool AwaitsImport(ExtractionVersion reduced)
     {
         FromAReducedCopy(reduced);
@@ -384,10 +311,6 @@ public sealed class LearningExtraction
         };
     }
 
-    /// <summary>
-    /// Reads from its head, with <paramref name="reduced"/>, a reduced copy of a recording whose learning
-    /// data <see cref="AwaitsImport"/>.
-    /// </summary>
     public void Import(ExtractionVersion reduced, DateTime at)
     {
         if (!AwaitsImport(reduced))

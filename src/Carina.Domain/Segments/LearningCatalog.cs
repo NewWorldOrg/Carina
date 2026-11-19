@@ -2,10 +2,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// One sound of the catalog as learning reads it: its entry, its length, and every stretch it is heard
-/// in, placed in its programme.
-/// </summary>
 public sealed record CatalogSound
 {
     public CatalogSound(CatalogEntryId id, TimeSpan length, IReadOnlyList<PlacedOccurrence> occurrences)
@@ -31,14 +27,6 @@ public sealed record CatalogSound
     public IReadOnlyList<PlacedOccurrence> Occurrences { get; }
 }
 
-/// <summary>
-/// The catalog a recording is read with when learning: what it would have heard when it was made. Only
-/// the stretches of recordings started no later than it count, so each entry it hears is estimated again
-/// from those (<see cref="CatalogKinds"/>), beside the other entries heard in its recordings as they would
-/// have been estimated then, and one with fewer than two of them by then is not heard at
-/// all. Every stretch heard says which entry it is a stretch of, so that the entries set aside when a recording is
-/// judged (<see cref="SetAsideFor"/>) can be taken out of what another recording hears.
-/// </summary>
 public sealed class LearningCatalog
 {
     private readonly ILookup<RecordingId, CatalogSound> soundsIn;
@@ -71,10 +59,6 @@ public sealed class LearningCatalog
 
     public static LearningCatalog Empty { get; } = new([], SeriesLinks.None);
 
-    /// <summary>
-    /// What <paramref name="recording"/>, started at <paramref name="startedAt"/>, would have heard of the catalog
-    /// when it was made.
-    /// </summary>
     public IReadOnlyList<CatalogHeard> HeardBy(RecordingId recording, DateTime startedAt)
     {
         ArgumentNullException.ThrowIfNull(recording);
@@ -84,16 +68,8 @@ public sealed class LearningCatalog
         return [.. soundsIn[recording].SelectMany(sound => Heard(sound, recording, then))];
     }
 
-    /// <summary>
-    /// What the catalog hears in <paramref name="recording"/> now, every stretch it has counted.
-    /// </summary>
     public IReadOnlyList<CatalogHeard> HeardNow(RecordingId recording) => HeardBy(recording, DateTime.MaxValue);
 
-    /// <summary>
-    /// The entries set aside when <paramref name="recording"/>, started at <paramref name="startedAt"/>, is judged:
-    /// every entry heard in it, so that what it is judged against is not what it is detected with, and every entry
-    /// first heard in a recording started after it, which it could not have known.
-    /// </summary>
     public IReadOnlySet<CatalogEntryId> SetAsideFor(RecordingId recording, DateTime startedAt)
     {
         ArgumentNullException.ThrowIfNull(recording);
@@ -105,9 +81,6 @@ public sealed class LearningCatalog
         ]);
     }
 
-    /// <summary>
-    /// The stretches of <paramref name="entries"/> heard in <paramref name="recording"/>, every one the catalog has.
-    /// </summary>
     public IReadOnlyList<SoundSpan> StretchesOf(RecordingId recording, IReadOnlySet<CatalogEntryId> entries)
     {
         ArgumentNullException.ThrowIfNull(recording);
@@ -123,11 +96,6 @@ public sealed class LearningCatalog
         ];
     }
 
-    /// <summary>
-    /// <paramref name="context"/> remembering its earlier episodes without the part of what they were taken to hold
-    /// that lies over a stretch of <paramref name="entries"/>, so that what was set aside does not come back through
-    /// what was detected in them, and the rest of what was detected in them stays.
-    /// </summary>
     public SegmentContext Forgetting(SegmentContext context, IReadOnlySet<CatalogEntryId> entries)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -157,12 +125,6 @@ public sealed class LearningCatalog
                 sound.Id));
     }
 
-    /// <summary>
-    /// The sounds as they would have been estimated at one time, each worked out once: from their stretches of
-    /// recordings started no later than then, and, for one they may settle (<see cref="CatalogKinds.Settle"/>), beside
-    /// the sounds heard in its recordings as every sound heard by then is settled with the others
-    /// (<see cref="CatalogKinds.SettleTogether"/>).
-    /// </summary>
     private sealed class Estimates(ILookup<RecordingId, CatalogSound> soundsIn, SeriesLinks links, DateTime startedAt)
     {
         private readonly Dictionary<CatalogEntryId, (PlacedOccurrence[] Kept, CatalogPattern Pattern)?> own = [];

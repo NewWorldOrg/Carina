@@ -4,10 +4,6 @@ using Carina.Domain.DataBroadcast;
 
 namespace Carina.Api.Services;
 
-/// <summary>
-/// Reads and changes the data broadcast settings changed from a screen. A change names the postal code and the
-/// prefecture together, and is made against the settings as they stand once no other change is being made.
-/// </summary>
 public sealed class DataBroadcastSettingsService(
     IDataBroadcastSettingsRepository rows,
     IAtomicWrite writes,

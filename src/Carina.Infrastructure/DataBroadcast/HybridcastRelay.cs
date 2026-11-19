@@ -10,14 +10,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// Talks to a broadcaster's server for a Hybridcast application started from a live channel, over the
-/// <see cref="RelayLine"/> that connects to public addresses only and never to this installation. It reads the AIT a
-/// document names, and carries the application's documents, resources, posts and WebSockets only inside the
-/// application's boundary; a redirect is followed only where it stays inside too. A post carries no more than a data
-/// broadcast document sends, with the media type the application named and nothing else of its request. Each exchange is written to the log by its channel, host, path, method, result,
-/// status, sizes and time, never by its query, its bodies or a cookie, and nothing is retried.
-/// </summary>
 public sealed class HybridcastRelay : IHybridcastRelay, IDisposable
 {
     public const string Exchanged =

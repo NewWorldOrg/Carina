@@ -1,9 +1,5 @@
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// How often the notices that wait are sent, how many one destination is sent in a window, and how long a notice is
-/// worth sending and worth keeping.
-/// </summary>
 public sealed record NotificationDeliverySettings
 {
     public TimeSpan BeforeFirstRound { get; init; } = TimeSpan.FromSeconds(20);

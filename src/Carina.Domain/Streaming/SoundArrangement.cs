@@ -55,10 +55,6 @@ public sealed record SoundArrangement
         return placed[SoundTracks.Ordinal(track)];
     }
 
-    /// <summary>
-    /// Where a live viewer's sound is taken from: the placement this arrangement gives the sound asked for, and
-    /// the whole stream at that sound's place in the programme when the arrangement holds no such sound.
-    /// </summary>
     public SoundPlacement Reaching(SoundTrack track)
         => Holds(track) ? Placement(track) : SoundPlacement.WholeStream(SoundTracks.Ordinal(track));
 

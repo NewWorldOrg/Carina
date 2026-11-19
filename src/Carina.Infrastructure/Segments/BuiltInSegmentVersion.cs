@@ -6,14 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// Keeps the built-in version of this release (<see cref="SegmentModel.BuiltIn"/>) when the application starts,
-/// before detection, learning or the chapters of an encode ask for the version in use. With no version kept it is
-/// kept as the first and put in use; beside an earlier built-in version in use that was not chosen by hand it takes
-/// its place; beside a version chosen by hand or learned it waits as a candidate
-/// (<see cref="SegmentModelVersion.KeepBuiltIn"/>). Kept already, nothing is written. A start that cannot reach the
-/// store says so and goes on; the version is kept at the next start.
-/// </summary>
 public sealed class BuiltInSegmentVersion(
     IServiceScopeFactory scopes,
     TimeProvider clock,

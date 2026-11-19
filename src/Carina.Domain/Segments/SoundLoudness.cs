@@ -1,10 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// How loud the sound is over every <see cref="Hop"/> samples of both channels: how far its power
-/// lies below full scale, in half-decibel steps. <see cref="Silent"/> stands for digital silence
-/// and anything quieter than the steps reach.
-/// </summary>
 public static class SoundLoudness
 {
     public const int Hop = 160;

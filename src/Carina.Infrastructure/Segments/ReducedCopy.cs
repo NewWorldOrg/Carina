@@ -9,17 +9,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// A reduced copy of one recording, made apart from this application in the shape <see cref="Shape"/>
-/// names, one directory a copy: the sound as the sum of its two channels (<see cref="Sum"/>) and as their
-/// difference (<see cref="Difference"/>), the picture shrunk to the size of a frame's light at every frame
-/// (<see cref="Frames"/>), the four corners laid out as <see cref="CornerTiles"/> four times a second
-/// (<see cref="Corners"/>), the captions taken from the recording when there were any
-/// (<see cref="CaptionsFile"/>), and beside them its manifest, what ffprobe read of the recording's file
-/// (<see cref="Probe"/>), and the rows of the recording, its reservation and its programme as they stood.
-/// The copy's time zero is where the programme's first picture or first sound began, whichever came first,
-/// and lies <see cref="StartsAt"/> into the recording's own time; the captions keep the recording's clock.
-/// </summary>
 public sealed record ReducedCopy(string Directory, RecordingId Id, ProgrammeCopy Programme, TimeSpan StartsAt, string? Captions)
 {
     public const string Shape = "anime-material-v1";
@@ -43,21 +32,8 @@ public sealed record ReducedCopy(string Directory, RecordingId Id, ProgrammeCopy
     public string PathOf(string file) => Path.Combine(Directory, file);
 }
 
-/// <summary>
-/// A reduced copy read from its directory, or why it is not imported.
-/// </summary>
 public sealed record ReducedCopyRead(ReducedCopy? Copy, string? Refusal);
 
-/// <summary>
-/// Reads a reduced copy from its directory: every file it is read from is there and holds something, its
-/// manifest names the shape <see cref="ReducedCopy.Shape"/> and the same recording as the rows copied beside
-/// it, and those rows give the copy of the programme. The programme ends by <see cref="ProgrammeEnd"/>, read
-/// from what the rows of the guide, the reservation and the recording say. Where the copy starts on the
-/// recording's own time is where the programme's first picture or first sound began, whichever came first,
-/// after the file's clock began, both as the probe of the file read them; a time further than
-/// <see cref="FurthestSeconds"/> from zero is no time a file's clock holds. Nothing in the directory is
-/// written.
-/// </summary>
 public static class ReducedCopyReader
 {
     public const long LargestDescription = 1 << 20;

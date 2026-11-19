@@ -5,10 +5,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Carina.Infrastructure.Persistence.Configurations;
 
-/// <summary>
-/// The versions of the model, each marked when it is built in, with the figures an evaluation leaves — the metrics overall and by station and the
-/// evidence they rest on — and what a rollback measured, in the shapes the HTTP surface answers them in.
-/// </summary>
 public sealed class SegmentModelVersionConfiguration : IEntityTypeConfiguration<SegmentModelVersion>
 {
     public const string TableName = "segment_model_version";

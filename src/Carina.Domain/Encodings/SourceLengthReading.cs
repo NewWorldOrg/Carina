@@ -13,10 +13,6 @@ public enum SourceLengthFault
     SaidNothing = 4,
 }
 
-/// <summary>
-/// How long the source is, which a job's progress is measured against. A source that cannot be
-/// measured leaves the job running with no percentage.
-/// </summary>
 public sealed record SourceLengthReading
 {
     private SourceLengthReading(TimeSpan? length, SourceLengthFault? fault, int? exitCode, string note)

@@ -54,16 +54,8 @@ public sealed record LedgerFile
 
     public long? SizeObserved { get; }
 
-    /// <summary>
-    /// Whether the row says the recording's thumbnail has been drawn.
-    /// </summary>
     public bool ThumbnailDrawn { get; }
 
-    /// <summary>
-    /// What a recording's row says of its file: still being written while it has no outcome, and otherwise what its
-    /// outcome says landed, the size read off the disk as it ended and whether the row says its picture is ready.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The recording ended without a size read off the disk.</exception>
     public static LedgerFile Of(
         RecordingId id,
         OutputRoot root,

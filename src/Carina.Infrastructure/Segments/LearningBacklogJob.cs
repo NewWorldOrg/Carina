@@ -9,13 +9,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// What one look at the recordings that have ended did: how many records it put back after a start,
-/// what stood in the way of spare time when it was not, how many recordings it gave whether captions
-/// are shown, which recording it began to import from a reduced copy, which recording it began to read,
-/// how many recordings waiting to be read it passed over because their file was out of reach, and which
-/// recording is being read or imported when it was done.
-/// </summary>
 public sealed record LearningBacklogLook(
     int Recovered,
     SpareTimeVerdict? Verdict,
@@ -28,22 +21,6 @@ public sealed record LearningBacklogLook(
     public bool SaysAnything => Recovered > 0 || Captioned > 0 || Importing is not null || Began is not null;
 }
 
-/// <summary>
-/// Imports the learning data of recordings from their reduced copies (<see cref="ReducedCopyImports"/>), and
-/// reads it out of the recordings that have ended, one at a time — a copy or a recording, the copies first and
-/// the most recently started recording first — from the head of each file to its end, and gives the
-/// recordings whose captions are ready whether captions are shown in each second. It looks after
-/// <see cref="LearningBacklogSettings.BeforeFirstLook"/>, then every
-/// <see cref="LearningBacklogSettings.BetweenLooks"/>, or every
-/// <see cref="LearningBacklogSettings.WhileReading"/> while a recording is read. A look that finds no
-/// reading of its own first puts back to waiting the records left reading — by the process that last
-/// stopped, or by a reading whose record could not be written as it ended. A reading is let go only
-/// once its record is written, so a write that fails is made again at the next look. Nothing begins outside
-/// <see cref="SpareTime"/>, which is judged again before each recording; a recording begun is read to its
-/// end, and an import carried to its end, even when recording or watching starts meanwhile. A recording whose file is out of reach is passed over and keeps waiting, and one whose row or file goes
-/// while it is read is read no further and ends partway. Stopping the process stops the reading and leaves
-/// its record for the next start. No recording's file, and nothing in a reduced copy, is removed.
-/// </summary>
 public sealed class LearningBacklogJob(
     IServiceScopeFactory scopes,
     ILearningFollower follower,
@@ -259,10 +236,6 @@ public sealed class LearningBacklogJob(
         }
     }
 
-    /// <summary>
-    /// True when the reading of the recording began, false when another recording is recorded as being
-    /// read, and null when the recording no longer waits.
-    /// </summary>
     private async Task<bool?> BeganAsync(
         ProgrammeEndDomainService programmeEnds,
         BackloggedRecording next,
@@ -324,10 +297,6 @@ public sealed class LearningBacklogJob(
         run = new Run(recording.Id, read, stopping, running);
     }
 
-    /// <summary>
-    /// Takes the record of a reading that has ended as failed when the reading ended leaving it reading, and lets
-    /// the reading go once that is written. A record that kept moving is left for the next look.
-    /// </summary>
     private async Task ReapAsync(CancellationToken cancellationToken)
     {
         if (run is not { Task.IsCompleted: true } ended)

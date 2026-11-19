@@ -36,11 +36,6 @@ public sealed class PipedSupply : ILiveSupply
 
     public TaskCompletionSource? HeldUntil { get; set; }
 
-    /// <summary>
-    /// Writes into the newest stream handed out that has not been let go, and answers whether there was one. A
-    /// session that ends lets its stream go on its own thread, so the newest stream may already be gone while the
-    /// next one has not been asked for.
-    /// </summary>
     public async Task<bool> FeedAsync(byte[] bytes)
     {
         IReadOnlyList<PipedTransportStream> handed = Opened;
@@ -48,11 +43,6 @@ public sealed class PipedSupply : ILiveSupply
         return handed.Count > 0 && await handed[^1].WriteWhileOpenAsync(bytes);
     }
 
-    /// <summary>
-    /// Set, an opening held by <see cref="HeldUntil"/> that its caller gives up on goes on holding the one
-    /// tuner, and answers its caller, until this is completed, as the driver does while it is told to let
-    /// go of a session it was still starting.
-    /// </summary>
     public TaskCompletionSource? LettingGoOfAGivenUpOpening { get; set; }
 
     public LiveRefusal? Refusing { get; set; }
@@ -151,9 +141,6 @@ public sealed class PipedTransportStream : ILiveTransportStream
 
     public bool RefusingToBeHeldOpen { get; set; }
 
-    /// <summary>
-    /// Set, the stream is one the driver has not let go of yet, until it is completed.
-    /// </summary>
     public TaskCompletionSource? HeldFromBeingLetGo { get; set; }
 
     public bool Disposed => TimesLetGo > 0;

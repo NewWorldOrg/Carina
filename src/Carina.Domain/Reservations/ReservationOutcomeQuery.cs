@@ -13,10 +13,6 @@ public sealed record ReservationOutcomeConditions
     public RuleId? Rule { get; init; }
 }
 
-/// <summary>
-/// What the ledger is asked for: a span of when the outcomes were written down, narrowed by
-/// classification, channel and the rule the reservation came of. Results come newest first.
-/// </summary>
 public sealed class ReservationOutcomeQuery
 {
     public const int MostPerPage = ReservationQuery.MostPerPage;

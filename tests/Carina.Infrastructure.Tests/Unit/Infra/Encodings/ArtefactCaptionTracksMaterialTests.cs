@@ -18,12 +18,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Encodings;
 
-/// <summary>
-/// Puts the text of a synthetic broadcast's captions into an artefact already made with the ffmpeg the
-/// application runs, and reads the track back off the file: one Japanese text track, off by default, whose
-/// cues change where the broadcast's captions change on the artefact's clock, with the picture, the sound
-/// and the chapters as they were.
-/// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
 public sealed class ArtefactCaptionTracksMaterialTests

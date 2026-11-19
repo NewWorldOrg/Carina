@@ -155,9 +155,6 @@ public sealed class HeldTranscoder : ILiveTranscoder
         set => input.Failing = value;
     }
 
-    /// <summary>
-    /// Set, the transcoder takes no bytes until it is completed.
-    /// </summary>
     public TaskCompletionSource? TakesNothingUntil
     {
         get => input.HeldUntil;
@@ -166,9 +163,6 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     public bool InputClosed => input.Closed;
 
-    /// <summary>
-    /// Set, a transcoder held from taking bytes goes on holding when the write is called off.
-    /// </summary>
     public bool TakesNoNoticeOfBeingCalledOff
     {
         get => input.TakesNoNoticeOfBeingCalledOff;
@@ -191,10 +185,6 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     public bool OutputOutlivesIt { get; set; }
 
-    /// <summary>
-    /// Set, a transcoder being stopped keeps its place in the budget until this is completed, as one still finishing
-    /// what it was given does.
-    /// </summary>
     public TaskCompletionSource? FinishesWhen { get; set; }
 
     public bool Disposed { get; private set; }
@@ -224,10 +214,6 @@ public sealed class HeldTranscoder : ILiveTranscoder
         exit.TrySetResult(TranscoderExit.Finished());
     }
 
-    /// <summary>
-    /// Ends the transcoder as a programme that exited <paramref name="exitCode"/> on its own, having kept
-    /// <paramref name="complaint"/>.
-    /// </summary>
     public void Fail(int exitCode, string complaint)
     {
         Complete();

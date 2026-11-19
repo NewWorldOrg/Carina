@@ -11,14 +11,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Carina.Api.Controllers.Live;
 
-/// <summary>
-/// Starts the Hybridcast application a live channel's data broadcast document asks for: the AIT is read again, and
-/// where it names an application by both identifiers that is to start by itself, a ticket is issued for it. The
-/// frame the application runs in carries the ticket in the path of the relay, because it has no cookie of its own;
-/// the relay then keeps to the application's boundary. Refused 403 unless the browser asking allows both
-/// communication and Hybridcast, 404 where no application of the AIT is to be started by these identifiers, 429
-/// where too many tickets are outstanding, and 502 where no AIT could be read.
-/// </summary>
 [ApiController]
 [Route("api/live/{networkId:int}-{serviceId:int}/data-broadcast/app/ticket")]
 [EndpointEffect(EndpointEffect.Changing)]

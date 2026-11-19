@@ -4,11 +4,6 @@ using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Migration;
 
-/// <summary>
-/// The words of a source rule's keyword or of the words it leaves out, with the programme marks the
-/// source system wrote as words taken out of them: a mark's symbol, its letters in brackets, or a
-/// word that is nothing but the one letter of a mark.
-/// </summary>
 public sealed record SourceRuleWords
 {
     private static readonly IReadOnlyDictionary<char, char> Closing = new Dictionary<char, char>

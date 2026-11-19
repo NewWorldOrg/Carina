@@ -3,10 +3,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// What linking a recording into a series reads of it, with the guide's start of its programme when that is
-/// known.
-/// </summary>
 public sealed record SeriesMember(
     RecordingId RecordingId,
     NetworkId NetworkId,
@@ -15,36 +11,17 @@ public sealed record SeriesMember(
     DateTime StartedAt,
     DateTime? ProgrammeStartsAt = null)
 {
-    /// <summary>
-    /// The broadcast the recording is of: two recordings on one station of a programme the guide starts at the
-    /// same time are one episode, and a recording whose programme's start is not known is an episode of its own.
-    /// </summary>
     public SeriesEpisode Episode => ProgrammeStartsAt is DateTime starts
         ? new SeriesEpisode(NetworkId, ServiceId, starts, null)
         : new SeriesEpisode(NetworkId, ServiceId, null, RecordingId);
 }
 
-/// <summary>
-/// One broadcast of a series: its station and the guide's start of its programme, or, when that is not known,
-/// the one recording of it.
-/// </summary>
 public sealed record SeriesEpisode(NetworkId NetworkId, ServiceId ServiceId, DateTime? ProgrammeStartsAt, RecordingId? Recording);
 
-/// <summary>
-/// Which recordings are of one series. Two stretches of one recording are, and so are two recordings of one
-/// broadcast (<see cref="SeriesMember.Episode"/>); so are recordings known to
-/// share the sound of an opening, an ending or a programme fixture, whatever their names and stations;
-/// and so are two recordings on the same station whose series names link (<see cref="SeriesNames.Link"/>)
-/// and which start within <see cref="StartsWithin"/> of each other in the time of day. Series are what these
-/// links join, through one another.
-/// </summary>
 public sealed class SeriesLinks
 {
     public static readonly TimeSpan StartsWithin = TimeSpan.FromMinutes(90);
 
-    /// <summary>
-    /// How far apart two episodes of a weekly series are at the least.
-    /// </summary>
     public static readonly TimeSpan EpisodesApart = TimeSpan.FromDays(6);
 
     private static readonly TimeSpan Day = TimeSpan.FromDays(1);
@@ -60,12 +37,6 @@ public sealed class SeriesLinks
 
     public static SeriesLinks None { get; } = new([]);
 
-    /// <summary>
-    /// Whether <paramref name="member"/> could be another episode of the weekly series of
-    /// <paramref name="series"/>, whatever it is called: it is on the station of one of them and starts a whole
-    /// number of weeks from it, give or take <see cref="StartsWithin"/>, on the same day of the week, and none
-    /// of them starts within <see cref="EpisodesApart"/> of it.
-    /// </summary>
     public static bool AnotherEpisodeInTheSlot(SeriesMember member, IReadOnlyList<SeriesMember> series)
     {
         ArgumentNullException.ThrowIfNull(member);
@@ -75,10 +46,6 @@ public sealed class SeriesLinks
                && series.All(episode => (episode.StartedAt - member.StartedAt).Duration() >= EpisodesApart);
     }
 
-    /// <summary>
-    /// The links that also join each group of recordings known to share a sound that links series
-    /// (<see cref="CatalogKinds.LinksSeries"/>). A recording named in two groups joins both.
-    /// </summary>
     public static SeriesLinks SharingSound(IEnumerable<IReadOnlyCollection<RecordingId>> groups)
     {
         ArgumentNullException.ThrowIfNull(groups);
@@ -111,16 +78,8 @@ public sealed class SeriesLinks
         return one.RecordingId.Equals(other.RecordingId) || one.Episode.Equals(other.Episode) || ShareSound(one, other) || Neighbours(one, other);
     }
 
-    /// <summary>
-    /// The members grouped into series, each group in the order the members were handed over, the
-    /// groups in the order of their first member.
-    /// </summary>
     public IReadOnlyList<IReadOnlyList<SeriesMember>> Group(IReadOnlyList<SeriesMember> members) => Group(members, member => member);
 
-    /// <summary>
-    /// The items grouped into series by the member each stands for, in the order of
-    /// <see cref="Group(IReadOnlyList{SeriesMember})"/>.
-    /// </summary>
     public IReadOnlyList<IReadOnlyList<T>> Group<T>(IReadOnlyList<T> items, Func<T, SeriesMember> member)
     {
         ArgumentNullException.ThrowIfNull(items);
@@ -149,10 +108,6 @@ public sealed class SeriesLinks
         ];
     }
 
-    /// <summary>
-    /// The members among <paramref name="others"/> of the series of <paramref name="judged"/>, joined to it
-    /// through one another, in the order they were handed over.
-    /// </summary>
     public IReadOnlyList<SeriesMember> SeriesOf(SeriesMember judged, IReadOnlyList<SeriesMember> others)
     {
         ArgumentNullException.ThrowIfNull(judged);

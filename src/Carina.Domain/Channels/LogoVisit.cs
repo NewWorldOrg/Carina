@@ -18,9 +18,6 @@ public sealed class LogoVisit
 
     public DateTime? LastCollectedAt { get; private set; }
 
-    /// <summary>
-    /// A visit that was not interrupted collected when at least one picture arrived, and found nothing otherwise.
-    /// </summary>
     public static LogoVisitOutcome OutcomeOf(bool interrupted, int picturesArrived)
     {
         if (interrupted)

@@ -6,19 +6,8 @@ using Carina.Domain.Segments;
 
 namespace Carina.Api.Services;
 
-/// <summary>
-/// The chapters a plan plays and the clock of the file it hands over, or no clock when the file's time cannot be
-/// told from the recording's.
-/// </summary>
 public sealed record PlayedChapters(IReadOnlyList<PlaybackChapter> Chapters, PlaybackFileClock? Clock);
 
-/// <summary>
-/// The chapters a playback offer plays, on the clock of the file it hands over: the stretches the version of the
-/// model in use detected, placed by <see cref="PlaybackFileClock"/> and offered to be skipped by the threshold the
-/// settings stand at, and none while that version has not detected the recording. An artefact whose timeline was
-/// not kept has no stretch placed on it. The clock that places the recording's time on the file is handed back
-/// beside the chapters. Nothing here writes.
-/// </summary>
 public sealed class PlaybackChapterService(
     ISegmentSettingsRepository settings,
     ISegmentModelVersionRepository versions,

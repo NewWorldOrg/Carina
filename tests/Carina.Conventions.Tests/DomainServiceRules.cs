@@ -9,17 +9,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Carina.Conventions.Tests;
 
-/// <summary>
-/// A business decision that needs a lookup through a repository, or spans several aggregates, is made by a
-/// domain service: a sealed, non-static class of the domain whose name ends in <see cref="Suffix"/>, which
-/// takes only interfaces the domain declares, and <see cref="TimeProvider"/>, through its constructor. The
-/// domain is the namespace handed in and every namespace under it. A class of the domain that takes such a
-/// dependency under another name is reported unless <see cref="OutcomesHoldingAHandle"/> lists it: an
-/// outcome that carries a live stream, a transcoder seat or a socket back to its caller. A type of that name
-/// outside the domain or of another shape is reported too. The source rule reads every declaration whose
-/// name ends in <see cref="Suffix"/> and reports one outside the domain's folder or in a file not named
-/// after it; generated migrations are left alone.
-/// </summary>
 public static class DomainServiceRules
 {
     public const string Suffix = "DomainService";

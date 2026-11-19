@@ -11,11 +11,6 @@ public enum RetryResult
     NoAnswer = 3,
 }
 
-/// <summary>
-/// What came of one attempt to start a recording again, in the classes the ledger already holds. A
-/// refusal that named a class carries it, one that named none carries nothing, and an attempt
-/// nothing answered is kept apart from both.
-/// </summary>
 public sealed record RetryAttempt
 {
     private RetryAttempt(RetryResult result, TuneFailureKind? tuneFailure, IReadOnlyList<RecordingFault> faults)
@@ -35,10 +30,6 @@ public sealed record RetryAttempt
 
     public IReadOnlyList<RecordingFault> Faults { get; }
 
-    /// <summary>
-    /// What came of an attempt: a recording it began, a refusal the driver answered with and whatever class that
-    /// named, or nothing answered, which is also what a start given up on this side comes to.
-    /// </summary>
     public static RetryAttempt Of(bool started, bool refusedByTheDriver, RecordingStartFailure? named)
     {
         if (started)

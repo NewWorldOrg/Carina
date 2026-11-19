@@ -1,10 +1,5 @@
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// The picture a station's watermark is looked for in: a frame shrunk to one fixed size and taken
-/// in grey, one byte a pixel, row after row. Only the four corners are looked at, and what is
-/// looked at there is an edge, a step in brightness to the pixel across or below.
-/// </summary>
 public static class WatermarkFrame
 {
     public const int Width = 480;

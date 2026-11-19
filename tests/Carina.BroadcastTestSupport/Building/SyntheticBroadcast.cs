@@ -61,10 +61,6 @@ public sealed record SyntheticBroadcast
 
     public const int CaptionClearedAtSecond = 9;
 
-    /// <summary>
-    /// How long a caption shown for a while asks to stay on screen, in the tenths of a second the
-    /// broadcast's own wait is counted in.
-    /// </summary>
     public const int CaptionLastsTenths = 20;
 
     public const int MainTone = 440;
@@ -97,40 +93,16 @@ public sealed record SyntheticBroadcast
 
     public TimeSpan Length { get; init; } = DefaultLength;
 
-    /// <summary>
-    /// Where the broadcast goes quiet and dark at once. Each moment named here starts a stretch
-    /// <see cref="QuietBreakLasts"/> long in which the sound is silenced and the picture painted black.
-    /// </summary>
     public IReadOnlyList<TimeSpan> QuietBreaks { get; init; } = [];
 
-    /// <summary>
-    /// Where the written stream's own clock begins; left at zero, the stream begins where ffmpeg would
-    /// begin it.
-    /// </summary>
     public TimeSpan StartsAt { get; init; } = TimeSpan.Zero;
 
-    /// <summary>
-    /// How long the sound runs before the first picture comes in. The breaks and the captions stay on
-    /// the broadcast's own clock.
-    /// </summary>
     public TimeSpan PictureLateBy { get; init; } = TimeSpan.Zero;
 
-    /// <summary>
-    /// Paints the picture flat grey rather than with the test pattern.
-    /// </summary>
     public bool Plain { get; init; }
 
-    /// <summary>
-    /// Draws a station's watermark, a white outline in the top right corner, over the picture, except
-    /// through the stretches named in <see cref="Unbranded"/>.
-    /// </summary>
     public bool Watermarked { get; init; }
 
-    /// <summary>
-    /// Sounds two streams of pink noise, the right channel partly the left, swelling and fading four times a
-    /// second, rather than one steady tone: a sound whose fingerprint changes from one window to the next the
-    /// way speech and music change it.
-    /// </summary>
     public bool Murmuring { get; init; }
 
     public IReadOnlyList<(TimeSpan From, TimeSpan Until)> Unbranded { get; init; } = [];

@@ -16,25 +16,8 @@ public sealed record EncodeJobDraft(
     EncodeDestinationId DestinationId,
     bool MakeItAgain);
 
-/// <summary>
-/// A job as read at a moment: what the ledger holds, how long the job has gone without headway and
-/// whether that is a stall, and, for a waiting job, whether it is held back by the card being used
-/// for someone watching.
-/// </summary>
 public sealed record EncodeJobView(EncodeJob Job, TimeSpan? QuietFor, bool Stalled, bool WaitingForAViewer);
 
-/// <summary>
-/// Queues one recording by hand, runs failed jobs again and calls one job off.
-/// </summary>
-/// <remarks>
-/// A recording still being written, or one that failed, is refused. A recording with a job already
-/// waiting or running is not queued twice, and a recording with any completed job, whatever its
-/// profile, is refused unless the caller asks for the artefact to be made again: a recording has one
-/// artefact at most. A job made again replaces every earlier artefact of the recording once it is
-/// made, whatever their profile or destination. Calling a
-/// job off writes the ledger first, then stops the programme running for it, then sweeps the files
-/// the job owes a removal for.
-/// </remarks>
 public sealed class EncodeJobService(
     IEncodeJobRepository jobs,
     EncodeQueueDomainService queue,
@@ -85,12 +68,6 @@ public sealed class EncodeJobService(
             Seen(queued, Now(), await turn.YieldsToAViewerAsync(cancellationToken)));
     }
 
-    /// <summary>
-    /// Runs failed jobs again, one id at a time and in the order asked, by queuing the recording each was made
-    /// from with the profile and destination it named, through the same path a person queues one recording by
-    /// hand. A job that did not fail is left as it stands, and what the queue refuses is answered as that row's
-    /// outcome rather than as a refusal of the whole request.
-    /// </summary>
     public async Task<ServiceResult<IReadOnlyList<EncodeRerunRow>>> RerunAsync(IReadOnlyList<EncodeJobId> ids, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(ids);

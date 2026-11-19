@@ -3,9 +3,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Rules;
 
-/// <summary>
-/// The listing a reservation or a programme names: the broadcast's identifiers and the start it was announced with.
-/// </summary>
 public readonly record struct ListingKey(int NetworkId, int ServiceId, int EventId, DateTime StartsAt)
 {
     public (int NetworkId, int ServiceId, int EventId) Broadcast => (NetworkId, ServiceId, EventId);

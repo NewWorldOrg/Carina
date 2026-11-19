@@ -1,10 +1,5 @@
 namespace Carina.Domain.Captions;
 
-/// <summary>
-/// The captions taken from one recording's file: the canvas they were drawn on, where the file's own
-/// clock begins as it was read when they were taken, every change in the order ffmpeg drew it, and every
-/// change of their text, or no text at all for a record kept before the text was taken.
-/// </summary>
 public sealed record CaptionRecord
 {
     public CaptionRecord(int width, int height, TimeSpan startsAt, IReadOnlyList<CaptionCue> cues, IReadOnlyList<CaptionLine>? lines = null)

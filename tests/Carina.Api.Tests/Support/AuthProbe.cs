@@ -86,9 +86,6 @@ internal sealed class AuthProbe : IAsyncDisposable
     public static AuthProbe OverHttp(Action<IServiceCollection>? alsoWired = null)
         => new(secure: false, alsoWired);
 
-    /// <summary>
-    /// A probe whose every log, the framework's included, is turned up to its finest and heard by <paramref name="heard"/>.
-    /// </summary>
     public static AuthProbe OverHttpHeardBy(RecordedStartup heard, Action<IServiceCollection>? alsoWired = null)
         => new(secure: false, alsoWired, heard);
 

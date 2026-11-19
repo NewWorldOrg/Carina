@@ -1,9 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// How a detection of one recording ended: breaks, an opening or an ending marked, only the programme found,
-/// or the sequence thrown away.
-/// </summary>
 public enum SegmentDetectionState
 {
     Marked = 1,
@@ -13,14 +9,6 @@ public enum SegmentDetectionState
     Discarded = 3,
 }
 
-/// <summary>
-/// The detection of one recording: its stretches end to end from the recording's zero to its length,
-/// turning kind at every boundary; the share of the length breaks take, whatever the state, the opening and
-/// the ending not counted; and the boundary candidates' seconds, both kept to
-/// <see cref="SegmentSequence.Resolution"/>. The sequence is thrown away when breaks take more than
-/// <see cref="MostBreakShare"/> of the length (exactly that much is kept) or there are more than
-/// <see cref="MostStretchesAnHour"/> stretches an hour; a sequence thrown away is kept as it was.
-/// </summary>
 public sealed class SegmentDetection
 {
     public const double MostBreakShare = 0.5;

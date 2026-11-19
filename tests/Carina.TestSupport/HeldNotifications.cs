@@ -146,10 +146,6 @@ public sealed class HeldNotificationSettings : INotificationSettingsRepository
     }
 }
 
-/// <summary>
-/// Holds the programmes asked to be told of and hands out copies, as the database does: a row changes only
-/// when it is saved.
-/// </summary>
 public sealed class HeldProgrammeWatches : IProgrammeWatchRepository
 {
     public List<ProgrammeWatch> Watches { get; } = [];

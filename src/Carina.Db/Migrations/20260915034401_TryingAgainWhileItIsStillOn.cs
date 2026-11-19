@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class TryingAgainWhileItIsStillOn : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -57,7 +55,6 @@ public partial class TryingAgainWhileItIsStillOn : Migration
             sql: "(retry_result IS NULL OR retry_result IN ('Started', 'RefusedAgain', 'NoAnswer'))\nAND (kind = 'Retried') = (retry_result IS NOT NULL)\nAND (retry_result IS DISTINCT FROM 'Started'\n     OR (tune_failure IS NULL AND jsonb_array_length(faults) = 0))");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

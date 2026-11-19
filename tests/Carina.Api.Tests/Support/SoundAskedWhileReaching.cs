@@ -3,9 +3,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Api.Tests.Support;
 
-/// <summary>
-/// The sound on air, remembering whether the channel was already being reached for when it was asked.
-/// </summary>
 internal sealed class SoundAskedWhileReaching(Func<bool> reaching) : ISoundOnAir
 {
     private int asked;

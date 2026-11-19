@@ -18,13 +18,6 @@ public enum ExtractionChange
     AnotherIsReading = 5,
 }
 
-/// <summary>
-/// Where following recordings reads and writes the records of taking their learning data out, and
-/// the data itself, each call in a scope of its own. A change to a record reads the row afresh,
-/// applies the change and writes it; when the row changed after it was read, it is read again and
-/// the change applied again, up to <see cref="Attempts"/> times. A change that declines the row as it
-/// stands writes nothing, and so does one that would read a recording while another is read.
-/// </summary>
 public sealed class LearningRecords(IServiceScopeFactory scopes)
 {
     public const int Attempts = 5;
@@ -106,10 +99,6 @@ public sealed class LearningRecords(IServiceScopeFactory scopes)
         }
     }
 
-    /// <summary>
-    /// Keeps each part, in place of the one already kept for the same recording, kind and chunk, in the
-    /// order given.
-    /// </summary>
     public async Task KeepPartsAsync(
         RecordingId id,
         IReadOnlyList<LearningDataPart> parts,

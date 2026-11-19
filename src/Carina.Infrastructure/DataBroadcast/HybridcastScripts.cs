@@ -3,23 +3,8 @@ using System.Text;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// One change to a script: the characters from <see cref="Start"/> up to <see cref="End"/> are replaced.
-/// </summary>
 public readonly record struct ScriptEdit(int Start, int End, string Replacement);
 
-/// <summary>
-/// Points a Hybridcast application's script at the stand-in the receiver script gives the frame for its location.
-/// Inside the frame the location is this installation's, and an application that reads its own host from it would
-/// ask the wrong server, so the location read as a global is rewritten: the bare name used as a value, assigned to
-/// or not, becomes <see cref="StandIn"/>, and the location of window, self, document or globalThis becomes
-/// <see cref="WindowStandIn"/>. The script is read token by token, so strings, template text, comments and regular
-/// expressions are never touched, nor is a property name, a member of any other object, or a name only spelt
-/// alike. A scope that declares a location of its own, or a self of its own, is left as it is; a window, document or
-/// globalThis taken as a parameter is the one passed in, which is the global. A script longer than
-/// <see cref="Largest"/> is not read at all, and one whose reading would take more than a few passes over it is
-/// left as it is. In Shift_JIS the second byte of a character is never read as code.
-/// </summary>
 public static class HybridcastScripts
 {
     public const int Largest = 2 * 1024 * 1024;

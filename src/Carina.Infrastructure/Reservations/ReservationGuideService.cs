@@ -11,15 +11,6 @@ public sealed record GuideRun(
     IReadOnlyList<ReservationId> Followed,
     IReadOnlyList<ReservationId> Cancelled);
 
-/// <summary>
-/// Holds every reservation still ahead against what the guide says now.
-/// </summary>
-/// <remarks>
-/// A broadcast is identified by the guide's network, service and event, so a reservation follows a
-/// renamed or moved programme. A broadcast the guide no longer announces takes its reservation out
-/// of the running. A broadcast is no longer announced when its programme carries an older mark than
-/// its service's newest whole reading; a service no reading has ever heard whole is left alone.
-/// </remarks>
 public sealed class ReservationGuideService(
     IReservationRepository reservations,
     ReservationOutcomeDomainService ledger,
@@ -129,11 +120,6 @@ public sealed class ReservationGuideService(
             cancellationToken);
     }
 
-    /// <summary>
-    /// Takes reservations out of the running through the allocation, the same call a person's cancel
-    /// goes through, then marks why and writes the ledger line. An allocation that could not be settled
-    /// leaves the reservation as it was.
-    /// </summary>
     private async Task<IReadOnlyList<ReservationId>> CancelAsync(
         IReadOnlyList<Reservation> gone,
         DateTime at,

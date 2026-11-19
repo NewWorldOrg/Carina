@@ -4,10 +4,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// One viewer's seat on a live session, read as it comes and cut into segments, held for as long as a player goes on
-/// asking for it.
-/// </summary>
 internal sealed class LiveHlsRendition(
     HlsHolding holding,
     ILiveViewing seat,

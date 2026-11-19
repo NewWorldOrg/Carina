@@ -5,21 +5,12 @@ using Carina.Domain.Encodings;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// One chapter a file carries as ffprobe reads it: where it starts and ends on the file's clock, and its title.
-/// </summary>
 public sealed record CarriedChapter(TimeSpan Starts, TimeSpan Ends, string Title);
 
-/// <summary>
-/// The chapters a file carries as ffprobe reads them.
-/// </summary>
 public static class ChaptersCarried
 {
     public static readonly TimeSpan Tolerance = TimeSpan.FromMilliseconds(10);
 
-    /// <summary>
-    /// Reads what ffprobe said in JSON, or answers null when it said something else.
-    /// </summary>
     public static IReadOnlyList<CarriedChapter>? Read(string said)
     {
         ArgumentNullException.ThrowIfNull(said);
@@ -36,10 +27,6 @@ public static class ChaptersCarried
         }
     }
 
-    /// <summary>
-    /// Why <paramref name="carried"/> are not <paramref name="wanted"/>, or null when they are: as many, each
-    /// starting and ending where it is meant to within <see cref="Tolerance"/>, titled for its kind.
-    /// </summary>
     public static string? Differs(IReadOnlyList<CarriedChapter> carried, IReadOnlyList<ChapterSegment> wanted)
     {
         ArgumentNullException.ThrowIfNull(carried);

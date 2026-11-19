@@ -1,9 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// The features of one segment, by the names <see cref="SegmentFeature"/> lists. A feature that could
-/// not be computed, or was not handed over, is not known.
-/// </summary>
 public sealed class SegmentFeatureValues
 {
     private readonly Dictionary<string, double?> values;

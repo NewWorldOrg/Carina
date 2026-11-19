@@ -6,15 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <summary>
-/// Lets a catalog entry's kind be decided by the opening or ending it carries on, and gives the copy of a programme
-/// kept with a recording's learning data the end its recording was promised, or else the one it had, where the
-/// guide's end was not known and the recording is still kept. Going back takes every entry carried on so for one
-/// not known, to be estimated again; the ends given stay, as nothing tells them from the guide's.
-/// </summary>
 public partial class CatalogEntriesCarryOnOpeningsAndCopiesOfProgrammesEndWhereTheirRecordingsWerePromised : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -39,7 +32,6 @@ public partial class CatalogEntriesCarryOnOpeningsAndCopiesOfProgrammesEndWhereT
             """);
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

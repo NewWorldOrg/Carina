@@ -2,11 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace Carina.Architecture.Tests;
 
-/// <summary>
-/// The image fetches the face the captions are drawn with from one fixed release, checks it against the
-/// release's own SHA256SUMS and against the sha256 the Dockerfile pins, and installs it beside the fallback
-/// face in both stages that draw captions before the font cache is built.
-/// </summary>
 public static class CaptionFontRules
 {
     public const string Face = "Denpa Font";

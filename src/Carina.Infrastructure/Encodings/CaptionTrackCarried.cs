@@ -3,23 +3,12 @@ using System.Text.Json;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// One subtitle track a file carries: its codec, its language and whether it is shown before anybody
-/// chooses it.
-/// </summary>
 public sealed record CarriedSubtitle(string Codec, string? Language, bool ShownByDefault);
 
-/// <summary>
-/// What a file carries as ffprobe reads it: how many picture and sound tracks, its subtitle tracks and how
-/// long it lasts.
-/// </summary>
 public sealed record CaptionTrackCarried(int Pictures, int Sounds, IReadOnlyList<CarriedSubtitle> Subtitles, TimeSpan? Length)
 {
     public static readonly TimeSpan Tolerance = TimeSpan.FromSeconds(1);
 
-    /// <summary>
-    /// Reads what ffprobe said in JSON, or answers null when it said something else.
-    /// </summary>
     public static CaptionTrackCarried? Read(string said)
     {
         ArgumentNullException.ThrowIfNull(said);
@@ -36,11 +25,6 @@ public sealed record CaptionTrackCarried(int Pictures, int Sounds, IReadOnlyList
         }
     }
 
-    /// <summary>
-    /// Why <paramref name="made"/> is not <paramref name="source"/> with one text track of captions put in, or
-    /// null when it is: the same picture and sound tracks, exactly one subtitle track, written as text in
-    /// Japanese and not shown by default, and as long as the source within <see cref="Tolerance"/>.
-    /// </summary>
     public static string? Differs(CaptionTrackCarried source, CaptionTrackCarried made)
     {
         ArgumentNullException.ThrowIfNull(source);

@@ -1,8 +1,5 @@
 namespace Carina.Domain.Captions;
 
-/// <summary>
-/// A caption drawn on the canvas: where it sits, how large it is, and the palette PNG it was drawn as.
-/// </summary>
 public sealed record CaptionPlacement
 {
     public const int FurthestEdge = ushort.MaxValue;

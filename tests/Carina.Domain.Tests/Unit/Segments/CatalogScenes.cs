@@ -5,19 +5,12 @@ using Carina.Domain.Segments;
 
 namespace Carina.Domain.Tests.Unit.Segments;
 
-/// <summary>
-/// Synthetic weekly series for the catalog: each episode is half an hour long unless the series says
-/// otherwise, and its recording starts a minute before the programme does.
-/// </summary>
 internal sealed class CatalogSeries(int station, string name, DateTime firstAiring, TimeSpan? runs = null)
 {
     public static readonly TimeSpan Lead = TimeSpan.FromMinutes(1);
 
     public static readonly TimeSpan Runs = TimeSpan.FromMinutes(30);
 
-    /// <summary>
-    /// How far into an episode its middle is, where the first half of the programme ends.
-    /// </summary>
     public static readonly double Midpoint = (Runs / 2).TotalSeconds;
 
     public static readonly DateTime Now = new(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc);

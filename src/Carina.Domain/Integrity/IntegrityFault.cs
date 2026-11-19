@@ -26,9 +26,6 @@ public static class IntegrityFaults
         IntegrityFault.ThumbnailMissing,
     ];
 
-    /// <summary>
-    /// The classes that name a recording's own file, and so carry the size the ledger recorded for it.
-    /// </summary>
     public static readonly IReadOnlyList<IntegrityFault> ThatCarryTheLedgerSize =
     [
         IntegrityFault.SizeDisagrees,

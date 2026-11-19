@@ -1,9 +1,5 @@
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// The address of a webhook, which is a secret: whoever knows it can post to the channel. It is read in the clear
-/// through <see cref="AddressAsWritten"/> only, to seal it and to send to it.
-/// </summary>
 public sealed class WebhookUrl
 {
     public const int Longest = 2048;
@@ -32,9 +28,6 @@ public sealed class WebhookUrl
 
     public string Tail { get; }
 
-    /// <summary>
-    /// The address as written, or nothing where it is not an https address of a host that takes webhooks.
-    /// </summary>
     public static WebhookUrl? Read(string? written)
     {
         if (string.IsNullOrEmpty(written)

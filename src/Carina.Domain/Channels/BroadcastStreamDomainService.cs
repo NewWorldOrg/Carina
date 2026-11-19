@@ -2,12 +2,6 @@ using Puppis.Contracts;
 
 namespace Carina.Domain.Channels;
 
-/// <summary>
-/// Decides which streams the guide is collected from and how each is tuned. Only selected candidates count. A stream
-/// is visited when one of its candidates is in the rotation, and it is tuned through the best of those. The candidate
-/// that speaks for a stream is the one in the rotation, then one backing off, then any other, with fewer failures
-/// first.
-/// </summary>
 public sealed class BroadcastStreamDomainService(ICandidateChannelRepository candidates)
     : IBroadcastStreamDirectory
 {

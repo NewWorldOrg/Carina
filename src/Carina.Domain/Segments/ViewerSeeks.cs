@@ -1,25 +1,7 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// What one forward seek passed, read to learn from: from where to where once its ends were drawn to boundary
-/// candidates, the weight it labels with, the kind the version in use found over more than half of it, if one other
-/// than the programme, and whether it runs from cut to cut in steps as long as adverts.
-/// </summary>
 public sealed record SeekSpan(TimeSpan Starts, TimeSpan Ends, double Weight, SegmentKind? Detected, bool InAdvertSteps);
 
-/// <summary>
-/// The seeks of one recording read to learn from. Nobody lands a seek on a cut, so each end of a forward seek is taken
-/// to lie within <see cref="Reach"/> of where it was sent, by how it was made, and is drawn to the likeliest boundary
-/// candidate within that reach: first one that faces a pod, as long as an advert from another candidate on the side of
-/// what was passed and not from one on the other side, then one as long as an advert from a candidate on the side of what
-/// was passed whatever lies on the other, then the stronger, then the nearer. An end with no candidate within reach is drawn in by the
-/// reach, so that nothing near it is labelled, and each such end lightens the seek from <see cref="MostWeight"/> to
-/// <see cref="OneEndLeftWeight"/> and <see cref="BothEndsLeftWeight"/>. A seek that keeps less than
-/// <see cref="ShortestSpan"/> is not used; a seek the viewer came back from, the latest earlier forward seek whose
-/// stretch holds where they came back to, is not used either, and where they came back to is kept. Coming back to within
-/// the reach of where that seek landed is putting right a seek that went a little too far, which leaves the seek as it
-/// is and keeps nothing. The same stretch passed more than once is one.
-/// </summary>
 public sealed class ViewerSeeks
 {
     public const double MostWeight = 0.1;
@@ -42,9 +24,6 @@ public sealed class ViewerSeeks
 
     public IReadOnlyList<TimeSpan> CameBackTo { get; }
 
-    /// <summary>
-    /// How far either way of where it was sent an end of a seek made by <paramref name="means"/> may lie.
-    /// </summary>
     public static TimeSpan Reach(SeekMeans means) => means switch
     {
         SeekMeans.Bar or SeekMeans.Key => TimeSpan.FromSeconds(8),
@@ -53,10 +32,6 @@ public sealed class ViewerSeeks
         _ => throw new ArgumentOutOfRangeException(nameof(means), means, "A seek is made by the bar, a step, a chapter or a key."),
     };
 
-    /// <summary>
-    /// <paramref name="seeks"/> read against the boundary candidates of the recording, the version in use's detection
-    /// of it, if there is one, and the tolerance of the grid adverts are laid on.
-    /// </summary>
     public static ViewerSeeks Read(
         IReadOnlyList<ViewerSeek> seeks,
         IReadOnlyList<BoundaryCandidate> candidates,
@@ -111,11 +86,6 @@ public sealed class ViewerSeeks
         return new ViewerSeeks(spans, cameBackTo);
     }
 
-    /// <summary>
-    /// The kind <paramref name="span"/> labels with: the kind the stretches of <paramref name="catalog"/> cover more than
-    /// half of it with, none when that is the programme, since the catalog wins; else the kind the version in use found;
-    /// else a break when it runs from cut to cut in steps as long as adverts; else none.
-    /// </summary>
     public static SegmentKind? KindOf(SeekSpan span, IReadOnlyList<CatalogHeard> catalog)
     {
         ArgumentNullException.ThrowIfNull(span);
@@ -196,11 +166,6 @@ public sealed class ViewerSeeks
                 .ThenBy(candidate => candidate.At)
                 .FirstOrDefault();
 
-        /// <summary>
-        /// 2 when <paramref name="candidate"/> is as long as an advert from another on the side of what was passed and
-        /// from none on the other side, as the edge of a pod is; 1 when it is so only on the side of what was passed;
-        /// 0 otherwise.
-        /// </summary>
         private int FacingAPod(BoundaryCandidate candidate, bool inwardIsLater)
         {
             bool faces = candidates.Any(other => inwardIsLater ? AnAdvert(candidate, other) : AnAdvert(other, candidate));

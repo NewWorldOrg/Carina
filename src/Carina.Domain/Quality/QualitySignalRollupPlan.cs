@@ -74,10 +74,6 @@ public static class QualitySignalRollupPlan
             TheOneChannel(taken));
     }
 
-    /// <summary>
-    /// The physical channel every one of the samples was taken on, or null when they were not all
-    /// taken on one or any of them does not say.
-    /// </summary>
     private static int? TheOneChannel(IReadOnlyList<QualitySignalSample> taken)
     {
         int? first = taken[0].PhysicalChannel;

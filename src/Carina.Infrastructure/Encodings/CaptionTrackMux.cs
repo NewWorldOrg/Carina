@@ -8,10 +8,6 @@ using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// What putting a text track of captions into an artefact came to: the file written with the track put in,
-/// when it was, and why not otherwise.
-/// </summary>
 public sealed record CaptionTrackMade(EncodeCaptionTrack Outcome, string? Captioned, string Note)
 {
     public static CaptionTrackMade Added(string captioned) => new(EncodeCaptionTrack.Added, captioned, string.Empty);
@@ -21,11 +17,6 @@ public sealed record CaptionTrackMade(EncodeCaptionTrack Outcome, string? Captio
     public static CaptionTrackMade Failed(string note) => new(EncodeCaptionTrack.Failed, null, note);
 }
 
-/// <summary>
-/// The names the text of captions and the copy with the track put in are written under: the job's own for
-/// the attempt that is making the artefact, and names that also carry a try of their own for an artefact
-/// that stands already, which may be tried more than once.
-/// </summary>
 public sealed record CaptionTrackNames(EncodeFileName Captions, EncodeFileName Captioned)
 {
     public static CaptionTrackNames Making(EncodeJob job)
@@ -47,12 +38,6 @@ public sealed record CaptionTrackNames(EncodeFileName Captions, EncodeFileName C
     }
 }
 
-/// <summary>
-/// Writes a copy of an artefact with the text of a recording's captions put in as a text track, beside the
-/// work of the job that made the artefact: the text and the copy are written into the ledger as scratch first,
-/// the copy's subtitle track is turned off by default, and the copy is checked against the artefact before it
-/// is handed back. The artefact itself is only read.
-/// </summary>
 public sealed class CaptionTrackMux(EncodeScratchFiles scratch, MachineSettings machine, TimeProvider clock)
 {
     public static readonly TimeSpan LongestCopy = TimeSpan.FromHours(1);

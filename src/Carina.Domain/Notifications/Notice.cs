@@ -2,9 +2,6 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// One happening worth telling somebody of, taken once from the ledger that holds it and worded once.
-/// </summary>
 public sealed class Notice
 {
     public const int TitleLongest = 256;
@@ -74,10 +71,6 @@ public sealed class Notice
         };
     }
 
-    /// <summary>
-    /// Whether more than <paramref name="tooOldAfter"/> has passed at <paramref name="at"/> since this happened, so
-    /// that it is no longer worth sending.
-    /// </summary>
     public bool IsTooOldAt(DateTime at, TimeSpan tooOldAfter) => OccurredAt < at - tooOldAfter;
 
     private static string Worded(string said, int longest, string parameterName)

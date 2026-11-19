@@ -485,10 +485,6 @@ public sealed class CatalogMatchingJobTests
         return entry;
     }
 
-    /// <summary>
-    /// An entry kept from before the rows for openings and endings, of no kind yet: a minute and a half heard
-    /// near the start of two weekly episodes, both matched already.
-    /// </summary>
     private static async Task<CatalogEntry> OutdatedAsync(
         CatalogMatchingHarness harness,
         int kindsVersion = CatalogKinds.FirstVersion,

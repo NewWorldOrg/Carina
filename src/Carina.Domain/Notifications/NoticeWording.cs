@@ -4,9 +4,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// Words a happening once, in Japanese, for every destination: a title, a body of one fact a line, and a link.
-/// </summary>
 public static class NoticeWording
 {
     private const string ReservationsScreen = "/reservations";

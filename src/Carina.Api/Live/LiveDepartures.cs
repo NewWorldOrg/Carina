@@ -23,10 +23,6 @@ public static class LiveDepartures
                 "A wire ends in one of the ways named here."),
         };
 
-    /// <summary>
-    /// What a viewer is told the supply ended for when the supply itself named no reason, or null
-    /// when the departure was not the supply ending.
-    /// </summary>
     public static LiveSupplyEnd? Ending(LiveDeparture departure)
         => departure switch
         {

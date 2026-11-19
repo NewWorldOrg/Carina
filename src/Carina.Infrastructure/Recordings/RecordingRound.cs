@@ -50,10 +50,6 @@ public sealed record RecordingRun(
 
     public IReadOnlyList<ReservationId> GaveUp { get; init; } = [];
 
-    /// <summary>
-    /// Reservations whose start was tried ahead of their window and did not take; nothing is written
-    /// down for them and the next tick tries again.
-    /// </summary>
     public IReadOnlyList<ReservationId> HeldBack { get; init; } = [];
 }
 
@@ -87,10 +83,6 @@ public sealed class RecordingRound(
         Unknowable = 3,
     }
 
-    /// <summary>
-    /// Runs one tick: following comes before stopping and starting, and each recording is followed
-    /// inside its own guard.
-    /// </summary>
     public async Task<RecordingRun> RunAsync(CancellationToken cancellationToken)
     {
         DateTime now = clock.GetUtcNow().UtcDateTime;
@@ -239,11 +231,6 @@ public sealed class RecordingRound(
         return starting;
     }
 
-    /// <summary>
-    /// Weighs a reservation whose start failed in a class before it is claimed. One that is waiting out
-    /// its pause or has been given up on does not take the claim; one to be tried again goes on as a
-    /// first start does.
-    /// </summary>
     private async Task<bool> TryingAgainAsync(
         RecordingTick due,
         RetryHistory history,
@@ -468,11 +455,6 @@ public sealed class RecordingRound(
         };
     }
 
-    /// <summary>
-    /// What came of an attempt, read off what the start wrote down: a recording it began, or the refusal
-    /// it added. A driver refusal carries whatever class it named; a driver that could not be reached,
-    /// or an abandoned start, is an attempt nothing answered.
-    /// </summary>
     private static RetryAttempt WhatCameOf(Starting starting, int startedBefore, int refusedBefore)
     {
         RecordingRefusal? refused = starting.Refused.Count > refusedBefore ? starting.Refused[^1] : null;

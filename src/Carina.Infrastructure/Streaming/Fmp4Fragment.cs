@@ -3,9 +3,6 @@ using System.Numerics;
 
 namespace Carina.Infrastructure.Streaming;
 
-/// <summary>
-/// What a track declares of its samples in the initialisation, for a fragment that leaves them unsaid.
-/// </summary>
 public sealed record Fmp4TrackDefaults(uint Timescale, uint Duration, uint Size, uint Flags);
 
 public readonly record struct Fmp4Sample(uint Duration, uint Size, uint Flags, uint CompositionOffset)
@@ -15,9 +12,6 @@ public readonly record struct Fmp4Sample(uint Duration, uint Size, uint Flags, u
     public bool IsASync => (Flags & NotASyncSample) is 0U;
 }
 
-/// <summary>
-/// One track's part of a fragment: when its first sample is decoded, its samples, and their bytes one after another.
-/// </summary>
 public sealed record Fmp4Run(uint Track, ulong DecodeTime, IReadOnlyList<Fmp4Sample> Samples, ReadOnlyMemory<byte> Data, bool SignedOffsets)
 {
     public ulong Ticks => Samples.Aggregate(0UL, (sum, sample) => sum + sample.Duration);
@@ -38,11 +32,6 @@ public sealed record Fmp4Run(uint Track, ulong DecodeTime, IReadOnlyList<Fmp4Sam
     private int BytesBefore(int sample) => (int)Samples.Take(sample).Aggregate(0L, (sum, taken) => sum + taken.Size);
 }
 
-/// <summary>
-/// A movie fragment read whole, each track's samples and bytes laid out, so that it can be written again or cut in
-/// two at a sample. Only a fragment whose track fragments count their data from the movie fragment box is read,
-/// which is how the live transcoder writes them.
-/// </summary>
 public sealed class Fmp4Fragment
 {
     private const uint BaseDataOffsetGiven = 0x000001;
@@ -118,10 +107,6 @@ public sealed class Fmp4Fragment
 
     public Fmp4Run? Of(uint track) => Runs.FirstOrDefault(run => run.Track == track);
 
-    /// <summary>
-    /// The fragment cut in two before sample <paramref name="sample"/> of <paramref name="track"/>. Every other track
-    /// is cut where its samples begin to be decoded at or after that sample, read on each track's own clock.
-    /// </summary>
     public (Fmp4Fragment Before, Fmp4Fragment From) CutAt(uint track, int sample, IReadOnlyDictionary<uint, Fmp4TrackDefaults> tracks)
     {
         ArgumentNullException.ThrowIfNull(tracks);
@@ -144,9 +129,6 @@ public sealed class Fmp4Fragment
             new Fmp4Fragment(Sequence, [.. from.Where(run => run.Samples.Count > 0)]));
     }
 
-    /// <summary>
-    /// The fragment as a movie fragment box and its media, every field of every sample written out.
-    /// </summary>
     public byte[] Written()
     {
         int moofLength = HeaderLength + 16 + Runs.Sum(TrackFragmentLength);

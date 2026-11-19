@@ -2,10 +2,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.Domain.Tests.Unit.Segments;
 
-/// <summary>
-/// Corner outlines, one a second, made up for the tests: a logo drawn as a block rectangle where the
-/// second shows it, over blocks of noise drawn from a fixed seed.
-/// </summary>
 internal static class SyntheticCorners
 {
     public const double Noise = 0.04;

@@ -202,9 +202,6 @@ public sealed class SegmentTrainerTests : IDisposable
     private async Task SkippedAsync(RecordingId recording)
         => await skips.TakeAsync(SkipEvent.Of(recording, new ViewerAction(Now, ViewerActionKind.Skipped, SegmentKind.Break, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(115), 1)), Cancel);
 
-    /// <summary>
-    /// A fifteen-second entry of the catalog heard at each second named in each recording named.
-    /// </summary>
     private void HeardIn(CatalogEntryId id, params (RecordingId Recording, double At)[] stretches)
     {
         CatalogOccurrence[] heard =
@@ -223,9 +220,6 @@ public sealed class SegmentTrainerTests : IDisposable
     }
 }
 
-/// <summary>
-/// The recordings a round could read, from the records, catalog, skip events and seeks held, as the store finds them.
-/// </summary>
 internal sealed class HeldTrainingWorklist(HeldLearningExtractions records, HeldCatalog catalog, ISkipEventRepository skips, ISeekEventRepository seeks) : ITrainingWorklist
 {
     public async Task<IReadOnlyList<LearningCandidate>> CandidatesAsync(CancellationToken cancellationToken)
@@ -253,9 +247,6 @@ internal sealed class HeldTrainingWorklist(HeldLearningExtractions records, Held
     }
 }
 
-/// <summary>
-/// Asks whether learning may go on, says no the <c>stopAt</c>-th time, and does what a test says at the time named.
-/// </summary>
 internal sealed class Counted(int stopAt, int whenAsked = 0, Action? then = null)
 {
     public int Asked { get; private set; }
@@ -273,9 +264,6 @@ internal sealed class Counted(int stopAt, int whenAsked = 0, Action? then = null
     }
 }
 
-/// <summary>
-/// The skip events held, keeping which recordings each listing named.
-/// </summary>
 internal sealed class ListedSkips : ISkipEventRepository
 {
     private readonly HeldSkipEvents held = new();

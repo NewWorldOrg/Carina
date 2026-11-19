@@ -15,9 +15,6 @@ internal enum NoticeUnit
     Minutes = 5,
 }
 
-/// <summary>
-/// How a measured value is said in each unit a notice uses.
-/// </summary>
 internal static class NoticeUnits
 {
     private const string Plain = "0.###";

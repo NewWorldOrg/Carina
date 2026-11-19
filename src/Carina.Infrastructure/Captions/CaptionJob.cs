@@ -14,16 +14,6 @@ using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Captions;
 
-/// <summary>
-/// Takes the captions out of ended recordings one at a time, newest first, and keeps them on the shelf.
-/// A pass does not start the next recording while anything is being recorded or watched or a reservation starts
-/// soon, as <see cref="Idleness"/> judges it, reads a recording's
-/// file only in its turn among the passes that read recordings through, and first puts
-/// back in the queue any recording whose row says its captions are ready while no record of them is kept.
-/// With room left in the pass, it takes again the captions of ready recordings whose record was kept before
-/// their text was taken, leaving them ready meanwhile, and then puts a text track of captions into the
-/// artefacts that await one.
-/// </summary>
 public sealed class CaptionJob(
     IServiceScopeFactory scopes,
     ICaptionTranscriber transcriber,
@@ -182,10 +172,6 @@ public sealed class CaptionJob(
         return tally;
     }
 
-    /// <summary>
-    /// The recordings whose captions are ready and whose record on the shelf was kept before the text of
-    /// captions was taken, so that they are taken again while they stay ready.
-    /// </summary>
     private async Task<IReadOnlyList<CaptionSubject>> TextlessAsync(
         ICaptionWorklist worklist,
         IReadOnlyList<RecordingId> ready,
@@ -329,10 +315,6 @@ public sealed class CaptionJob(
         return null;
     }
 
-    /// <summary>
-    /// Takes again the captions of a recording that is ready, for their text. Whatever stops that leaves the
-    /// record kept before and the recording as they were, and is counted for as long as this process runs.
-    /// </summary>
     private async Task<CaptionState?> RetakenAsync(
         ICaptionWorklist worklist,
         CaptionSubject subject,

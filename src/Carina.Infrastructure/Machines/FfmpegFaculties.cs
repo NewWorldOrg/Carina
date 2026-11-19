@@ -4,10 +4,6 @@ using Carina.Domain.Machines;
 
 namespace Carina.Infrastructure.Machines;
 
-/// <summary>
-/// Reads what an ffmpeg build was compiled with out of its own listing, and puts that together with
-/// what the card was found to accept.
-/// </summary>
 public static partial class FfmpegFaculties
 {
     public const string H264OnTheProcessor = "libx264";
@@ -63,10 +59,6 @@ public static partial class FfmpegFaculties
 
     public static string Av1On(CardKind card) => CardKinds.Named(card) is CardKind.Nvenc ? Av1OnNvenc : Av1OnVaapi;
 
-    /// <summary>
-    /// The faculties of this machine, whose card is of <paramref name="card"/>'s kind. Each of the card's three
-    /// faculties is answered by a frame actually encoded with that card's encoder, not by the build listing it.
-    /// </summary>
     public static IReadOnlyList<Faculty> Of(
         IReadOnlyList<string> encoders,
         IReadOnlyList<string> decoders,

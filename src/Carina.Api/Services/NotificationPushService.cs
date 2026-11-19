@@ -9,10 +9,6 @@ public sealed record PushKeyHeld(string PublicKey);
 
 public sealed record PushEnrolled(ListedNotificationDestination Destination, bool Added);
 
-/// <summary>
-/// Gives the key browsers subscribe with, and registers and replaces what a browser subscribed. A subscription is
-/// sealed before it is kept and is never given back.
-/// </summary>
 public sealed class NotificationPushService(
     INotificationDestinationRepository destinations,
     INotificationRuleRepository rules,

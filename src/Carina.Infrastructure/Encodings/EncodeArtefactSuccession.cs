@@ -6,24 +6,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// What settling a recording's artefacts came to: how many earlier artefacts were marked replaced,
-/// how many of their files were removed, and the name of each one that could not be.
-/// </summary>
 public sealed record EncodeSuccessionReport(int Replaced, int FilesRemoved, IReadOnlyList<EncodeFileName> Left)
 {
     public static readonly EncodeSuccessionReport Nothing = new(0, 0, []);
 }
 
-/// <summary>
-/// Leaves a recording with the artefact of the job that completed last as its only one.
-/// </summary>
-/// <remarks>
-/// Every earlier completed job is marked replaced, and the file each one made under another name is
-/// written down as owed a removal in the same write. The removals every replaced job still owes are
-/// then made from the ledger. A removal owed at the name the standing artefact now holds is settled
-/// without touching the disk. The recording itself is never touched.
-/// </remarks>
 public sealed class EncodeArtefactSuccession(
     IEncodeJobRepository jobs,
     IEncodeScratchLedger ledger,

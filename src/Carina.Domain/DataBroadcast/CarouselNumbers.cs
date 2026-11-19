@@ -1,8 +1,5 @@
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// The ranges the numbers of a data carousel are carried in.
-/// </summary>
 public static class CarouselNumbers
 {
     public const int MostTag = 0xFF;

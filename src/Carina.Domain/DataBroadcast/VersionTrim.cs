@@ -1,17 +1,7 @@
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// One module version held for a record, with the carousel and the download it came in.
-/// </summary>
 internal readonly record struct HeldVersion(int Tag, uint DownloadId, ModuleVersion Version);
 
-/// <summary>
-/// Which versions a record leaves out to take no more than the bytes it may and to hold no more versions in a
-/// carousel than a count of two bytes tells: versions that a later version of the same module of the same download
-/// took the place of, in the order they were taken the place of, never the latest version of a module or a version
-/// of the startup document. A version taken the place of earlier never comes after one taken the place of later, so
-/// leaving versions out as they arrive leaves out the same ones as leaving them out at the end.
-/// </summary>
 internal static class VersionTrim
 {
     public const int MostVersionsInACarousel = ushort.MaxValue;

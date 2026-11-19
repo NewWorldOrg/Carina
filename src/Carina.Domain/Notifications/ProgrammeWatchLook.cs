@@ -2,22 +2,11 @@ using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// What one look did to a programme asked to be told of: whether the row changed, and what to tell of it now.
-/// </summary>
 public sealed record ProgrammeWatchStep(bool Changed, NoticeKind? Tells)
 {
     public static ProgrammeWatchStep Nothing { get; } = new(false, null);
 }
 
-/// <summary>
-/// One look at a programme asked to be told of, by the time and by what the guide says.
-/// </summary>
-/// <remarks>
-/// A row that waits follows the guide, is told of once its minutes before the start are reached, is passed over
-/// when its broadcast has ended, and is cancelled when the guide stops naming it before it begins. A row already
-/// told of stays as it is; a start that moves, or a guide that stops naming it before it begins, is told once.
-/// </remarks>
 public static class ProgrammeWatchLook
 {
     public static ProgrammeWatchStep At(

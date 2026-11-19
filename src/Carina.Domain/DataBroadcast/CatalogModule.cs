@@ -1,9 +1,5 @@
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// One module the catalog holds valid: its id, version and size, whether that version has arrived, and the
-/// resources it carries once it has.
-/// </summary>
 public sealed record CatalogModule
 {
     public CatalogModule(int id, int version, long size, bool arrived, IReadOnlyList<CatalogResource> resources)

@@ -6,10 +6,6 @@ using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Reads how long a source is by asking ffprobe for one key and reading that key back out of the
-/// answer. What ffprobe says on the error stream is ignored.
-/// </summary>
 public sealed class FfprobeSourceLength(MachineSettings settings, TimeProvider clock) : ISourceLengthReader
 {
     public const string Key = "duration";

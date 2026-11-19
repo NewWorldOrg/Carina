@@ -1,8 +1,5 @@
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// How much room is left where a directory lies, or null when it cannot be told.
-/// </summary>
 public interface IFreeSpaceReader
 {
     long? FreeBytes(string directory);

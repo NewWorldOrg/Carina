@@ -102,9 +102,6 @@ public sealed class Recording
 
     public long CarriedEovfCount { get; private set; }
 
-    /// <summary>
-    /// What the sessions before the one being counted had counted, which the counts of this recording stand on.
-    /// </summary>
     public CarriedCount Carried
         => new(
             DropCounters.Rehydrate(CarriedCcDroppedPackets is not null, CarriedCcDroppedPackets, CarriedCcTotalPackets),
@@ -112,10 +109,6 @@ public sealed class Recording
             CarriedScrambledPackets,
             CarriedEovfCount);
 
-    /// <summary>
-    /// When the session whose counts were last taken opened, to the millisecond, or <see langword="null"/> when
-    /// nothing has said which session was counted.
-    /// </summary>
     public DateTime? CountedSessionOpenedAt { get; private set; }
 
     public TunerDeviceId? TunerDeviceId { get; private set; }
@@ -126,37 +119,18 @@ public sealed class Recording
 
     public CaptionState CaptionState { get; private set; } = CaptionState.Pending;
 
-    /// <summary>
-    /// When the captions were last taken from the recording's file, or null while they are waiting to be.
-    /// </summary>
     public DateTime? CaptionsMadeAt { get; private set; }
 
-    /// <summary>
-    /// How many times the picture on screen changes in the captions kept, or null unless they are ready.
-    /// </summary>
     public int? CaptionPictures { get; private set; }
 
-    /// <summary>
-    /// How many times in a row taking the captions has failed.
-    /// </summary>
     public int CaptionAttempts { get; private set; }
 
     public DataBroadcastState DataBroadcastState { get; private set; } = DataBroadcastState.None;
 
-    /// <summary>
-    /// When the data broadcast was last taken from the recording's file, made, found missing or failed, or null
-    /// while its record is not yet due or is coming.
-    /// </summary>
     public DateTime? DataBroadcastMadeAt { get; private set; }
 
-    /// <summary>
-    /// How many modules the record of the data broadcast holds, or null unless it is made.
-    /// </summary>
     public int? DataBroadcastModules { get; private set; }
 
-    /// <summary>
-    /// How many times in all taking the data broadcast has failed.
-    /// </summary>
     public int DataBroadcastAttempts { get; private set; }
 
     public DataBroadcastProgress DataBroadcast => new(DataBroadcastState, DataBroadcastAttempts, DataBroadcastModules);
@@ -185,123 +159,54 @@ public sealed class Recording
 
     public int? FilesLeftBehind { get; private set; }
 
-    /// <summary>
-    /// When the file of a recording that ended with <see cref="RecordingFault.ScramblingUnresolved"/>
-    /// was descrambled, or null while it has not been.
-    /// </summary>
     public DateTime? DescrambledAt { get; private set; }
 
-    /// <summary>
-    /// Whether this recording is encoded once it ends, copied from the reservation it was started for
-    /// at the moment it began. Defaults to true.
-    /// </summary>
     public bool EncodeWhenRecorded { get; private set; }
 
     public ProgrammeRef Programme => new(NetworkId, ServiceId, EventId, ProgrammeStartsAt);
 
     public bool IsInFlight => Outcome is null;
 
-    /// <summary>
-    /// Whether the recording can be watched from its file: it has ended, so the file is whole. One still being
-    /// written gets no ticket for an external player and keeps no position it was watched to.
-    /// </summary>
     public bool CanBeWatched => !IsInFlight;
 
-    /// <summary>
-    /// Whether there is something to encode: a recording still being written is encoded once it has ended, and one
-    /// that failed has nothing to encode.
-    /// </summary>
     public RecordingEncodability Encodability
         => IsInFlight ? RecordingEncodability.StillBeingWritten
             : Outcome is RecordingOutcome.Failed ? RecordingEncodability.Failed
             : RecordingEncodability.Encodable;
 
-    /// <summary>
-    /// Whether the recording ended with <see cref="RecordingFault.ScramblingUnresolved"/> in its outcome
-    /// detail and has not been descrambled since.
-    /// </summary>
     public bool LeftScrambled => !IsInFlight && EndedScrambled(outcomeDetail) && DescrambledAt is null;
 
     public bool ThumbnailShowsAnUnfinishedRecording
         => ThumbnailState is ThumbnailState.Ready && Outcome is RecordingOutcome.Truncated;
 
-    /// <summary>
-    /// Whether a picture is to be drawn of the recording: it has ended and its picture is waiting. The thumbnail
-    /// pass skips one that failed rather than drawing it. The query the pass reads in the store says the same.
-    /// </summary>
     public bool AwaitsAThumbnail => Outcome is not null && ThumbnailState is ThumbnailState.Pending;
 
-    /// <summary>
-    /// Whether the captions are to be taken from the recording's file again: it has ended, and they are waiting, failed
-    /// fewer times in a row than are tried, or were taken before the file was descrambled. The query the caption pass
-    /// reads in the store says the same.
-    /// </summary>
     public bool AwaitsCaptions
         => Outcome is not null
            && (CaptionState is CaptionState.Pending
                || (CaptionState is CaptionState.Failed && CaptionAttempts < CaptionSettings.TriesAtMost)
                || DescrambledAt > CaptionsMadeAt);
 
-    /// <summary>
-    /// Whether the data broadcast is to be taken from the recording's file: it has ended and its record is coming. The
-    /// query the data broadcast pass reads in the store says the same.
-    /// </summary>
     public bool AwaitsItsDataBroadcast => Outcome is not null && DataBroadcastState is DataBroadcastState.Coming;
 
-    /// <summary>
-    /// Whether the recording ended with its record of the data broadcast never put to coming, as one that ended while
-    /// a process that did not know the record was running. The query that puts such records to coming says the same.
-    /// </summary>
     public bool DataBroadcastNeverCameDue => Outcome is not null && DataBroadcastState is DataBroadcastState.None;
 
-    /// <summary>
-    /// Whether the record of the data broadcast failed with tries left, so it is put to coming again. The query that
-    /// puts such records to coming says the same.
-    /// </summary>
     public bool DataBroadcastIsDueAgain => DataBroadcast.IsRetryDue;
 
     public TimeSpan Written => TimeSpan.FromMilliseconds(WrittenDurationMs);
 
-    /// <summary>
-    /// Whether the recording is over at <paramref name="now"/>: this side asked it to stop, or the window it holds
-    /// has closed.
-    /// </summary>
     public bool IsOver(DateTime now) => AbortedAt is not null || ExpectedWindowEnd <= now;
 
-    /// <summary>
-    /// Whether this side is to ask the recording to stop at <paramref name="now"/>: its window has closed and nobody
-    /// has asked yet.
-    /// </summary>
     public bool IsDueToStop(DateTime now) => AbortedAt is null && ExpectedWindowEnd <= now;
 
-    /// <summary>
-    /// Whether the recording keeps following its programme when the guide moves it: one made for a reservation, which
-    /// names the margin to follow it with, until this side asks it to stop. A window that has closed is still followed,
-    /// because the programme may have run late.
-    /// </summary>
     public bool FollowsItsProgramme => AbortedAt is null && ReservationId is not null;
 
-    /// <summary>
-    /// The moment the recording is counted as far as: its last count, or the moment it began while nothing has
-    /// counted it.
-    /// </summary>
     public DateTime CountedUntil => MeasuredUpdatedAt ?? StartedAtActual;
 
-    /// <summary>
-    /// Whether the last break in the recording is still open.
-    /// </summary>
     public bool IsInterrupted => interruptions.Count > 0 && interruptions[^1].IsOpen;
 
-    /// <summary>
-    /// Whether the recording takes what its session counted at <paramref name="now"/>: it is not over and has not
-    /// been counted that far already.
-    /// </summary>
     public bool KeepsCountingAt(DateTime now) => !IsOver(now) && now > CountedUntil;
 
-    /// <summary>
-    /// Whether <paramref name="gap"/> is one the recording has not kept yet and falls after its start and after every
-    /// gap it has kept, so that <see cref="Missed"/> keeps it.
-    /// </summary>
     public bool Follows(RecordingGap gap)
     {
         ArgumentNullException.ThrowIfNull(gap);
@@ -309,11 +214,6 @@ public sealed class Recording
         return gap.From >= StartedAtActual && gaps.All(kept => kept.Until != gap.Until && gap.From >= kept.Until);
     }
 
-    /// <summary>
-    /// When the recording stopped being written, for a break noticed at <paramref name="noticed"/>: the last write to
-    /// its file, kept no earlier than the moment it began or last broke off or resumed, or the moment the break was
-    /// noticed when the file says nothing earlier.
-    /// </summary>
     public DateTime StoppedWritingAt(DateTime? lastWritten, DateTime noticed)
     {
         if (lastWritten is not { } written || written >= noticed)
@@ -371,11 +271,6 @@ public sealed class Recording
             broadcastGroupRole,
             encodeWhenRecorded: encodeWhenRecorded);
 
-    /// <summary>
-    /// A recording carried over from the recording system being replaced, written in full over the times that system
-    /// recorded it: the programme's start to <paramref name="endAt"/>. It holds no reservation, no tuner and no count of
-    /// what was dropped, and the title is the only part of the programme it keeps.
-    /// </summary>
     public static Recording CarriedOver(
         RecordingId id,
         ProgrammeRef programme,
@@ -729,14 +624,6 @@ public sealed class Recording
         }
     }
 
-    /// <summary>
-    /// Lifts <see cref="LeftScrambled"/> from a recording that ended with
-    /// <see cref="RecordingFault.ScramblingUnresolved"/>, keeping its outcome and outcome detail as they are.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// The recording is still being written, or it is not <see cref="LeftScrambled"/>.
-    /// </exception>
-    /// <exception cref="ArgumentException"><paramref name="at"/> is not UTC or is before the recording stopped.</exception>
     public void Descrambled(DateTime at)
     {
         if (!LeftScrambled)
@@ -759,14 +646,6 @@ public sealed class Recording
         }
     }
 
-    /// <summary>
-    /// Keeps where the captions taken from the recording's file stand: waiting, ready with the number of
-    /// changes kept, absent, or failed once more.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The recording is still being written.</exception>
-    /// <exception cref="ArgumentException">
-    /// The number of changes does not fit the state, or <paramref name="at"/> is not UTC or is before the recording began.
-    /// </exception>
     public void Caption(CaptionState captionState, int? captionPictures, DateTime at)
     {
         if (IsInFlight)
@@ -787,35 +666,12 @@ public sealed class Recording
         CaptionAttempts = captionState is CaptionState.Failed ? CaptionAttempts + 1 : 0;
     }
 
-    /// <summary>
-    /// Keeps that the data broadcast coming from the recording's file was taken: made with the modules its record
-    /// holds, or missing when it holds none.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The record is not coming.</exception>
-    /// <exception cref="ArgumentException"><paramref name="at"/> is not UTC or is before the recording began.</exception>
     public void DataBroadcastTaken(int modules, DateTime at) => Keep(DataBroadcast.Taken(modules), Settled(at));
 
-    /// <summary>
-    /// Keeps that taking the data broadcast coming from the recording's file failed once more.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The record is not coming.</exception>
-    /// <exception cref="ArgumentException"><paramref name="at"/> is not UTC or is before the recording began.</exception>
     public void DataBroadcastFailed(DateTime at) => Keep(DataBroadcast.Failed(), Settled(at));
 
-    /// <summary>
-    /// Puts the record of the data broadcast to coming: one not yet due on a recording that has ended, one that
-    /// failed with tries left, or one that is made and no longer kept.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// The record is none of those, or is not yet due on a recording still being written.
-    /// </exception>
     public void DataBroadcastAgain() => Keep(DueAgain(), null);
 
-    /// <summary>
-    /// Names the tuner the recording is being written on, as a session reports it, unless one is already named or the
-    /// session names none.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
     public void Adopt(string deviceId)
     {
         RefuseUnlessInFlight();
@@ -834,12 +690,6 @@ public sealed class Recording
         TunerDeviceId = tunerDeviceId;
     }
 
-    /// <summary>
-    /// Takes what the session writing this recording has counted so far. A session that opened at another moment
-    /// than the one counted before is a new one: what was counted until then is carried, and what a session counts
-    /// is added to what is carried. A reading that does not say when its session opened is of the session already
-    /// being counted.
-    /// </summary>
     public void Measure(
         DropCounters counters,
         DropTimeline positions,
@@ -945,11 +795,6 @@ public sealed class Recording
         ResumeCount++;
     }
 
-    /// <summary>
-    /// Keeps a gap a session carrying on into this recording's file left behind, and moves the interruption opened
-    /// during that gap onto it. A gap that ends where one already kept ends is the same gap seen again, and is kept
-    /// once.
-    /// </summary>
     public void Missed(RecordingGap gap)
     {
         ArgumentNullException.ThrowIfNull(gap);
@@ -967,10 +812,6 @@ public sealed class Recording
         PlaceTheInterruptionOn(gap);
     }
 
-    /// <summary>
-    /// Moves the last interruption that began before a gap ended and had not resumed before it began so that it
-    /// begins where the gap begins and, when it has resumed, resumes where the gap ends.
-    /// </summary>
     private void PlaceTheInterruptionOn(RecordingGap gap)
     {
         int index = interruptions.FindLastIndex(one => one.OccurredAt < gap.Until);
@@ -1000,10 +841,6 @@ public sealed class Recording
         outcomeDetail.Add(detail);
     }
 
-    /// <summary>
-    /// Writes down once that the programme being recorded announces no end of its own.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
     public void NoteEndUndecided(DateTime at)
     {
         RefuseUnlessInFlight();
@@ -1016,11 +853,6 @@ public sealed class Recording
         Note(new OutcomeDetail(RecordingFault.EndStillUndecided, null, string.Empty, at));
     }
 
-    /// <summary>
-    /// Takes what the disk was found to hold as the recording began. A recording starts on a disk found short of room
-    /// and says so.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
     public void Prechecked(DiskPrecheckVerdict verdict, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(verdict);
@@ -1074,11 +906,6 @@ public sealed class Recording
         }
     }
 
-    /// <summary>
-    /// Ends the recording as failed because the disk it is written to has no room left, naming the full disk and what
-    /// the file weighed, if anything did.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
     public void FailOnAFullDisk(long? weighed, DateTime at)
     {
         RefuseUnlessInFlight();
@@ -1087,11 +914,6 @@ public sealed class Recording
         Settle(RecordingOutcome.Failed, weighed ?? 0, at);
     }
 
-    /// <summary>
-    /// Ends a recording nothing was writing on what its file holds, naming why it ended where it did. It is never
-    /// complete.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
     public void SettleOnWhatWasLeft(bool driverIsAnotherInstance, long? weighed, QualityBands bands, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(bands);
@@ -1101,11 +923,6 @@ public sealed class Recording
         Settle(OrphanRecovery.WhatIsLeftOf(weighed), weighed ?? 0, at);
     }
 
-    /// <summary>
-    /// Ends the recording with what the completion judgement makes of its window, the length it wrote, whether this
-    /// side asked it to stop, what its file weighed and what was left scrambled.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
     public void Conclude(long? weighed, ExpectedBitrate bitrate, QualityBands bands, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(bitrate);
@@ -1131,12 +948,6 @@ public sealed class Recording
         Settle(verdict.Outcome, weighed ?? 0, at);
     }
 
-    /// <summary>
-    /// Reads a session the driver ended at the end it was holding as stopped there by this side: at
-    /// <paramref name="endHeld"/>, or at <paramref name="now"/> when it held none or one still to come. A stop already
-    /// written down stands, and an end before the recording began is none it reached.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
     public void ReachedItsEnd(DateTime? endHeld, DateTime now)
     {
         RefuseUnlessInFlight();

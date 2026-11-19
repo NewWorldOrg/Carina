@@ -6,10 +6,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
 public partial class AReservationStandsAsideForTheSameBroadcast : Migration
 {
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -24,7 +22,6 @@ public partial class AReservationStandsAsideForTheSameBroadcast : Migration
             sql: "(cancelled_because IS NULL OR cancelled_because IN ('ByHand', 'ProgrammeGone', 'SameBroadcast'))\nAND (state = 'Cancelled') = (cancelled_because IS NOT NULL)");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

@@ -5,10 +5,6 @@ using System.Text.Json;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// A push service's reading of a <c>vapid</c> Authorization header (RFC 8292): the token's parts, and whether the
-/// key the header names signed it.
-/// </summary>
 public sealed record VapidReading(JsonElement Header, JsonElement Claims, byte[] Key, bool Signed)
 {
     private const string Scheme = "vapid ";

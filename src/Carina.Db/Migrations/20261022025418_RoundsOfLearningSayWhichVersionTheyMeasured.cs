@@ -4,20 +4,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <summary>
-/// Keeps with each round of learning the number of the version in use it measured, so that the figures the status
-/// answers for a version never evaluated itself are those of a round that measured that version, however long ago and
-/// whatever was put in use or rolled back meanwhile. A round kept before with figures of the version in use gets the
-/// number of the one version that was in use when it was taken; it is left empty when none or more than one was, or when
-/// a version was rolled back from within an hour of it, since that version was then put in use after it was taken. Going
-/// back drops the number.
-/// </summary>
 public partial class RoundsOfLearningSayWhichVersionTheyMeasured : Migration
 {
     private const string InUseWhenTaken =
         "version.adopted_at <= rounds.taken_at AND (version.retired_at IS NULL OR version.retired_at > rounds.taken_at)";
 
-    /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -54,7 +45,6 @@ public partial class RoundsOfLearningSayWhichVersionTheyMeasured : Migration
             sql: "(candidate IS NOT NULL OR (verdict IS NULL AND in_use_metrics IS NULL AND in_use_version IS NULL)) AND (in_use_metrics IS NULL OR jsonb_typeof(in_use_metrics) = 'object')");
     }
 
-    /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);

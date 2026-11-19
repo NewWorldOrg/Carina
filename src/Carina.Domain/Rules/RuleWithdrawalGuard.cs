@@ -3,10 +3,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Rules;
 
-/// <summary>
-/// Whether the guide of the stream a reservation is carried on has been read whole since it was last thrown away,
-/// together with how long before its start a reservation is left alone by a rule that still stands.
-/// </summary>
 public sealed class RuleWithdrawalGuard
 {
     private readonly IReadOnlyDictionary<(int NetworkId, int ServiceId), int> carriers;
@@ -25,10 +21,6 @@ public sealed class RuleWithdrawalGuard
         this.grace = grace;
     }
 
-    /// <summary>
-    /// Whether a rule may take <paramref name="reservation"/> back on <paramref name="occasion"/>: the reservation
-    /// allows it, and, unless the rule is being deleted, the guide of its stream has been read whole.
-    /// </summary>
     public bool Lets(Reservation reservation, RuleWithdrawal occasion, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(reservation);

@@ -11,13 +11,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Carina.Api.Controllers.Live;
 
-/// <summary>
-/// Reads the AIT a live channel's data broadcast document names, from the broadcaster's server, and hands back the
-/// applications in it this receiver can run. Refused 403 unless the browser asking allows both communication and
-/// Hybridcast. An address the relay refuses, a server that could not be reached and an answer that is not an AIT
-/// are answered 502, with the result a transmission would have had and the status the server answered. Opened with
-/// the reader's own session only, never with a ticket.
-/// </summary>
 [ApiController]
 [Route("api/live/{networkId:int}-{serviceId:int}/data-broadcast/ait")]
 [EndpointEffect(EndpointEffect.Reading)]

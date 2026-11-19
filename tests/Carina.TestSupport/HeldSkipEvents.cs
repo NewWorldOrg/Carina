@@ -3,10 +3,6 @@ using Carina.Domain.Segments;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// The skip events held in memory, taken as the store takes them: no more than
-/// <see cref="SkipEvent.MostAnHour"/> for one recording within <see cref="SkipEvent.Within"/> before each.
-/// </summary>
 public sealed class HeldSkipEvents : ISkipEventRepository
 {
     private readonly Lock gate = new();

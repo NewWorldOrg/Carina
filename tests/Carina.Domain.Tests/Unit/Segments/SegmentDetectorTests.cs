@@ -299,9 +299,6 @@ public sealed class SegmentDetectorTests
     private static SegmentEvidence Pods(int many)
         => Cuts(new SyntheticReadings(Length), [.. Enumerable.Range(0, many).SelectMany(pod => new[] { 40 + (85.0 * pod), 55 + (85.0 * pod) })]).Evidence();
 
-    /// <summary>
-    /// The stretches decided from the segments alone, without reading any of them as one.
-    /// </summary>
     private static IReadOnlyList<SegmentSpan> Apart(SegmentEvidence evidence, SegmentContext context, SegmentModel model)
     {
         RecordingPieces read = SegmentDetector.Read(evidence, context, model.Thresholds);
@@ -313,10 +310,6 @@ public sealed class SegmentDetectorTests
     private static (double Starts, double Ends)[] Breaks(IReadOnlyList<SegmentSpan> spans)
         => [.. spans.Where(segment => segment.Kind is SegmentKind.Break).Select(segment => (Math.Round(segment.Starts.TotalSeconds, 2), Math.Round(segment.Ends.TotalSeconds, 2)))];
 
-    /// <summary>
-    /// The seams a broadcast is joined at, a second of silence as an edit leaves with the picture changing, at each of
-    /// <paramref name="at"/>.
-    /// </summary>
     private static SyntheticReadings Seams(SyntheticReadings readings, params double[] at)
     {
         foreach (double second in at)
@@ -362,12 +355,6 @@ public sealed class SegmentDetectorTests
 
     private static readonly Marks APodAtFiveMinutes = Marked(60 / Length, Programme(0, 300), Break(300, 360), Programme(360, 1800));
 
-    /// <summary>
-    /// Scenarios written as readings, each with the breaks a reading laid on the grid adverts are aired on marks in it,
-    /// run through the versions of the model made by hand, of two kinds and of four, the catalog weighing in neither.
-    /// The version that tells the opening and the ending in any series hears speech between the cues, since sound that
-    /// keeps its loudness everywhere is a song.
-    /// </summary>
     private static readonly Dictionary<string, Scenario> Listed = new(StringComparer.Ordinal)
     {
         ["nothing observed"] = new(new Observation(), HalfAnHour, Tuning.Default, NothingFound),
@@ -441,11 +428,6 @@ public sealed class SegmentDetectorTests
             Marked(60 / Length, Programme(0, 1740), Break(1740, 1800))),
     };
 
-    /// <summary>
-    /// The scenarios with a pod longer than a minute with no cut inside it, which no broadcast airs, since a pod is cut at
-    /// every advert; the version that tells the opening and the ending in any series takes such a stretch for an opening
-    /// or the programme rather than a break.
-    /// </summary>
     private static readonly string[] UncutPods = ["two pods", "breaks taking more than half the length"];
 
     public static TheoryData<string> Scenarios => [.. Listed.Keys];
@@ -607,10 +589,6 @@ public sealed class SegmentDetectorTests
 
     private readonly record struct Scene(TimeSpan At, double Score);
 
-    /// <summary>
-    /// What a scenario observed: where it went quiet, where the picture went black and where it changed enough to be
-    /// scored.
-    /// </summary>
     private sealed record Observation
     {
         public IReadOnlyList<Stretch> Silences { get; init; } = [];
@@ -620,17 +598,11 @@ public sealed class SegmentDetectorTests
         public IReadOnlyList<Scene> Scenes { get; init; } = [];
     }
 
-    /// <summary>
-    /// How much the picture has to change at a boundary and how far off the grid a pair of boundaries may sit.
-    /// </summary>
     private sealed record Tuning(double Scene, TimeSpan GridTolerance)
     {
         public static Tuning Default { get; } = new(0.30, TimeSpan.FromSeconds(1));
     }
 
-    /// <summary>
-    /// What a scenario marks: the state, the share of the length taken for breaks, and the stretches when it marks any.
-    /// </summary>
     private sealed record Marks(SegmentDetectionState State, double Share, IReadOnlyList<(TimeSpan Starts, TimeSpan Ends, SegmentKind Kind)> Segments);
 
     private sealed record Scenario(Observation Observed, TimeSpan Length, Tuning Tuning, Marks Marks);

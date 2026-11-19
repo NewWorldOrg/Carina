@@ -251,16 +251,8 @@ internal sealed class AppSwapFeature : IAsyncDisposable
 
     private RunningApp? running;
 
-    /// <summary>
-    /// Where this side may read the disk the driver writes to, for the tests that weigh what a recording
-    /// actually left behind. Left unset, a file is reported as one that could not be weighed.
-    /// </summary>
     private IntegritySettings? weighing;
 
-    /// <summary>
-    /// The pace the watch keeps, for the tests that cannot wait out the default pauses on the
-    /// hand-turned clock.
-    /// </summary>
     private RecordingWatchSettings? watching;
 
     private AppSwapFeature(SyntheticDriverHost driver, DateTimeOffset from)
@@ -386,10 +378,6 @@ internal sealed class AppSwapFeature : IAsyncDisposable
         await running.UntilConnectedAsync();
     }
 
-    /// <summary>
-    /// The driver connection supervisor, keeping its retry cadence on the real clock while everything
-    /// else the application reads time from is hand turned.
-    /// </summary>
     private static IHostedService WatchingTheDriver(IServiceProvider provider)
         => ActivatorUtilities.CreateInstance<DriverConnectionSupervisor>(provider, TimeProvider.System);
 
@@ -431,10 +419,6 @@ internal sealed class AppSwapFeature : IAsyncDisposable
         await driver.DisposeAsync();
     }
 
-    /// <summary>
-    /// A tick for a programme that airs from the moment it is added, on a clock brought up to the real
-    /// one first.
-    /// </summary>
     private RecordingTick DueFromNow(TimeSpan window)
     {
         TimeSpan behind = DateTimeOffset.UtcNow - Clock.GetUtcNow();

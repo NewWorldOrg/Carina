@@ -7,12 +7,6 @@ using Carina.Infrastructure.Segments;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
-/// <summary>
-/// What a synthetic reduced copy describes of itself: the shape its manifest names, the recording it is a
-/// copy of, where the recording's file, its programme's first picture and first sound and another stream
-/// began as the probe of the file read them, and the rows of that recording, its programme in the guide and
-/// its reservation as they are copied beside it.
-/// </summary>
 internal sealed record CopyDescription
 {
     public static readonly DateTime Starts = new(2026, 10, 6, 15, 0, 0, DateTimeKind.Utc);
@@ -124,18 +118,12 @@ internal sealed record CopyDescription
         => new DateTimeOffset(utc).ToOffset(TimeSpan.FromHours(9)).ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
 }
 
-/// <summary>
-/// Writes synthetic reduced copies, one directory each, under a shelf.
-/// </summary>
 internal static class ReducedCopies
 {
     public static readonly string[] Media = [ReducedCopy.Sum, ReducedCopy.Difference, ReducedCopy.Frames, ReducedCopy.Corners];
 
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
 
-    /// <summary>
-    /// A copy whose media are a few bytes standing in for what a decoder would read.
-    /// </summary>
     public static string Write(string shelf, string name, CopyDescription description, params string[] leftOut)
     {
         string directory = Describe(shelf, name, description, leftOut);

@@ -2,20 +2,8 @@ using System.Text;
 
 namespace Carina.Broadcast.Text;
 
-/// <summary>
-/// One change of the text on a caption screen, a number of tenths of a second after the statement that made
-/// it began: the text shown, line by line, or null when nothing is left on the screen.
-/// </summary>
 public sealed record AribCaptionChange(int AfterTenths, string? Text);
 
-/// <summary>
-/// The text of the captions on screen, written one statement after another in the eight-unit code, with the
-/// default macros that designate the caption sets followed and any other macro passed over. The screen
-/// is cleared only when a statement says so or when a statement ends with a wait; a statement that does
-/// neither adds to what is there. Ruby, colours, sizes and positions are left behind, a move to another row
-/// starts a new line, and a character only the broadcast's own glyph can show becomes
-/// <see cref="Unreplaceable"/>.
-/// </summary>
 public sealed class AribCaptionScreen
 {
     public const char Unreplaceable = '〓';
@@ -80,14 +68,8 @@ public sealed class AribCaptionScreen
 
     private string? shown;
 
-    /// <summary>
-    /// What the screen shows once every statement written so far has run to its end, or null when nothing.
-    /// </summary>
     public string? Shown => shown;
 
-    /// <summary>
-    /// Writes the body of one statement onto the screen and says each change of what it shows.
-    /// </summary>
     public IReadOnlyList<AribCaptionChange> Write(ReadOnlySpan<byte> statement)
     {
         Statement reading = new(this);

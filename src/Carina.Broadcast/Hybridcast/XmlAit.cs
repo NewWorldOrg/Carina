@@ -4,9 +4,6 @@ using System.Xml.Linq;
 
 namespace Carina.Broadcast.Hybridcast;
 
-/// <summary>
-/// How an application is to be treated when it is asked for, as an AIT names it.
-/// </summary>
 public enum AitControlCode
 {
     Autostart = 1,
@@ -16,17 +13,8 @@ public enum AitControlCode
     Kill = 4,
 }
 
-/// <summary>
-/// One pair of an application's boundary: the sixteen bits of what it is permitted, and the addresses the pair
-/// applies to. A pair that names no address applies to every address.
-/// </summary>
 public sealed record AitPermission(int Bitmap, IReadOnlyList<string> ManagedUrls);
 
-/// <summary>
-/// An application an XML AIT names that a receiver of the first phase can run: its organisation and application
-/// identifiers, its control code, the address it is entered at, the profile it declares where it declares one, and
-/// the pairs of its boundary, none where the AIT carries no boundary at all.
-/// </summary>
 public sealed record AitApplication(
     uint OrgId,
     ushort AppId,
@@ -35,15 +23,6 @@ public sealed record AitApplication(
     int? Profile,
     IReadOnlyList<AitPermission> Boundary);
 
-/// <summary>
-/// Reads an AIT written as XML and carried over HTTP. The chain from the service discovery down to each application
-/// is read in the ISDB namespace only; what sits under an application is read by its local name, because the
-/// identifiers are written in the ISDB namespace as often as in the one the standard's example uses. An
-/// application is left out, and the rest kept, where its identifiers are not decimal numbers or name organisation 0,
-/// where it is not an ISDB-HTML application, where its control code is not one of the three acted on, where it
-/// declares a profile other than the first or a version past 1.1.1, or where it is not carried over HTTP to an http
-/// or https address.
-/// </summary>
 public static class XmlAit
 {
     public const int Largest = 256 * 1024;

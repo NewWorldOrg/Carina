@@ -28,10 +28,6 @@ public sealed class EncodeJobRunnerTests
         printf 'out_time_us=10000000\nspeed=2.0x\nprogress=end\n'
         """;
 
-    /// <summary>
-    /// The same run, made to outlive the look at it: the first thing it writes is more than a pipe
-    /// holds, so it cannot exit before it has been identified and written into the ledger.
-    /// </summary>
     private const string OutlivesTheLookAndReportsProgress = """
         head -c 70000 /dev/zero | tr '\0' '.'
         printf '\n'
@@ -1283,10 +1279,6 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal([EncodeScratchKind.WorkFile], harness.Scratch.Files.Select(scratch => scratch.Kind));
     }
 
-    /// <summary>
-    /// A recording the version in use detected with a pod of adverts in the middle, which falls two to five seconds
-    /// into the artefact once the head is skipped.
-    /// </summary>
     private static Recording APodInTheMiddle(EncodeHarness harness)
     {
         Recording recording = harness.Recorded();
@@ -1324,10 +1316,6 @@ public sealed class EncodeJobRunnerTests
         Assert.True(removed >= 0 && became > removed, string.Join('\n', moves));
     }
 
-    /// <summary>
-    /// A stand-in for ffprobe that says the file with the text track put in carries one Japanese text track off
-    /// by default beside the picture and the sound, and that anything else carries the picture and the sound.
-    /// </summary>
     private static string Prober(EncodeHarness harness)
         => StandInProgramme.Written(
             harness.Room.Under($"prober-{Guid.NewGuid():N}.sh"),
@@ -1367,9 +1355,6 @@ public sealed class EncodeJobRunnerTests
         return box;
     }
 
-    /// <summary>
-    /// The arguments of a run of a recording no version has detected.
-    /// </summary>
     private static async Task<string[]> UndetectedAsync()
     {
         using var harness = new EncodeHarness();
@@ -1397,9 +1382,6 @@ public sealed class EncodeJobRunnerTests
     private static SegmentSpan Span(double starts, double ends, SegmentKind kind)
         => new(TimeSpan.FromSeconds(starts), TimeSpan.FromSeconds(ends), kind, 0.9);
 
-    /// <summary>
-    /// What the programme standing in for ffmpeg was handed, and where it kept the chapters it was handed.
-    /// </summary>
     private sealed record Run(string Arguments, string Chapters)
     {
         public string[] Handed(EncodeHarness harness, EncodeJob job)

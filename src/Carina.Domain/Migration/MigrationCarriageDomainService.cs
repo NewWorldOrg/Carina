@@ -8,12 +8,6 @@ using Puppis.Contracts;
 
 namespace Carina.Domain.Migration;
 
-/// <summary>
-/// Carries what a run judged to be carried into this system. A recording is linked into the new root before its row is
-/// written, arrives recorded in full and is queued for encoding with the one destination and its default profile; a
-/// rule arrives turned off. A run for real stops before it carries anything when <see cref="MigrationPreconditions"/>
-/// says so, and a rehearsal carries nothing and writes nothing.
-/// </summary>
 public sealed class MigrationCarriageDomainService(
     IMigrationCarrier carrier,
     IRecordingRepository recordings,

@@ -1,8 +1,5 @@
 namespace Carina.Domain.Segments;
 
-/// <summary>
-/// A stretch of a recording, in its own time, that no learning data could be taken from.
-/// </summary>
 public sealed record LearningDataGap
 {
     public LearningDataGap(TimeSpan from, TimeSpan until)

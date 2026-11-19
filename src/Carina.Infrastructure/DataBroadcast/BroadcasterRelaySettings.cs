@@ -2,11 +2,6 @@ using System.Reflection;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
-/// <summary>
-/// How far the relay goes for a document: how many exchanges a channel has under way at once, how long one may
-/// take including the wait for its turn, the most it sends and the most it takes back, how many redirects on the
-/// same host it follows, and the name it introduces itself by.
-/// </summary>
 public sealed record BroadcasterRelaySettings(
     int AtOnce,
     TimeSpan Time,

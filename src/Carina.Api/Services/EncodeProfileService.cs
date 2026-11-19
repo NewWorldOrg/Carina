@@ -22,9 +22,6 @@ public sealed class EncodeProfileService(
     public async Task<ServiceResult<IReadOnlyList<EncodeProfile>>> ListAsync(CancellationToken cancellationToken)
         => ServiceResult<IReadOnlyList<EncodeProfile>>.Success(await profiles.ListAsync(cancellationToken));
 
-    /// <summary>
-    /// What a new profile starts from on this machine, which depends on what it can encode H.265 with.
-    /// </summary>
     public async Task<ServiceResult<EncodeProfileDefaults>> DefaultsAsync(CancellationToken cancellationToken)
         => ServiceResult<EncodeProfileDefaults>.Success(EncodeProfileDefaults.For(await machine.ReadAsync(cancellationToken)));
 

@@ -2,10 +2,6 @@ using System.Text;
 
 namespace Carina.Domain.Base;
 
-/// <summary>
-/// What another programme said, kept for a person to read: the paths on this machine are taken
-/// out first, and then only the tail is kept.
-/// </summary>
 public static class ProgrammeNote
 {
     public const string InsteadOfAPath = "…";

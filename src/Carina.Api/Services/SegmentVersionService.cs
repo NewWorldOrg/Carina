@@ -10,11 +10,6 @@ public enum SegmentVersionFailure
     NoSuchVersion = 3,
 }
 
-/// <summary>
-/// Chooses the version of the model in use by hand, or leaves the choice to learning again. Either goes through the
-/// one change that moves the version in use; once it has moved, detection in spare time detects the recordings still
-/// kept again with it.
-/// </summary>
 public sealed class SegmentVersionService(ISegmentModelVersionRepository versions, TimeProvider clock)
 {
     public async Task<ServiceResult<SegmentModelVersion, SegmentVersionFailure>> ChooseAsync(

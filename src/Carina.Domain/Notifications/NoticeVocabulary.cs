@@ -6,9 +6,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// The words a notice says a classification in. A classification with no word here is not said.
-/// </summary>
 internal static class NoticeVocabulary
 {
     private static readonly IReadOnlyDictionary<RecordingFault, string> RecordingFaults = new Dictionary<RecordingFault, string>

@@ -5,43 +5,20 @@ using Carina.Domain.Encodings;
 
 namespace Carina.Infrastructure.Segments;
 
-/// <summary>
-/// The arguments for the run that decodes a recording fed on its standard input into what its
-/// learning data is made from, and nothing more: the programme's first picture, decoded at half its
-/// size, shrunk to grey 64 by 36 at every frame, and to grey 480 by 270 at the first frame of each
-/// second, and its first sound at 8 kHz in two channels of 16-bit samples. All three go into Matroska
-/// on the standard output, every block carrying the recording's own time lifted by
-/// <see cref="Lift"/>. One thread, and no card.
-/// </summary>
 public static class FfmpegLearningInvocation
 {
     public const string Fed = "pipe:0";
 
     public const string HandedBack = "pipe:1";
 
-    /// <summary>
-    /// How far every time handed back stands above the recording's own time, in whole seconds. It is
-    /// more than the 33-bit clock holds, so nothing handed back falls below zero.
-    /// </summary>
     public const int ClockLiftedBySeconds = 100_000;
 
     private const string Microseconds = "0.000000";
 
-    /// <summary>
-    /// Two channels from whatever the decoder hands over, by name: a stereo sound is kept as it is,
-    /// the centre and the back of a surround sound are folded in at -3 dB, a mono sound goes to both
-    /// sides, and a frame a corrupt packet decodes into channels with no names at all comes out as
-    /// silence instead of stopping ffmpeg, which <c>aresample</c> alone does when it cannot tell how
-    /// to fold such channels down.
-    /// </summary>
     private const string Stereo = "pan=stereo|FL=FL+0.707*FC+0.707*BL+0.707*SL|FR=FR+0.707*FC+0.707*BR+0.707*SR";
 
     public static readonly TimeSpan Lift = TimeSpan.FromSeconds(ClockLiftedBySeconds);
 
-    /// <summary>
-    /// The arguments for a file whose own clock begins at <paramref name="fileBegins"/>, the
-    /// <c>format.start_time</c> ffprobe reads from its head.
-    /// </summary>
     public static IReadOnlyList<string> Arguments(ServiceId service, TimeSpan fileBegins)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -92,9 +69,6 @@ public static class FfmpegLearningInvocation
         ];
     }
 
-    /// <summary>
-    /// Where a time handed back falls on the recording's own time.
-    /// </summary>
     public static TimeSpan OnTheRecording(TimeSpan handedBack) => handedBack - Lift;
 
     private static string Offset(TimeSpan fileBegins)

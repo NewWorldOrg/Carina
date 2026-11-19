@@ -187,11 +187,6 @@ public sealed class RootsHeldApartValidation(IOptions<IntegrityOptions> sweeping
     }
 }
 
-/// <summary>
-/// Holds the two encoder settings to one kind of card: either names a card or the processor, and the two
-/// never name different cards, because a machine is taken to have one kind of card and is asked about
-/// that one alone.
-/// </summary>
 public sealed class OneCardValidation(IOptions<TranscodingOptions> transcoding) : IValidateOptions<EncodingOptions>
 {
     public ValidateOptionsResult Validate(string? name, EncodingOptions options)

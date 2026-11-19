@@ -4,9 +4,6 @@ using Carina.Domain.Channels;
 
 namespace Carina.Domain.Quality;
 
-/// <summary>
-/// One subject whose reading of one measure went beyond a level, with the level it passed and what was read.
-/// </summary>
 public sealed record ThresholdBreach(
     QualityThresholdKey Breached,
     QualitySubject Subject,
@@ -21,10 +18,6 @@ public static class ThresholdBreachWatch
 {
     public static readonly TimeSpan Looked = QualityPeriod.ShippedSpan;
 
-    /// <summary>
-    /// Names each channel whose recordings went beyond a level, once for each measure, at the heaviest level any
-    /// of them passed and with the worst reading among them.
-    /// </summary>
     public static IReadOnlyList<ThresholdBreach> Recorded(IReadOnlyList<QualityLedgerRow> rows, QualityBands bands)
     {
         ArgumentNullException.ThrowIfNull(rows);
@@ -51,10 +44,6 @@ public static class ThresholdBreachWatch
         return found;
     }
 
-    /// <summary>
-    /// Names each tuner whose signal usually read beyond a level, once for each reading taken of it. A tuner the
-    /// driver says cannot lock is not named again for its lock rate.
-    /// </summary>
     public static IReadOnlyList<ThresholdBreach> Received(
         IReadOnlyList<SignalFigures> figures,
         IReadOnlyList<QualityThresholdStanding> thresholds,
@@ -98,10 +87,6 @@ public static class ThresholdBreachWatch
         return found;
     }
 
-    /// <summary>
-    /// Names each channel whose signal usually read beyond a level on a tuner, once for each reading taken of it,
-    /// unless the tuner itself is already named for the same level. Lock rate is the tuner's alone.
-    /// </summary>
     public static IReadOnlyList<ThresholdBreach> ReceivedByChannel(
         IReadOnlyList<ReceptionFigures> figures,
         IReadOnlyList<QualityThresholdStanding> thresholds,
@@ -138,10 +123,6 @@ public static class ThresholdBreachWatch
         return found;
     }
 
-    /// <summary>
-    /// Opens each breach that has no incident standing for the same level on the same subject, and resolves each
-    /// standing one the reading no longer names.
-    /// </summary>
     public static ThresholdBreachWatchPlan Plan(
         IReadOnlyList<ThresholdBreach> breaches,
         IReadOnlyList<QualityIncident> standing)
@@ -163,10 +144,6 @@ public static class ThresholdBreachWatch
         return QualityIncident.Detect(id, at, breach.Breached, breach.Subject, breach.Observed, breach.Applied);
     }
 
-    /// <summary>
-    /// Names the tuners the driver says cannot lock: the ones it names now when it could be asked, and the ones an
-    /// unsettled incident still names when it could not.
-    /// </summary>
     public static IReadOnlySet<string> CannotLock(
         bool asked,
         IReadOnlyList<TunerTrouble> troubles,

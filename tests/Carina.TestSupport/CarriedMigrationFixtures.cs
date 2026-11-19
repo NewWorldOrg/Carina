@@ -7,9 +7,6 @@ using Carina.Domain.Rules;
 
 namespace Carina.TestSupport;
 
-/// <summary>
-/// A source ledger and the things a run carries it into, held in memory for the tests of the migration.
-/// </summary>
 public static class CarriedMigrationFixtures
 {
     public static readonly DateTime Began = new(2026, 9, 8, 3, 0, 0, DateTimeKind.Utc);

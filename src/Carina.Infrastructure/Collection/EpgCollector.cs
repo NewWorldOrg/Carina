@@ -57,11 +57,6 @@ public sealed class EpgCollector(
         }
     }
 
-    /// <summary>
-    /// Waits out the time between sweeps, or less when a tuner comes free while a visit is due. Neither
-    /// an early sweep nor a look at whether one is worth starting comes sooner than
-    /// <see cref="CollectionSettings.SoonestAfterASweep"/> after the last.
-    /// </summary>
     private async Task RestAsync(ChannelReader<bool> tunersMoved, CancellationToken stoppingToken)
     {
         using CancellationTokenSource rested = new(settings.BetweenSweeps, clock);

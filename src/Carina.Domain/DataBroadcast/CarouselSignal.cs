@@ -1,20 +1,11 @@
 namespace Carina.Domain.DataBroadcast;
 
-/// <summary>
-/// What is read of a data broadcast, handed to <see cref="CarouselState"/>: the programme map carrying one
-/// or not, a carousel's download info, a module put together, an event message timed, a data stream's
-/// reference of the programme time, or a carousel left out for being too large.
-/// </summary>
 public abstract record CarouselSignal
 {
     private CarouselSignal()
     {
     }
 
-    /// <summary>
-    /// The programme map carrying a data broadcast: where it is entered, and the component tags of every data
-    /// stream it lists, the entry's among them.
-    /// </summary>
     public sealed record Carried : CarouselSignal
     {
         public Carried(DataBroadcastEntry entry, IReadOnlyList<int> tags)

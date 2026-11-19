@@ -12,10 +12,6 @@ using Npgsql;
 
 namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Encodings;
 
-/// <summary>
-/// However a job whose process died is put back or given up when the application starts again, the recording it
-/// read keeps its result, reasons, size and the time that size was read exactly as they were.
-/// </summary>
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
 public sealed class EncodeRestartTests(RepositoryDatabase database) : IAsyncLifetime

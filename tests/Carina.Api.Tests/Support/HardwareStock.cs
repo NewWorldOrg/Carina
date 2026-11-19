@@ -4,9 +4,6 @@ using Puppis.Contracts;
 
 namespace Carina.Api.Tests.Support;
 
-/// <summary>
-/// A driver that answers with the hardware behind its tuners, its detected devices and its card reader.
-/// </summary>
 internal static class HardwareStock
 {
     public static readonly DateTimeOffset Moment = new(2026, 11, 1, 19, 20, 0, TimeSpan.FromHours(9));

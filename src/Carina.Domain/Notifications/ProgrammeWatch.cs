@@ -5,10 +5,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Notifications;
 
-/// <summary>
-/// One programme somebody asked to be told of as it begins, without recording it. It holds no tuner and no
-/// place in the schedule, and it is told to the destinations asked for with it rather than through the rules.
-/// </summary>
 public sealed class ProgrammeWatch
 {
     private ProgrammeWatch()
@@ -41,14 +37,8 @@ public sealed class ProgrammeWatch
 
     public DateTime? NotifiedAt { get; private set; }
 
-    /// <summary>
-    /// The start the notice named when the programme was told of, kept while the row follows the guide on.
-    /// </summary>
     public DateTime? ToldStartsAt { get; private set; }
 
-    /// <summary>
-    /// Whether the start now held is further from the start that was told than the guide's usual drift.
-    /// </summary>
     public bool HasMovedSinceTold
         => ToldStartsAt is { } told && (StartsAt - told).Duration() > EpgComparison.Unremarkable;
 
@@ -76,10 +66,6 @@ public sealed class ProgrammeWatch
         return Rehydrate(id, programme, announced, leadMinutes, destinations, ProgrammeWatchState.Waiting, null, null, at, at);
     }
 
-    /// <summary>
-    /// Why a programme of the guide may not be asked to be told of at <paramref name="leadMinutes"/> minutes before it
-    /// begins, judged at <paramref name="at"/>, or nothing when it may.
-    /// </summary>
     public static ProgrammeWatchRefusal? RefusalToAsk(Programme announced, int leadMinutes, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(announced);
@@ -173,15 +159,9 @@ public sealed class ProgrammeWatch
         return at >= StartsAt - TimeSpan.FromMinutes(LeadMinutes) ? ProgrammeWatchMoment.Soon : ProgrammeWatchMoment.NotYet;
     }
 
-    /// <summary>
-    /// Whether this row stands in the way of asking for the same programme again.
-    /// </summary>
     public bool StandsAt(DateTime at)
         => State is ProgrammeWatchState.Waiting || (State is ProgrammeWatchState.Notified && at < EndsAt);
 
-    /// <summary>
-    /// Takes what the guide says now. Returns whether the row changed.
-    /// </summary>
     public bool Follow(WatchedBroadcast announced, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(announced);
@@ -221,10 +201,6 @@ public sealed class ProgrammeWatch
 
     public void Cancel(DateTime at) => Settle(ProgrammeWatchState.Cancelled, at);
 
-    /// <summary>
-    /// Withdraws a programme somebody no longer wants to be told of. One that waits is cancelled, one already
-    /// cancelled is left as it stands, and one told of or skipped is not withdrawn.
-    /// </summary>
     public ProgrammeWatchWithdrawal Withdraw(DateTime at)
     {
         switch (State)
@@ -240,10 +216,6 @@ public sealed class ProgrammeWatch
         }
     }
 
-    /// <summary>
-    /// Stops telling one destination of a programme that still waits. Left with none, it is cancelled.
-    /// Returns whether the row changed.
-    /// </summary>
     public bool StopTelling(NotificationDestinationId destination, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(destination);

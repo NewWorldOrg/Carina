@@ -21,10 +21,6 @@ internal enum ScriptTokenKind
     Mark,
 }
 
-/// <summary>
-/// What a bracket opens: the condition of a statement, a catch clause, a call or parameter list, an array, a
-/// binding pattern, a block, a function body, an object literal, a class body, or a substitution in a template.
-/// </summary>
 internal enum ScriptGroup
 {
     None,
@@ -50,11 +46,6 @@ internal enum ScriptGroup
     Substitution,
 }
 
-/// <summary>
-/// Where a token stands among the brackets: the one it stands inside, the function body and the scope around it,
-/// the nearest bracket around it that is not an object, an array or a binding pattern, and whether a binding
-/// pattern stands between it and that bracket. Each is a token index, or -1 for the script itself.
-/// </summary>
 internal readonly record struct ScriptPlace(int Parent, int Function, int Scope, int Outer, bool UnderBinding)
 {
     public static ScriptPlace Script { get; } = new(-1, -1, -1, -1, false);
@@ -72,11 +63,6 @@ internal readonly record struct ScriptPlace(int Parent, int Function, int Scope,
     }
 }
 
-/// <summary>
-/// One token of a script: where it stands, the var, let or const its statement began with at its own depth (-1 for
-/// none), and for a bracket, what it opens and the index of its partner; a colon knows whether it answers a question
-/// mark.
-/// </summary>
 internal sealed class ScriptToken(ScriptTokenKind kind, int start, int end, ScriptPlace place, int declarer)
 {
     public ScriptTokenKind Kind { get; } = kind;
@@ -105,14 +91,6 @@ internal sealed class ScriptToken(ScriptTokenKind kind, int start, int end, Scri
         => End - Start == text.Length && string.CompareOrdinal(source, Start, text, 0, text.Length) == 0;
 }
 
-/// <summary>
-/// Reads a script into tokens in one pass and without recursion: strings with their escapes, template literals with
-/// substitutions nested to any depth, line and block comments and the HTML-like comments a script may carry, and a
-/// regular expression told from a division by the token before it. A bracket that closes a condition, a block or a
-/// function body lets a regular expression follow; one that closes an expression does not. A regular expression that
-/// does not close on its line makes that slash a division, and no later slash on the line is tried as one, so the
-/// reading stays linear. A script that ends part way through anything is read to its end.
-/// </summary>
 internal sealed class ScriptScanner(string source)
 {
     private static readonly FrozenSet<string> RegexAfter = new[]

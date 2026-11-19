@@ -2,10 +2,6 @@ using Carina.Domain.Programmes;
 
 namespace Carina.Infrastructure.Persistence;
 
-/// <summary>
-/// The statements that read the programmes a relayed or moved link joins, and the programmes several
-/// services carry as the same broadcast at the same time.
-/// </summary>
 public static class ProgrammeGrouping
 {
     public const string NamedParameter = "named";
@@ -17,11 +13,6 @@ public static class ProgrammeGrouping
             WHERE link ->> 'kind' IN ('{nameof(RelationKind.Relayed)}', '{nameof(RelationKind.Moved)}'))
         """;
 
-    /// <summary>
-    /// The named programmes that event sharing joins to a named programme of another service, and the
-    /// ones a transport stream carries on more than one service under the same name, from the same start
-    /// to the same end.
-    /// </summary>
     public static readonly string SimulcastSql = $"""
         WITH named AS (
             SELECT network_id, service_id, event_id, transport_stream_id, start_at, end_at, name, related

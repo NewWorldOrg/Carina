@@ -50,10 +50,6 @@ public readonly ref struct TransportPacket
 
     public int ContinuityCounter { get; }
 
-    /// <summary>
-    /// The 33-bit base of the programme clock reference the adaptation field carries, on the 90 kHz clock,
-    /// or null when it carries none.
-    /// </summary>
     public long? ProgramClockReference { get; }
 
     public ReadOnlySpan<byte> Payload { get; }

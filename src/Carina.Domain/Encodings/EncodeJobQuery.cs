@@ -3,11 +3,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// What a page of the job ledger is asked for: which standings, and which page of what size. A page
-/// size over the ceiling is cut down to it and answered as the size that was used; a page below the
-/// first yields no query. Jobs come back newest first.
-/// </summary>
 public sealed class EncodeJobQuery
 {
     public const int MostPerPage = 100;
