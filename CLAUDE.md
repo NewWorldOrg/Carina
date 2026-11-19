@@ -430,6 +430,10 @@ walks past it.
   them), and the directives `// ReSharper `, `// csharpier-ignore` and
   `// @formatter:`. `CommentConventionRuleTests` reads every `*.cs` file and
   refuses a comment outside a string literal.
+  A migration scaffolded by `dotnet ef migrations add` arrives with
+  `/// <inheritdoc />` on its methods and those lines are deleted before
+  committing, while the generated Designer file and the model snapshot are left
+  as the generator wrote them.
 - Warnings are errors. The build is the gate.
 - Tests come first. There is no implementation without a test.
 
