@@ -9,7 +9,8 @@ public sealed record LiveSessionSettings
         TimeSpan? betweenHolds = null,
         TimeSpan? longestWaitToBeFed = null,
         TimeSpan? longestWaitForATunerToComeFree = null,
-        long? mostBytesWaitingToBeFed = null)
+        long? mostBytesWaitingToBeFed = null,
+        TimeSpan? longestWaitForAViewer = null)
     {
         TimeSpan outliving = linger ?? TimeSpan.FromSeconds(5);
         TimeSpan raise = longestRaise ?? TimeSpan.FromSeconds(30);
@@ -18,6 +19,7 @@ public sealed record LiveSessionSettings
         TimeSpan mouthful = longestWaitToBeFed ?? TimeSpan.FromSeconds(10);
         TimeSpan coming = longestWaitForATunerToComeFree ?? TimeSpan.FromSeconds(5);
         long held = mostBytesWaitingToBeFed ?? 32L * 1024 * 1024;
+        TimeSpan awaited = longestWaitForAViewer ?? TimeSpan.FromSeconds(8);
 
         if (outliving <= TimeSpan.Zero)
         {
@@ -75,6 +77,14 @@ public sealed record LiveSessionSettings
                 "A transcoder is held some bytes it has not taken yet, not none, or the first mouthful is cut.");
         }
 
+        if (awaited <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(longestWaitForAViewer),
+                awaited,
+                "A session started ahead waits some time for its viewer, not none, or it is stopped before the viewer can connect.");
+        }
+
         if (holds >= ahead)
         {
             throw new ArgumentOutOfRangeException(
@@ -90,6 +100,7 @@ public sealed record LiveSessionSettings
         LongestWaitToBeFed = mouthful;
         LongestWaitForATunerToComeFree = coming;
         MostBytesWaitingToBeFed = held;
+        LongestWaitForAViewer = awaited;
     }
 
     public TimeSpan Linger { get; }
@@ -105,4 +116,6 @@ public sealed record LiveSessionSettings
     public long MostBytesWaitingToBeFed { get; }
 
     public TimeSpan LongestWaitForATunerToComeFree { get; }
+
+    public TimeSpan LongestWaitForAViewer { get; }
 }

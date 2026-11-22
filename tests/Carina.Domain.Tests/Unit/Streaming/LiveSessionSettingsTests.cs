@@ -126,6 +126,29 @@ public sealed class LiveSessionSettingsTests
     }
 
     [Fact]
+    public void ByDefaultASessionStartedAheadWaitsEightSecondsForAViewer()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(8), new LiveSessionSettings().LongestWaitForAViewer);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void WaitingNoTimeAtAllForAViewerIsRefused(int seconds)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new LiveSessionSettings(longestWaitForAViewer: TimeSpan.FromSeconds(seconds)));
+    }
+
+    [Fact]
+    public void AnyPositiveWaitForAViewerIsKept()
+    {
+        LiveSessionSettings settings = new(longestWaitForAViewer: TimeSpan.FromSeconds(3));
+
+        Assert.Equal(TimeSpan.FromSeconds(3), settings.LongestWaitForAViewer);
+    }
+
+    [Fact]
     public void AnyPositiveWaitForATunerOnItsWayOutIsKept()
     {
         LiveSessionSettings settings = new(longestWaitForATunerToComeFree: TimeSpan.FromSeconds(3));
