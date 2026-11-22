@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging;
 
 using Puppis.Contracts;
 
+using Subject = Carina.Domain.Auth.Subject;
+
 namespace Carina.Infrastructure.Streaming;
 
 public sealed class LiveSessionManager(
@@ -27,6 +29,8 @@ public sealed class LiveSessionManager(
     private readonly Dictionary<(NetworkId Network, ServiceId Service), LiveReception> receptions = [];
 
     private readonly List<LiveSession> leaving = [];
+
+    private readonly Dictionary<Subject, LiveSession> ahead = [];
 
     public IReadOnlyList<LiveSessionKey> Keys
     {
@@ -87,15 +91,61 @@ public sealed class LiveSessionManager(
         }
     }
 
-    public async Task<LiveJoin> JoinAsync(LiveSessionKey key, CancellationToken cancellationToken)
+    public async Task<LiveJoin> JoinAsync(LiveSessionKey key, Subject viewer, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(viewer);
 
-        LiveJoin join = await SeatedAsync(key, cancellationToken);
+        LiveJoin join = await SeatedAsync(key, viewer, cancellationToken);
 
-        return join.Refusal is LiveRefusal.NoTunerFree
-            ? await SeatedAfterLettingGoAsync(key, join, cancellationToken)
-            : join;
+        return join.Refusal switch
+        {
+            LiveRefusal.NoTunerFree => await SeatedAfterLettingGoAsync(key, viewer, join, cancellationToken),
+            LiveRefusal.TooManyAlready => await SeatedAfterStoppingWhatWasStartedAheadAsync(key, viewer, join, cancellationToken),
+            _ => join,
+        };
+    }
+
+    public LiveAhead StartAhead(LiveSessionKey key, Subject viewer)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(viewer);
+
+        LiveSession awaiting;
+        LiveSession? left;
+        bool raised = false;
+
+        lock (gate)
+        {
+            LiveSession? running = sessions.GetValueOrDefault(key);
+            LiveAwaiting standing = running?.Await(viewer, settings.LongestWaitForAViewer) ?? LiveAwaiting.Closed;
+
+            if (standing is LiveAwaiting.Watched)
+            {
+                return LiveAhead.AlreadyWatched;
+            }
+
+            if (running is null || standing is LiveAwaiting.Closed)
+            {
+                running = Raised(key);
+                running.Await(viewer, settings.LongestWaitForAViewer);
+                running.Start();
+                raised = true;
+            }
+
+            awaiting = running;
+            left = TurnedTo(viewer, awaiting);
+        }
+
+        if (raised)
+        {
+            events.Signal(AppEventName.Live);
+            SayIfNothingComesOfIt(awaiting);
+        }
+
+        HandOver(left, awaiting, viewer);
+
+        return raised ? LiveAhead.Started : LiveAhead.AlreadyRunning;
     }
 
     public async Task<LiveHandover> HandOverAsync(LiveChannelKey channel, CancellationToken cancellationToken)
@@ -175,11 +225,11 @@ public sealed class LiveSessionManager(
         await Task.WhenAll(reading.Select(reception => reception.Holding));
     }
 
-    private async Task<LiveJoin> SeatedAsync(LiveSessionKey key, CancellationToken cancellationToken)
+    private async Task<LiveJoin> SeatedAsync(LiveSessionKey key, Subject viewer, CancellationToken cancellationToken)
     {
         for (int attempt = 0; attempt < Attempts; attempt++)
         {
-            if (await Expected(key).JoinAsync(cancellationToken) is { } join)
+            if (await Expected(key, viewer).JoinAsync(cancellationToken) is { } join)
             {
                 return join;
             }
@@ -190,8 +240,46 @@ public sealed class LiveSessionManager(
             "what the transcoder wrote ended before a viewer could be seated.");
     }
 
+    private async Task<LiveJoin> SeatedAfterStoppingWhatWasStartedAheadAsync(
+        LiveSessionKey key,
+        Subject viewer,
+        LiveJoin refused,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<LiveSession> stopping = StopWhatWasStartedAhead(key);
+
+        if (stopping.Count is 0)
+        {
+            return refused;
+        }
+
+        using CancellationTokenSource deadline = new(settings.LongestWaitForATunerToComeFree, clock);
+        using CancellationTokenSource leash =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+
+        return await WithinAsync(EndedAsync(stopping), leash.Token, cancellationToken)
+            ? await SeatedAsync(key, viewer, cancellationToken)
+            : refused;
+    }
+
+    private List<LiveSession> StopWhatWasStartedAhead(LiveSessionKey asked)
+    {
+        List<LiveSession> candidates;
+
+        lock (gate)
+        {
+            candidates =
+            [
+                .. sessions.Values.Where(session => !session.Key.Equals(asked) && session.AwaitedByViewersNobodyHasSeen),
+            ];
+        }
+
+        return [.. candidates.Where(session => session.CloseIfNobodyIsWatching())];
+    }
+
     private async Task<LiveJoin> SeatedAfterLettingGoAsync(
         LiveSessionKey key,
+        Subject viewer,
         LiveJoin refused,
         CancellationToken cancellationToken)
     {
@@ -211,7 +299,7 @@ public sealed class LiveSessionManager(
             return refused;
         }
 
-        LiveJoin again = await SeatedAsync(key, cancellationToken);
+        LiveJoin again = await SeatedAsync(key, viewer, cancellationToken);
 
         if (again.Refusal is not LiveRefusal.TooManyAlready || letting.All(session => session.Life.IsCompleted))
         {
@@ -219,7 +307,7 @@ public sealed class LiveSessionManager(
         }
 
         return await WithinAsync(EndedAsync(letting), leash.Token, cancellationToken)
-            ? await SeatedAsync(key, cancellationToken)
+            ? await SeatedAsync(key, viewer, cancellationToken)
             : again;
     }
 
@@ -308,36 +396,113 @@ public sealed class LiveSessionManager(
     private static bool HasLetGo(LiveSession gone)
         => gone.Released.IsCompleted && (!gone.Reception.IsClosed || gone.Reception.Life.IsCompleted);
 
-    private LiveSession Expected(LiveSessionKey key)
+    private LiveSession Expected(LiveSessionKey key, Subject viewer)
     {
-        LiveSession raised;
+        LiveSession expected;
+        LiveSession? left;
+        bool raised = false;
 
         lock (gate)
         {
-            if (sessions.TryGetValue(key, out LiveSession? running) && running.Expect())
+            if (!sessions.TryGetValue(key, out LiveSession? running) || !running.Expect())
             {
-                return running;
+                running = Raised(key);
+                running.Expect();
+                running.Start();
+                raised = true;
             }
 
-            raised = new LiveSession(
-                key,
-                fanouts,
-                settings,
-                transcoding,
-                Receiving(key.Network, key.Service),
-                transcoders,
-                clock,
-                logger,
-                Forget);
-
-            sessions[key] = raised;
-            raised.Expect();
-            raised.Start();
+            expected = running;
+            left = TurnedTo(viewer, null);
         }
 
-        events.Signal(AppEventName.Live);
+        if (raised)
+        {
+            events.Signal(AppEventName.Live);
+        }
+
+        HandOver(left, expected, viewer);
+
+        return expected;
+    }
+
+    private LiveSession Raised(LiveSessionKey key)
+    {
+        LiveSession raised = new(
+            key,
+            fanouts,
+            settings,
+            transcoding,
+            Receiving(key.Network, key.Service),
+            transcoders,
+            clock,
+            logger,
+            Forget);
+
+        sessions[key] = raised;
 
         return raised;
+    }
+
+    private LiveSession? TurnedTo(Subject viewer, LiveSession? awaiting)
+    {
+        ahead.Remove(viewer, out LiveSession? before);
+
+        if (awaiting is not null)
+        {
+            ahead[viewer] = awaiting;
+        }
+
+        return before;
+    }
+
+    private static void HandOver(LiveSession? from, LiveSession to, Subject viewer)
+    {
+        if (from is null || ReferenceEquals(from, to))
+        {
+            return;
+        }
+
+        _ = to.Secured.ContinueWith(
+            secured =>
+            {
+                if (secured.Result)
+                {
+                    from.NoLongerAwaitedBy(viewer);
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private void SayIfNothingComesOfIt(LiveSession awaiting)
+        => _ = awaiting.Raising.ContinueWith(
+            raising => SayNothingCameOfIt(awaiting.Key, raising),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+    private void SayNothingCameOfIt(LiveSessionKey key, Task<LiveJoin?> raising)
+    {
+        if (raising.IsFaulted)
+        {
+            logger.LogWarning(
+                raising.Exception.GetBaseException(),
+                "A live session on {Key} started ahead of its viewer failed before it was raised.",
+                key.ToString());
+
+            return;
+        }
+
+        if (raising.IsCompletedSuccessfully && raising.Result is { } refused)
+        {
+            logger.LogInformation(
+                "A live session on {Key} started ahead of its viewer was refused ({Refusal}): {Note}",
+                key.ToString(),
+                refused.Refusal,
+                refused.Note);
+        }
     }
 
     private LiveReception Receiving(NetworkId network, ServiceId service)
@@ -379,6 +544,13 @@ public sealed class LiveSessionManager(
             forgotten = sessions.TryGetValue(session.Key, out LiveSession? held)
                         && ReferenceEquals(held, session)
                         && sessions.Remove(session.Key);
+
+            Subject[] awaiting = [.. ahead.Where(awaited => ReferenceEquals(awaited.Value, session)).Select(awaited => awaited.Key)];
+
+            foreach (Subject viewer in awaiting)
+            {
+                ahead.Remove(viewer);
+            }
 
             leaving.RemoveAll(HasLetGo);
 

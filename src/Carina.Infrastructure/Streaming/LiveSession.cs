@@ -8,6 +8,8 @@ using Microsoft.Extensions.Logging;
 
 using Puppis.Contracts;
 
+using Subject = Carina.Domain.Auth.Subject;
+
 namespace Carina.Infrastructure.Streaming;
 
 internal sealed class LiveSession
@@ -36,6 +38,10 @@ internal sealed class LiveSession
 
     private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    private readonly TaskCompletionSource<bool> secured = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private readonly HashSet<Subject> awaited = [];
+
     private readonly LiveStartupRecord startup;
 
     private readonly LiveEndingRecord ending = new();
@@ -53,6 +59,8 @@ internal sealed class LiveSession
     private Task? captioning;
 
     private ITimer? linger;
+
+    private DateTimeOffset standingUntil;
 
     private TimeSpan? probed;
 
@@ -91,6 +99,10 @@ internal sealed class LiveSession
 
     internal Task Released => released.Task;
 
+    internal Task<bool> Secured => secured.Task;
+
+    internal Task<LiveJoin?> Raising => raised.Task;
+
     public int Viewers => fanout.Viewers;
 
     public long Dropped => fanout.Dropped;
@@ -116,6 +128,17 @@ internal sealed class LiveSession
         }
     }
 
+    internal bool AwaitedByViewersNobodyHasSeen
+    {
+        get
+        {
+            lock (gate)
+            {
+                return expected is 0 && awaited.Count > 0;
+            }
+        }
+    }
+
     internal void Start() => Life = LiveAsync();
 
     internal bool Expect()
@@ -128,11 +151,48 @@ internal sealed class LiveSession
             }
 
             expected++;
+            awaited.Clear();
             linger?.Dispose();
             linger = null;
 
             return true;
         }
+    }
+
+    internal LiveAwaiting Await(Subject viewer, TimeSpan wait)
+    {
+        lock (gate)
+        {
+            if (closed)
+            {
+                return LiveAwaiting.Closed;
+            }
+
+            if (expected > 0)
+            {
+                return LiveAwaiting.Watched;
+            }
+
+            awaited.Add(viewer);
+            StandFor(wait);
+
+            return LiveAwaiting.Awaited;
+        }
+    }
+
+    internal void NoLongerAwaitedBy(Subject viewer)
+    {
+        lock (gate)
+        {
+            if (!awaited.Remove(viewer) || awaited.Count > 0 || expected > 0 || closed)
+            {
+                return;
+            }
+
+            Closing();
+        }
+
+        LetGo();
     }
 
     internal async Task<LiveJoin?> JoinAsync(CancellationToken cancellationToken)
@@ -220,8 +280,23 @@ internal sealed class LiveSession
     private void Closing()
     {
         closed = true;
+        awaited.Clear();
         linger?.Dispose();
         linger = null;
+    }
+
+    private void StandFor(TimeSpan wait)
+    {
+        DateTimeOffset until = clock.GetUtcNow() + wait;
+
+        if (linger is not null && until <= standingUntil)
+        {
+            return;
+        }
+
+        linger?.Dispose();
+        linger = clock.CreateTimer(_ => LingerOver(), null, wait, Timeout.InfiniteTimeSpan);
+        standingUntil = until;
     }
 
     private void LetGo()
@@ -314,7 +389,8 @@ internal sealed class LiveSession
             }
 
             linger?.Dispose();
-            linger = clock.CreateTimer(_ => LingerOver(), null, settings.Linger, Timeout.InfiniteTimeSpan);
+            linger = null;
+            StandFor(settings.Linger);
         }
     }
 
@@ -352,6 +428,7 @@ internal sealed class LiveSession
         finally
         {
             Close();
+            secured.TrySetResult(false);
             await TearDownAsync(unasked);
         }
     }
@@ -382,6 +459,7 @@ internal sealed class LiveSession
         }
 
         startup.Reach(LiveStartupSegment.TunerSecured);
+        secured.TrySetResult(true);
         DataBroadcastSession? shown = reception.ShowDataBroadcastTo(fanout);
 
         lock (gate)
@@ -795,4 +873,13 @@ internal sealed class LiveSession
             left();
         }
     }
+}
+
+internal enum LiveAwaiting
+{
+    Awaited = 1,
+
+    Watched = 2,
+
+    Closed = 3,
 }

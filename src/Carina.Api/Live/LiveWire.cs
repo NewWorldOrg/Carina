@@ -64,7 +64,15 @@ public static class LiveWire
             return;
         }
 
-        (LiveSessionKey key, LiveJoin join) = await LiveSeating.JoinAsync(sessions, onAir, asked, context.RequestAborted);
+        if (SessionClaims.SubjectOf(context.User) is not { } viewer)
+        {
+            await RefuseAsync(context, StatusCodes.Status401Unauthorized, "This request carries no session.");
+
+            return;
+        }
+
+        (LiveSessionKey key, LiveJoin join) =
+            await LiveSeating.JoinAsync(sessions, onAir, asked, viewer, context.RequestAborted);
 
         if (join.Viewing is not { } viewing)
         {

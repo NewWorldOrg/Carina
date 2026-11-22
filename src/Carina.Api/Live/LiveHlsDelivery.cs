@@ -118,7 +118,7 @@ public static class LiveHlsDelivery
         context.Response.Headers.CacheControl = NeverCached;
 
         LiveSessionKey inH264 = new(asked.Network, asked.Service, asked.Profile, asked.Sound);
-        (_, LiveJoin join) = await LiveSeating.JoinAsync(sessions, onAir, inH264, context.RequestAborted);
+        (_, LiveJoin join) = await LiveSeating.JoinAsync(sessions, onAir, inH264, watcher, context.RequestAborted);
 
         if (join.Viewing is not { } seat)
         {

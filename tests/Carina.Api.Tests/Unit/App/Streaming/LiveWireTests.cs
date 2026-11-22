@@ -55,6 +55,33 @@ public sealed class LiveWireTests
         Assert.NotNull(Counted(ledger, LiveDeparture.SourceBroke).Longest);
     }
 
+    [Fact]
+    public async Task TheOneWhoOpenedTheWireIsTheViewerWhoIsSeated()
+    {
+        var socket = new ScriptedWebSocket { ReceiveThrows = new ObjectDisposedException(nameof(WebSocket)) };
+        SeatingAt seating = new(new HeldLiveSource());
+
+        await LiveWire.Invoke(Asking(socket), seating, new HeldSoundOnAir(), Ledger(), Impatient(), Running, Clock, new AlreadyChosen(LiveEncoder.Software));
+
+        Assert.Equal([SignedInViewer.Subject], seating.Seated);
+    }
+
+    [Fact]
+    public async Task AWireAskedForByNobodyInParticularIsRefusedBeforeAnybodyIsSeated()
+    {
+        var socket = new ScriptedWebSocket { ReceiveThrows = new ObjectDisposedException(nameof(WebSocket)) };
+        SeatingAt seating = new(new HeldLiveSource());
+        HttpContext asking = Asking(socket);
+
+        asking.User = new System.Security.Claims.ClaimsPrincipal();
+
+        await LiveWire.Invoke(asking, seating, new HeldSoundOnAir(), Ledger(), Impatient(), Running, Clock, new AlreadyChosen(LiveEncoder.Software));
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, asking.Response.StatusCode);
+        Assert.Empty(seating.Asked);
+        Assert.Empty(seating.Reached);
+    }
+
     private static LiveDepartureLedger Ledger()
         => new(new HandTurnedClock(Opened), NullLogger<LiveDepartureLedger>.Instance);
 
@@ -74,6 +101,7 @@ public sealed class LiveWireTests
 
         context.Request.Path = LiveWire.Path;
         context.Request.QueryString = new QueryString("?network=32736&service=1024&profile=720p30");
+        context.User = SignedInViewer.Principal();
         context.Features.Set<IHttpWebSocketFeature>(new Accepting(socket));
 
         return context;

@@ -3,6 +3,7 @@ using System.Runtime.Versioning;
 using System.Text;
 
 using Carina.BroadcastTestSupport;
+using Carina.Domain.Auth;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Machines;
@@ -70,6 +71,12 @@ public sealed class LiveSessionManagerTests
         CarouselBroadcast.Resource("startup.bml", EntityWriter.BmlType, Encoding.ASCII.GetBytes("<bml/>")));
 
     private static readonly LiveSessionSettings Settings = new();
+
+    private static readonly Subject Viewer = new("viewer");
+
+    private static readonly Subject SomebodyElse = new("somebody else");
+
+    private static readonly TimeSpan WaitForAViewer = TimeSpan.FromSeconds(8);
 
     private readonly HandTurnedClock clock = new();
 
@@ -244,9 +251,9 @@ public sealed class LiveSessionManagerTests
         HeldTranscoders scarce = new(one);
         LiveSessionManager crowded = Managing(one, scarce);
 
-        await using ILiveViewing first = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
+        await using ILiveViewing first = Seated(await crowded.JoinAsync(EveryFrame, Viewer, CancellationToken.None));
 
-        LiveJoin refused = await crowded.JoinAsync(EveryField, CancellationToken.None);
+        LiveJoin refused = await crowded.JoinAsync(EveryField, Viewer, CancellationToken.None);
 
         Assert.False(refused.Seated);
         Assert.Equal(LiveRefusal.TooManyAlready, refused.Refusal);
@@ -386,7 +393,7 @@ public sealed class LiveSessionManagerTests
     {
         supply.Refusing = LiveRefusal.NoTunerFree;
 
-        LiveJoin refused = await manager.JoinAsync(EveryFrame, CancellationToken.None);
+        LiveJoin refused = await manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
         Assert.Equal("held back for the test.", refused.Note);
@@ -405,7 +412,7 @@ public sealed class LiveSessionManagerTests
     {
         supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, CancellationToken.None);
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         await Eventually.Happens(() => transcoders.Started is 1, "the transcoder is started without waiting for the tuner");
 
@@ -429,7 +436,7 @@ public sealed class LiveSessionManagerTests
     {
         supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, CancellationToken.None);
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         await Eventually.Happens(() => transcoders.Started is 1, "the transcoder is started without waiting for the tuner");
 
@@ -449,7 +456,7 @@ public sealed class LiveSessionManagerTests
         supply.Refusing = LiveRefusal.WouldNotTune;
         transcoders.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, CancellationToken.None);
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         await Eventually.Happens(() => supply.Asked is 1, "the tuner is asked for while the transcoder is still starting");
 
@@ -494,7 +501,7 @@ public sealed class LiveSessionManagerTests
         supply.Refusing = LiveRefusal.NoTunerFree;
         supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        Task<LiveJoin> joining = real.JoinAsync(EveryFrame, CancellationToken.None);
+        Task<LiveJoin> joining = real.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         await StandIns.WroteDown(pids, 1);
 
@@ -503,6 +510,455 @@ public sealed class LiveSessionManagerTests
         Assert.Equal(LiveRefusal.NoTunerFree, (await joining).Refusal);
         await Eventually.Happens(() => counted.Running is 0, "the seat of the transcoder nothing came of is given back");
         Assert.True(await standIns.NothingIsLeftOf(StandIns.Pids(pids)));
+    }
+
+    [Fact]
+    public async Task ASessionStartedAheadAsksForTheTunerAndStartsTheTranscoderBeforeAnyViewerJoins()
+    {
+        LiveAhead answered = manager.StartAhead(EveryFrame, Viewer);
+
+        Assert.Equal(LiveAhead.Started, answered);
+        await Eventually.Happens(
+            () => supply.Opened.Count is 1 && transcoders.Started is 1,
+            "the tuner is asked for and the transcoder started with nobody on the wire");
+        Assert.Equal([EveryFrame], manager.Keys);
+        Assert.Equal(0, manager.Viewers(EveryFrame));
+        Assert.Equal(1, budget.Running);
+    }
+
+    [Fact]
+    public async Task AViewerJoiningTheSessionStartedAheadForThemRidesItAndNothingIsStartedAgain()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        clock.Turn(WaitForAViewer * 2);
+
+        Assert.Equal(1, supply.Asked);
+        Assert.Equal(1, transcoders.Started);
+        Assert.Equal(1, manager.Viewers(EveryFrame));
+        Assert.False(transcoders.Raised[0].Disposed);
+        Assert.Equal(TheHoldOnTheSupply, clock.Pending);
+    }
+
+    [Fact]
+    public async Task AViewerJoiningWhileTheSessionStartedAheadIsStillAskingForItsTunerWaitsOnThatSameAsking()
+    {
+        supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => supply.Asked is 1, "the session started ahead reaches the supply");
+
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
+
+        supply.HeldUntil.SetResult();
+
+        await using ILiveViewing viewing = Seated(await joining);
+
+        Assert.Equal(1, supply.Asked);
+        Assert.Equal(1, transcoders.Started);
+    }
+
+    [Fact]
+    public async Task ASessionStartedAheadThatNobodyJoinsIsStoppedAndItsTunerGivenBackOnceTheWaitIsOver()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the session started ahead secures its tuner");
+
+        clock.Turn(WaitForAViewer - TimeSpan.FromMilliseconds(1));
+
+        Assert.False(transcoders.Raised[0].Disposed);
+        Assert.Equal([EveryFrame], manager.Keys);
+
+        clock.Turn(TimeSpan.FromMilliseconds(1));
+
+        await Eventually.Happens(
+            () => budget.Running is 0 && supply.Opened[0].Disposed,
+            "the seat comes back and the tuner is given back once nobody came within the wait");
+
+        Assert.True(transcoders.Raised[0].Disposed);
+        Assert.Empty(manager.Keys);
+    }
+
+    [Fact]
+    public async Task ASessionStartedAheadThatIsStoppedForWantOfAViewerSaysItWasLetGoOfLikeOneItsLastViewerLeft()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the session started ahead secures its tuner");
+
+        clock.Turn(WaitForAViewer);
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the tuner is given back once nobody came within the wait");
+
+        Assert.Empty(warnings.Endings);
+        Assert.Equal(1, supply.Opened[0].TimesLetGo);
+    }
+
+    [Fact]
+    public async Task StartingAheadWhatIsAlreadyStartedAheadStartsNothingMore()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+
+        LiveAhead again = manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the session started ahead secures its tuner");
+
+        Assert.Equal(LiveAhead.AlreadyRunning, again);
+        Assert.Equal(1, supply.Asked);
+        Assert.Equal(1, transcoders.Started);
+        Assert.Equal([EveryFrame], manager.Keys);
+    }
+
+    [Fact]
+    public async Task StartingAheadAgainWaitsForTheViewerFromThenOn()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the session started ahead secures its tuner");
+
+        clock.Turn(WaitForAViewer / 2);
+        manager.StartAhead(EveryFrame, Viewer);
+        clock.Turn(WaitForAViewer - TimeSpan.FromMilliseconds(1));
+
+        Assert.False(transcoders.Raised[0].Disposed);
+
+        clock.Turn(TimeSpan.FromMilliseconds(1));
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the tuner is given back once the later wait is over");
+    }
+
+    [Fact]
+    public async Task StartingAheadWhatSomebodyIsWatchingDoesNothing()
+    {
+        await using ILiveViewing watching = Seated(await manager.JoinAsync(EveryFrame, SomebodyElse, CancellationToken.None));
+
+        LiveAhead answered = manager.StartAhead(EveryFrame, Viewer);
+
+        clock.Turn(WaitForAViewer * 2);
+
+        Assert.Equal(LiveAhead.AlreadyWatched, answered);
+        Assert.Equal(1, supply.Asked);
+        Assert.Equal(1, transcoders.Started);
+        Assert.Equal(1, manager.Viewers(EveryFrame));
+        Assert.False(transcoders.Raised[0].Disposed);
+        Assert.Equal(TheHoldOnTheSupply, clock.Pending);
+    }
+
+    [Fact]
+    public async Task StartingAheadWhatIsLingeringKeepsItForTheViewerAtLeastAsLongAsItWouldHaveLingered()
+    {
+        ILiveViewing gone = await Joined(EveryFrame);
+
+        await gone.DisposeAsync();
+
+        LiveAhead answered = manager.StartAhead(EveryFrame, Viewer);
+
+        clock.Turn(WaitForAViewer - TimeSpan.FromMilliseconds(1));
+
+        Assert.Equal(LiveAhead.AlreadyRunning, answered);
+        Assert.False(transcoders.Raised[0].Disposed);
+
+        clock.Turn(TimeSpan.FromMilliseconds(1));
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the tuner is given back once the wait is over");
+        Assert.Equal(1, transcoders.Started);
+    }
+
+    [Fact]
+    public async Task ASessionStartedAheadCountsNoViewerInTheLedger()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the session started ahead secures its tuner");
+
+        LiveSessionView listed = Assert.Single(await Ledger.RunningAsync(CancellationToken.None));
+
+        Assert.Equal(EveryFrame, listed.Key);
+        Assert.Equal(0, listed.Viewers);
+        Assert.Empty(listed.Watching);
+        Assert.Equal(0L, listed.Dropped);
+    }
+
+    [Fact]
+    public async Task AViewerWhoAsksForAnotherChannelHasTheOneStartedAheadForThemStoppedOnceTheNewOneHasItsTunerAndNotBefore()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the session started ahead secures its tuner");
+
+        supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, Viewer, CancellationToken.None);
+
+        await Eventually.Happens(() => supply.Asked is 2, "the channel the viewer turned to is asked for");
+
+        Assert.False(supply.Opened[0].Disposed);
+        Assert.False(transcoders.Raised[0].Disposed);
+        Assert.Contains(EveryFrame, manager.Keys);
+
+        supply.HeldUntil.SetResult();
+
+        await using ILiveViewing viewing = Seated(await joining);
+
+        await Eventually.Happens(
+            () => supply.Opened[0].Disposed && transcoders.Raised[0].Disposed,
+            "the one started ahead is stopped and its tuner given back once the new one has its tuner");
+        Assert.Equal([AnotherChannel], manager.Keys);
+        Assert.Equal(1, manager.Viewers(AnotherChannel));
+    }
+
+    [Fact]
+    public async Task AViewerWhoAsksForAnotherFormatOfTheSameChannelHasTheOneStartedAheadStoppedAndKeepsTheOneTuner()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => transcoders.Started is 1, "the session started ahead starts its transcoder");
+
+        await using ILiveViewing viewing = Seated(await manager.JoinAsync(InH265, Viewer, CancellationToken.None));
+
+        await Eventually.Happens(
+            () => transcoders.Raised[0].Disposed && budget.Running is 1,
+            "the transcoder of the format nobody asked for after all is stopped");
+        Assert.Equal([InH265], manager.Keys);
+        Assert.Equal(1, supply.Asked);
+        Assert.False(supply.Opened[0].Disposed);
+    }
+
+    [Fact]
+    public async Task AChannelTheViewerTurnedToThatIsRefusedLeavesTheOneStartedAheadToItsOwnWait()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the session started ahead secures its tuner");
+
+        supply.Refusing = LiveRefusal.NoSuchChannel;
+
+        LiveJoin refused = await manager.JoinAsync(AnotherChannel, Viewer, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.NoSuchChannel, refused.Refusal);
+        Assert.False(supply.Opened[0].Disposed);
+        Assert.Contains(EveryFrame, manager.Keys);
+
+        clock.Turn(WaitForAViewer);
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the one started ahead is stopped once its own wait is over");
+    }
+
+    [Fact]
+    public async Task SomebodyElseTurningToAnotherChannelLeavesWhatWasStartedAheadForTheViewer()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the session started ahead secures its tuner");
+
+        await using ILiveViewing theirs = Seated(await manager.JoinAsync(AnotherChannel, SomebodyElse, CancellationToken.None));
+        await using ILiveViewing ours = await Joined(EveryFrame);
+
+        Assert.Equal(2, supply.Asked);
+        Assert.Equal(2, transcoders.Started);
+        Assert.False(transcoders.Raised[0].Disposed);
+    }
+
+    [Fact]
+    public async Task StartingAheadAnotherChannelForTheSameViewerStopsTheEarlierOneOnceTheNewOneHasItsTunerAndNotBefore()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the session started ahead secures its tuner");
+
+        supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        manager.StartAhead(AnotherChannel, Viewer);
+
+        await Eventually.Happens(() => supply.Asked is 2, "the later channel is asked for");
+
+        Assert.False(supply.Opened[0].Disposed);
+
+        supply.HeldUntil.SetResult();
+
+        await Eventually.Happens(
+            () => supply.Opened.Count is 2 && supply.Opened[0].Disposed && transcoders.Raised[0].Disposed,
+            "the earlier one is stopped once the later one has its tuner");
+        Assert.Equal([AnotherChannel], manager.Keys);
+        Assert.False(supply.Opened[1].Disposed);
+    }
+
+    [Fact]
+    public async Task ASessionStartedAheadForTwoViewersIsKeptForTheOneWhoDidNotTurnAway()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+        manager.StartAhead(EveryFrame, SomebodyElse);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the session started ahead secures its tuner");
+
+        await using ILiveViewing elsewhere = Seated(await manager.JoinAsync(AnotherChannel, SomebodyElse, CancellationToken.None));
+
+        await Stays(() => !supply.Opened[0].Disposed && manager.Keys.Contains(EveryFrame));
+
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        Assert.Equal(2, supply.Asked);
+    }
+
+    [Fact]
+    public async Task ASessionStartedAheadThatFindsNoTunerFreeGivesUpWithoutTakingTheTunerOfTheOneStillLingering()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        ILiveViewing gone = Seated(await manager.JoinAsync(AnotherChannel, SomebodyElse, CancellationToken.None));
+
+        await gone.DisposeAsync();
+
+        LiveAhead answered = manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(
+            () => supply.Asked is 2 && !manager.Keys.Contains(EveryFrame) && budget.Running is 1,
+            "the session started ahead gives up when no tuner is free");
+
+        Assert.Equal(LiveAhead.Started, answered);
+        Assert.Equal([AnotherChannel], manager.Keys);
+        Assert.False(supply.Opened[0].Disposed);
+        Assert.False(transcoders.Raised[0].Disposed);
+        Assert.Equal(2, supply.Asked);
+    }
+
+    [Fact]
+    public async Task ASessionStartedAheadThatFindsNoTunerFreeLeavesTheViewerWhoIsWatchingAlone()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        await using ILiveViewing watching = Seated(await manager.JoinAsync(AnotherChannel, SomebodyElse, CancellationToken.None));
+
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(
+            () => supply.Asked is 2 && !manager.Keys.Contains(EveryFrame) && budget.Running is 1,
+            "the session started ahead gives up when no tuner is free");
+
+        Assert.Equal(1, manager.Viewers(AnotherChannel));
+        Assert.False(supply.Opened[0].Disposed);
+        Assert.Null(watching.Ending!.Current);
+    }
+
+    [Fact]
+    public async Task AViewerWhoFindsNoTunerFreeTakesTheTunerOfASessionStartedAheadThatNobodyJoined()
+    {
+        supply.AsIfThereWereOneTuner = true;
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the session started ahead secures its tuner");
+
+        await using ILiveViewing viewing = Seated(await manager.JoinAsync(AnotherChannel, SomebodyElse, CancellationToken.None));
+
+        Assert.True(supply.Opened[0].Disposed);
+        Assert.Equal([AnotherChannel], manager.Keys);
+    }
+
+    [Fact]
+    public async Task AViewerRefusedForTheCeilingIsSeatedOnceTheSessionStartedAheadThatHeldTheSeatIsStopped()
+    {
+        TranscodeBudget one = new(new TranscodeBudgetSettings { AtOnce = 1 });
+        HeldTranscoders scarce = new(one);
+        LiveSessionManager crowded = Managing(one, scarce);
+
+        crowded.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => scarce.Started is 1, "the session started ahead takes the one seat");
+
+        await using ILiveViewing viewing = Seated(await crowded.JoinAsync(AnotherChannel, SomebodyElse, CancellationToken.None));
+
+        Assert.True(scarce.Raised[0].Disposed);
+        Assert.Equal([AnotherChannel], crowded.Keys);
+        Assert.Equal(1, one.Running);
+    }
+
+    [Fact]
+    public async Task AViewerRefusedForTheCeilingByThoseWhoAreWatchingStaysRefusedAndNothingIsStopped()
+    {
+        TranscodeBudget one = new(new TranscodeBudgetSettings { AtOnce = 1 });
+        HeldTranscoders scarce = new(one);
+        LiveSessionManager crowded = Managing(one, scarce);
+
+        await using ILiveViewing watching = Seated(await crowded.JoinAsync(EveryFrame, SomebodyElse, CancellationToken.None));
+
+        LiveJoin refused = await crowded.JoinAsync(AnotherChannel, Viewer, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.TooManyAlready, refused.Refusal);
+        Assert.False(scarce.Raised[0].Disposed);
+        Assert.Equal(1, crowded.Viewers(EveryFrame));
+    }
+
+    [Fact]
+    public async Task ASessionStartedAheadRefusedForTheCeilingGivesUpAndTakesNobodysSeat()
+    {
+        TranscodeBudget one = new(new TranscodeBudgetSettings { AtOnce = 1 });
+        HeldTranscoders scarce = new(one);
+        LiveSessionManager crowded = Managing(one, scarce);
+
+        await using ILiveViewing watching = Seated(await crowded.JoinAsync(EveryFrame, SomebodyElse, CancellationToken.None));
+
+        crowded.StartAhead(AnotherChannel, Viewer);
+
+        await Eventually.Happens(
+            () => supply.Asked is 2 && crowded.Keys.Count is 1 && supply.Opened.Count(opened => !opened.Disposed) is 1,
+            "the session started ahead gives up and hands back the tuner it was given");
+
+        Assert.Equal([EveryFrame], crowded.Keys);
+        Assert.Equal(1, scarce.Started);
+        Assert.False(scarce.Raised[0].Disposed);
+        Assert.Equal(1, crowded.Viewers(EveryFrame));
+    }
+
+    [Fact]
+    public async Task ARecordingTakingTheTunerEndsTheSessionStartedAheadAtOnce()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(
+            () => supply.Opened.Count is 1 && transcoders.Started is 1,
+            "the session started ahead secures its tuner and starts its transcoder");
+
+        supply.Opened[0].Ending = LiveSupplyEnding.Of(LiveSupplyEnd.TakenForARecording, "a recording outranked it.");
+        supply.Opened[0].NoMore();
+
+        await Eventually.Happens(() => transcoders.Raised[0].InputClosed, "the transcoder is told there is no more to take");
+
+        transcoders.Raised[0].NoMore();
+
+        await Eventually.Happens(
+            () => manager.Keys.Count is 0 && budget.Running is 0 && supply.Opened[0].Disposed,
+            "the session is torn down, its transcoder gone and its stream let go");
+        Assert.True(transcoders.Raised[0].Disposed);
+    }
+
+    [Fact]
+    public async Task StartingAheadSignalsLiveOnceWhenItRaisesTheSessionAndNotWhenItFindsItRunning()
+    {
+        manager.StartAhead(EveryFrame, Viewer);
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the session started ahead secures its tuner");
+
+        Assert.Equal([AppEventName.Live], events.Signalled);
+    }
+
+    [Fact]
+    public async Task ASessionStartedAheadThatIsRefusedIsSaidInTheLogBecauseNobodyIsOnTheWireToBeTold()
+    {
+        supply.Refusing = LiveRefusal.WouldNotTune;
+
+        manager.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(() => warnings.RefusedAhead.Count is 1, "the refusal is written down");
+
+        IReadOnlyDictionary<string, object?> told = Assert.Single(warnings.RefusedAhead);
+
+        Assert.Equal(EveryFrame.ToString(), told["Key"]);
+        Assert.Equal(LiveRefusal.WouldNotTune, told["Refusal"]);
+        await Eventually.Happens(() => manager.Keys.Count is 0 && budget.Running is 0, "nothing is left of it");
     }
 
     [Fact]
@@ -563,7 +1019,7 @@ public sealed class LiveSessionManagerTests
 
         await watching.DisposeAsync();
 
-        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, CancellationToken.None);
+        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, Viewer, CancellationToken.None);
 
         await Eventually.Happens(
             () => transcoders.Raised[0].Disposed && clock.Waiting.Contains(StopGrace),
@@ -594,13 +1050,13 @@ public sealed class LiveSessionManagerTests
 
         supply.AsIfThereWereOneTuner = true;
 
-        ILiveViewing watching = Seated(await full.JoinAsync(EveryFrame, CancellationToken.None));
+        ILiveViewing watching = Seated(await full.JoinAsync(EveryFrame, Viewer, CancellationToken.None));
 
         raising.Raised[0].FinishesWhen = finishing;
 
         await watching.DisposeAsync();
 
-        Task<LiveJoin> joining = full.JoinAsync(AnotherChannel, CancellationToken.None);
+        Task<LiveJoin> joining = full.JoinAsync(AnotherChannel, Viewer, CancellationToken.None);
 
         await Eventually.Happens(
             () => supply.Opened.Count is 2 && supply.Opened[1].Disposed,
@@ -628,13 +1084,13 @@ public sealed class LiveSessionManagerTests
 
         supply.AsIfThereWereOneTuner = true;
 
-        ILiveViewing watching = Seated(await full.JoinAsync(EveryFrame, CancellationToken.None));
+        ILiveViewing watching = Seated(await full.JoinAsync(EveryFrame, Viewer, CancellationToken.None));
 
         raising.Raised[0].FinishesWhen = finishing;
 
         await watching.DisposeAsync();
 
-        Task<LiveJoin> joining = full.JoinAsync(AnotherChannel, CancellationToken.None);
+        Task<LiveJoin> joining = full.JoinAsync(AnotherChannel, Viewer, CancellationToken.None);
 
         await Eventually.Happens(
             () => supply.Opened.Count is 2 && supply.Opened[1].Disposed,
@@ -671,7 +1127,7 @@ public sealed class LiveSessionManagerTests
 
         Assert.False(supply.Opened[0].Disposed);
 
-        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, CancellationToken.None);
+        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, Viewer, CancellationToken.None);
 
         await Eventually.Happens(() => supply.Asked is 2, "the viewer of the other channel reaches the supply");
         await Eventually.Happens(
@@ -697,7 +1153,7 @@ public sealed class LiveSessionManagerTests
     {
         TaskCompletionSource lettingGo = await GivenUpOnWhileStillOpeningAsync();
 
-        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, CancellationToken.None);
+        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, Viewer, CancellationToken.None);
 
         await Eventually.Happens(() => supply.GivenUpOn is 1, "the opening nobody waits for any more is given up on");
 
@@ -714,7 +1170,7 @@ public sealed class LiveSessionManagerTests
     {
         TaskCompletionSource lettingGo = await GivenUpOnWhileStillOpeningAsync();
 
-        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, CancellationToken.None);
+        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, Viewer, CancellationToken.None);
 
         await Eventually.Happens(() => supply.GivenUpOn is 1, "the opening nobody waits for any more is given up on");
         await Eventually.Happens(
@@ -739,7 +1195,7 @@ public sealed class LiveSessionManagerTests
 
         await using ILiveViewing watching = await Joined(EveryFrame);
 
-        LiveJoin refused = await manager.JoinAsync(AnotherChannel, CancellationToken.None);
+        LiveJoin refused = await manager.JoinAsync(AnotherChannel, Viewer, CancellationToken.None);
 
         Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
         Assert.False(supply.Opened[0].Disposed);
@@ -761,7 +1217,7 @@ public sealed class LiveSessionManagerTests
             () => manager.Keys.Count is 1 && transcoders.Raised[1].Disposed,
             "the profile nobody watches has left the ledger and stopped its transcoder");
 
-        LiveJoin refused = await manager.JoinAsync(AnotherChannel, CancellationToken.None).WaitAsync(Eventually.Patience);
+        LiveJoin refused = await manager.JoinAsync(AnotherChannel, Viewer, CancellationToken.None).WaitAsync(Eventually.Patience);
 
         Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
         Assert.Equal([EveryFrame], manager.Keys);
@@ -777,7 +1233,7 @@ public sealed class LiveSessionManagerTests
         await using ILiveViewing watching = await Joined(EveryFrame);
         await (await Joined(EveryField)).DisposeAsync();
 
-        LiveJoin refused = await manager.JoinAsync(AnotherChannel, CancellationToken.None).WaitAsync(Eventually.Patience);
+        LiveJoin refused = await manager.JoinAsync(AnotherChannel, Viewer, CancellationToken.None).WaitAsync(Eventually.Patience);
 
         Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
         Assert.Equal([EveryFrame], manager.Keys);
@@ -897,8 +1353,8 @@ public sealed class LiveSessionManagerTests
             events,
             warnings);
 
-        await using ILiveViewing stalled = Seated(await tight.JoinAsync(EveryFrame, CancellationToken.None));
-        await using ILiveViewing flowing = Seated(await tight.JoinAsync(EveryField, CancellationToken.None));
+        await using ILiveViewing stalled = Seated(await tight.JoinAsync(EveryFrame, Viewer, CancellationToken.None));
+        await using ILiveViewing flowing = Seated(await tight.JoinAsync(EveryField, Viewer, CancellationToken.None));
 
         transcoders.Raised[0].TakesNothingUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1034,8 +1490,8 @@ public sealed class LiveSessionManagerTests
             hook,
             warnings);
 
-        await Seated(await hooked.JoinAsync(EveryFrame, CancellationToken.None)).DisposeAsync();
-        await Seated(await hooked.JoinAsync(EveryField, CancellationToken.None)).DisposeAsync();
+        await Seated(await hooked.JoinAsync(EveryFrame, Viewer, CancellationToken.None)).DisposeAsync();
+        await Seated(await hooked.JoinAsync(EveryField, Viewer, CancellationToken.None)).DisposeAsync();
 
         LiveSessionKey? askedAgain = null;
         Task<LiveJoin>? back = null;
@@ -1045,11 +1501,11 @@ public sealed class LiveSessionManagerTests
             if (back is null && hooked.Keys.Count is 1)
             {
                 askedAgain = hooked.Keys[0];
-                back = hooked.JoinAsync(askedAgain, CancellationToken.None);
+                back = hooked.JoinAsync(askedAgain, Viewer, CancellationToken.None);
             }
         };
 
-        Task<LiveJoin> asking = hooked.JoinAsync(AnotherChannel, CancellationToken.None);
+        Task<LiveJoin> asking = hooked.JoinAsync(AnotherChannel, Viewer, CancellationToken.None);
 
         await Eventually.Happens(() => back is not null, "a profile is asked for again between the other being given up and it");
 
@@ -1080,7 +1536,7 @@ public sealed class LiveSessionManagerTests
 
         supply.Refusing = LiveRefusal.NoTunerFree;
 
-        LiveJoin refused = await manager.JoinAsync(AnotherChannel, CancellationToken.None);
+        LiveJoin refused = await manager.JoinAsync(AnotherChannel, Viewer, CancellationToken.None);
 
         Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
         Assert.Equal("held back for the test.", refused.Note);
@@ -1108,7 +1564,7 @@ public sealed class LiveSessionManagerTests
     {
         supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, CancellationToken.None);
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         await Eventually.Happens(() => supply.Asked is 1, "the viewer reaches the supply");
 
@@ -1128,7 +1584,7 @@ public sealed class LiveSessionManagerTests
     {
         transcoders.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, CancellationToken.None);
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         await Eventually.Happens(() => supply.Opened.Count is 1, "the viewer secures the tuner");
 
@@ -1172,7 +1628,7 @@ public sealed class LiveSessionManagerTests
     {
         transcoders.Failing = TranscoderFault.ProgrammeMissing;
 
-        LiveJoin refused = await manager.JoinAsync(EveryFrame, CancellationToken.None);
+        LiveJoin refused = await manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         Assert.Equal(LiveRefusal.TranscoderWouldNotStart, refused.Refusal);
         Assert.Equal(0, budget.Running);
@@ -1185,7 +1641,7 @@ public sealed class LiveSessionManagerTests
     {
         supply.Refusing = LiveRefusal.NoTunerFree;
 
-        Assert.Equal(LiveRefusal.NoTunerFree, (await manager.JoinAsync(EveryFrame, CancellationToken.None)).Refusal);
+        Assert.Equal(LiveRefusal.NoTunerFree, (await manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None)).Refusal);
 
         supply.Refusing = null;
 
@@ -1214,7 +1670,7 @@ public sealed class LiveSessionManagerTests
             {
                 together.SignalAndWait();
 
-                return manager.JoinAsync(EveryFrame, CancellationToken.None);
+                return manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
             })),
         ];
 
@@ -1265,7 +1721,7 @@ public sealed class LiveSessionManagerTests
 
         using CancellationTokenSource givingUp = new();
 
-        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, givingUp.Token);
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, Viewer, givingUp.Token);
 
         await Eventually.Happens(() => supply.Asked is 1, "the joiner reaches the supply");
         await givingUp.CancelAsync();
@@ -1463,7 +1919,7 @@ public sealed class LiveSessionManagerTests
     {
         supply.Refusing = LiveRefusal.WouldNotTune;
 
-        await manager.JoinAsync(EveryFrame, CancellationToken.None);
+        await manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         Assert.Null(manager.Startup(EveryFrame));
     }
@@ -1697,7 +2153,7 @@ public sealed class LiveSessionManagerTests
             events,
             warnings);
 
-        await using ILiveViewing slow = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
+        await using ILiveViewing slow = Seated(await crowded.JoinAsync(EveryFrame, Viewer, CancellationToken.None));
 
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
 
@@ -1891,7 +2347,7 @@ public sealed class LiveSessionManagerTests
     {
         supply.Refusing = LiveRefusal.NoTunerFree;
 
-        await manager.JoinAsync(EveryFrame, CancellationToken.None);
+        await manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         await Eventually.Happens(() => events.Signalled.Count is 2, "the refused session is signalled in and out");
 
@@ -1948,7 +2404,7 @@ public sealed class LiveSessionManagerTests
             events,
             warnings);
 
-        await using ILiveViewing slow = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
+        await using ILiveViewing slow = Seated(await crowded.JoinAsync(EveryFrame, Viewer, CancellationToken.None));
 
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
 
@@ -1959,7 +2415,7 @@ public sealed class LiveSessionManagerTests
 
         await Eventually.Happens(() => slow.Backlog.Dropped >= 2L, "pictures beyond the backlog are thrown away");
 
-        await using ILiveViewing fresh = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
+        await using ILiveViewing fresh = Seated(await crowded.JoinAsync(EveryFrame, Viewer, CancellationToken.None));
 
         LiveSessionView running = (await ((ILiveSessionLedger)crowded).RunningAsync(CancellationToken.None)).Single();
 
@@ -1979,7 +2435,7 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
-    public void AViewerAsksTheManagerToJoinAKeyToHandAChannelOverOrToReachForOneAndNothingElse()
+    public void AViewerAsksTheManagerToJoinAKeyToStartOneAheadToHandAChannelOverOrToReachForOneAndNothingElse()
     {
         MethodInfo[] asked =
         [
@@ -1989,7 +2445,7 @@ public sealed class LiveSessionManagerTests
         ];
 
         Assert.Equal(
-            ["DisposeAsync", "HandOverAsync", "JoinAsync", "Reach", "RunningAsync", "Startup", "Viewers"],
+            ["DisposeAsync", "HandOverAsync", "JoinAsync", "Reach", "RunningAsync", "StartAhead", "Startup", "Viewers"],
             asked.Select(method => method.Name).Order());
         Assert.All(
             asked.SelectMany(method => method.GetParameters()),
@@ -1997,7 +2453,12 @@ public sealed class LiveSessionManagerTests
                 parameter.ParameterType,
                 (Type[])[typeof(NetworkId), typeof(ServiceId), typeof(TuningParameters), typeof(LiveProfile)]));
         Assert.Equal(
-            [nameof(ILiveSessionManager.HandOverAsync), nameof(ILiveSessionManager.JoinAsync), nameof(ILiveSessionManager.Reach)],
+            [
+                nameof(ILiveSessionManager.HandOverAsync),
+                nameof(ILiveSessionManager.JoinAsync),
+                nameof(ILiveSessionManager.Reach),
+                nameof(ILiveSessionManager.StartAhead),
+            ],
             typeof(ILiveSessionManager).GetMethods().Select(method => method.Name).Order());
     }
 
@@ -2095,7 +2556,7 @@ public sealed class LiveSessionManagerTests
     [Fact]
     public async Task AReaderRidesTheReadingAViewerRaisedAndNoSecondTunerIsAskedFor()
     {
-        LiveJoin joined = await handing.JoinAsync(EveryFrame, CancellationToken.None);
+        LiveJoin joined = await handing.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         Assert.True(joined.Seated, "a viewer is seated on the channel");
 
@@ -2138,7 +2599,7 @@ public sealed class LiveSessionManagerTests
     [Fact]
     public async Task ASeatThatRefusesAMouthfulInAWayNobodyNamedIsDroppedAndTheOthersGoOnBeingFed()
     {
-        LiveJoin joined = await handing.JoinAsync(EveryFrame, CancellationToken.None);
+        LiveJoin joined = await handing.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         Assert.True(joined.Seated, "a viewer is seated on the channel");
 
@@ -2165,7 +2626,7 @@ public sealed class LiveSessionManagerTests
     [Fact]
     public async Task AReaderThatHasLetGoIsNotOfferedAnotherMouthfulAndTheReadingCarriesOn()
     {
-        LiveJoin joined = await handing.JoinAsync(EveryFrame, CancellationToken.None);
+        LiveJoin joined = await handing.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         Assert.True(joined.Seated, "a viewer is seated on the channel");
 
@@ -2194,7 +2655,7 @@ public sealed class LiveSessionManagerTests
     [Fact]
     public async Task AReaderThatNeverReadsDropsWhatItCannotHoldAndNeverHoldsUpTheTranscodingSeat()
     {
-        LiveJoin joined = await handing.JoinAsync(EveryFrame, CancellationToken.None);
+        LiveJoin joined = await handing.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
 
         Assert.True(joined.Seated, "a viewer is seated on the channel");
 
@@ -2442,7 +2903,7 @@ public sealed class LiveSessionManagerTests
 
         using CancellationTokenSource givingUp = new();
 
-        Task<LiveJoin> abandoned = manager.JoinAsync(EveryFrame, givingUp.Token);
+        Task<LiveJoin> abandoned = manager.JoinAsync(EveryFrame, Viewer, givingUp.Token);
 
         await Eventually.Happens(() => supply.Asked is 1, "the first viewer reaches the supply");
         await givingUp.CancelAsync();
@@ -2499,7 +2960,8 @@ public sealed class LiveSessionManagerTests
                 longestRaise: LongestRaise,
                 heldAhead: HeldAhead,
                 betweenHolds: BetweenHolds,
-                longestWaitForATunerToComeFree: WaitForATunerToComeFree),
+                longestWaitForATunerToComeFree: WaitForATunerToComeFree,
+                longestWaitForAViewer: WaitForAViewer),
             new LiveFanoutSettings(),
             new LiveTranscodeSettings { StopGrace = StopGrace },
             supply,
@@ -2509,7 +2971,7 @@ public sealed class LiveSessionManagerTests
             warnings);
 
     private async Task<ILiveViewing> Joined(LiveSessionKey key)
-        => Seated(await manager.JoinAsync(key, CancellationToken.None));
+        => Seated(await manager.JoinAsync(key, Viewer, CancellationToken.None));
 
     private static Task Pour(PipedTransportStream into, int mouthfuls)
         => Task.Run(async () =>
@@ -2540,6 +3002,16 @@ public sealed class LiveSessionManagerTests
     private static long? Milliseconds(TimeSpan? elapsed)
         => elapsed is { } reached ? (long)Math.Round(reached.TotalMilliseconds) : null;
 
+    private static async Task Stays(Func<bool> so)
+    {
+        for (int tries = 0; tries < 20; tries++)
+        {
+            Assert.True(so(), "What was to stay as it was did not.");
+
+            await Task.Delay(TimeSpan.FromMilliseconds(10));
+        }
+    }
+
     private sealed class RecordedWarnings : ILogger<LiveSessionManager>
     {
         private readonly Lock gate = new();
@@ -2549,6 +3021,19 @@ public sealed class LiveSessionManagerTests
         private readonly List<IReadOnlyDictionary<string, object?>> startups = [];
 
         private readonly List<IReadOnlyDictionary<string, object?>> endings = [];
+
+        private readonly List<IReadOnlyDictionary<string, object?>> refusedAhead = [];
+
+        public IReadOnlyList<IReadOnlyDictionary<string, object?>> RefusedAhead
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return [.. refusedAhead];
+                }
+            }
+        }
 
         public IReadOnlyList<IReadOnlyDictionary<string, object?>> Endings
         {
@@ -2603,6 +3088,18 @@ public sealed class LiveSessionManagerTests
                 lock (gate)
                 {
                     startups.Add(said.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
+                }
+
+                return;
+            }
+
+            if (logLevel is LogLevel.Information
+                && state is IReadOnlyList<KeyValuePair<string, object?>> refused
+                && refused.Any(pair => string.Equals(pair.Key, "Refusal", StringComparison.Ordinal)))
+            {
+                lock (gate)
+                {
+                    refusedAhead.Add(refused.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
                 }
 
                 return;
@@ -2723,7 +3220,7 @@ public sealed class LiveSessionManagerTests
         }
 
         public async Task<ILiveViewing> Joined(LiveSessionKey key)
-            => Seated(await Manager.JoinAsync(key, CancellationToken.None));
+            => Seated(await Manager.JoinAsync(key, Viewer, CancellationToken.None));
 
         public async ValueTask DisposeAsync()
         {

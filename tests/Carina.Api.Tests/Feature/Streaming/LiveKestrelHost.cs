@@ -76,7 +76,11 @@ internal sealed class LiveKestrelHost : IAsyncDisposable
     }
 
     private Task CarryAsync(HttpContext context)
-        => LiveWire.Invoke(context, seating, new HeldSoundOnAir(), noted, settings, app.Lifetime, TimeProvider.System, new AlreadyChosen(LiveEncoder.Software));
+    {
+        context.User = SignedInViewer.Principal();
+
+        return LiveWire.Invoke(context, seating, new HeldSoundOnAir(), noted, settings, app.Lifetime, TimeProvider.System, new AlreadyChosen(LiveEncoder.Software));
+    }
 
     private Uri ResolveWire()
     {

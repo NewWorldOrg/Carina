@@ -515,7 +515,7 @@ public sealed class DriverLiveSupplyTests
         LiveSessionKey key = new(Network, Service, LiveProfile.Hd30);
 
         LiveJoin[] joined = await Task.WhenAll(
-            Enumerable.Range(0, 5).Select(_ => sessions.JoinAsync(key, CancellationToken.None)));
+            Enumerable.Range(0, 5).Select(_ => sessions.JoinAsync(key, new Carina.Domain.Auth.Subject("viewer"), CancellationToken.None)));
 
         Assert.All(joined, join => Assert.True(join.Seated, join.Note));
         Assert.Single(driver.Started);

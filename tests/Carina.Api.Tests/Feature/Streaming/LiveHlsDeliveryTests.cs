@@ -106,6 +106,18 @@ public sealed partial class LiveHlsDeliveryTests
     }
 
     [Fact]
+    public async Task TheOneWhoAskedForThePlaylistIsTheViewerWhoIsSeated()
+    {
+        await using AuthProbe probe = Wiring();
+        AuthSession signedIn = await probe.SignedInAsync();
+
+        using HttpResponseMessage answer = await OpenedAsync(probe.Client, $"{Channel}/hls.m3u8?profile=720p30");
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal([signedIn.Subject], Seating(probe).Seated);
+    }
+
+    [Fact]
     public async Task ABrowsersPlaylistAskedWithoutAProfileOpensAtTheProfileThisMachineOpensAt()
     {
         await using AuthProbe probe = Wiring();

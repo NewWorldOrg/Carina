@@ -1,3 +1,4 @@
+using Carina.Domain.Auth;
 using Carina.Domain.Streaming;
 
 namespace Carina.Api.Tests.Support;
@@ -9,6 +10,10 @@ internal sealed class SeatingAt(ILiveWireSource source) : ILiveSessionManager
     private readonly List<LiveSessionKey> asked = [];
 
     private readonly List<LiveChannelKey> reached = [];
+
+    private readonly List<Subject> seated = [];
+
+    private readonly List<(LiveSessionKey Key, Subject Viewer)> startedAhead = [];
 
     private int reachesHeld;
 
@@ -37,6 +42,30 @@ internal sealed class SeatingAt(ILiveWireSource source) : ILiveSessionManager
             }
         }
     }
+
+    public IReadOnlyList<Subject> Seated
+    {
+        get
+        {
+            lock (gate)
+            {
+                return [.. seated];
+            }
+        }
+    }
+
+    public IReadOnlyList<(LiveSessionKey Key, Subject Viewer)> StartedAhead
+    {
+        get
+        {
+            lock (gate)
+            {
+                return [.. startedAhead];
+            }
+        }
+    }
+
+    public LiveAhead AnsweringAhead { get; set; } = LiveAhead.Started;
 
     public int ReachesLetGo => Volatile.Read(ref reachesLetGo);
 
@@ -89,11 +118,23 @@ internal sealed class SeatingAt(ILiveWireSource source) : ILiveSessionManager
         }
     }
 
-    public async Task<LiveJoin> JoinAsync(LiveSessionKey key, CancellationToken cancellationToken)
+    public LiveAhead StartAhead(LiveSessionKey key, Subject viewer)
+    {
+        lock (gate)
+        {
+            startedAhead.Add((key, viewer));
+            reachHeldWhileJoining = reachesHeld > 0;
+        }
+
+        return AnsweringAhead;
+    }
+
+    public async Task<LiveJoin> JoinAsync(LiveSessionKey key, Subject viewer, CancellationToken cancellationToken)
     {
         lock (gate)
         {
             asked.Add(key);
+            seated.Add(viewer);
             reachHeldWhileJoining = reachesHeld > 0;
         }
 
