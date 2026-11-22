@@ -1,9 +1,11 @@
 using System.Reflection;
+using System.Runtime.Versioning;
 using System.Text;
 
 using Carina.BroadcastTestSupport;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
+using Carina.Domain.Machines;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Streaming;
@@ -380,7 +382,7 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
-    public async Task ASupplyThatRefusesIsPassedOnAndRaisesNoTranscoder()
+    public async Task ASupplyThatRefusesIsPassedOnAndTheTranscoderStartedBesideItIsStoppedAndGivesItsSeatBack()
     {
         supply.Refusing = LiveRefusal.NoTunerFree;
 
@@ -388,9 +390,119 @@ public sealed class LiveSessionManagerTests
 
         Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
         Assert.Equal("held back for the test.", refused.Note);
-        Assert.Equal(0, transcoders.Started);
         Assert.Equal(1, supply.Asked);
         Assert.Empty(manager.Keys);
+        await Eventually.Happens(() => budget.Running is 0, "the seat of the transcoder nothing came of is given back");
+
+        HeldTranscoder started = Assert.Single(transcoders.Raised);
+
+        Assert.True(started.Disposed);
+        Assert.Equal(0, started.TakenIn);
+    }
+
+    [Fact]
+    public async Task TheTranscoderIsStartedWhileTheTunerIsStillBeingAskedFor()
+    {
+        supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, CancellationToken.None);
+
+        await Eventually.Happens(() => transcoders.Started is 1, "the transcoder is started without waiting for the tuner");
+
+        Assert.Equal(1, supply.Asked);
+        Assert.Empty(supply.Opened);
+        Assert.False(joining.IsCompleted);
+        Assert.True(manager.Startup(EveryFrame)!.Current!.Reached(LiveStartupSegment.TranscoderStarted));
+        Assert.False(manager.Startup(EveryFrame)!.Current!.Reached(LiveStartupSegment.TunerSecured));
+
+        supply.HeldUntil.SetResult();
+
+        await using ILiveViewing viewing = Seated(await joining);
+
+        Assert.Equal(1, transcoders.Started);
+        Assert.Equal(1, budget.Running);
+        Assert.True(viewing.Startup!.Current!.Reached(LiveStartupSegment.TunerSecured));
+    }
+
+    [Fact]
+    public async Task TheFirstBytesTheTunerSendsReachTheTranscoderThatWasStartedBeforeItAnswered()
+    {
+        supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, CancellationToken.None);
+
+        await Eventually.Happens(() => transcoders.Started is 1, "the transcoder is started without waiting for the tuner");
+
+        supply.HeldUntil.SetResult();
+
+        await using ILiveViewing viewing = Seated(await joining);
+
+        await supply.Opened[0].WriteAsync(AMouthful());
+        await Eventually.Happens(
+            () => transcoders.Raised[0].TakenIn == AMouthful().Length,
+            "what the tuner sent first is written into the transcoder that was waiting for it");
+    }
+
+    [Fact]
+    public async Task ATunerRefusedWhileTheTranscoderIsStillStartingLeavesNoTranscoderRunning()
+    {
+        supply.Refusing = LiveRefusal.WouldNotTune;
+        transcoders.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, CancellationToken.None);
+
+        await Eventually.Happens(() => supply.Asked is 1, "the tuner is asked for while the transcoder is still starting");
+
+        transcoders.HeldUntil.SetResult();
+
+        LiveJoin refused = await joining;
+
+        Assert.Equal(LiveRefusal.WouldNotTune, refused.Refusal);
+        await Eventually.Happens(
+            () => budget.Running is 0 && transcoders.Raised.All(raised => raised.Disposed),
+            "the transcoder that started after all is stopped and its seat given back");
+        Assert.Empty(manager.Keys);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    public async Task ATunerThatIsRefusedLeavesNoProcessOfTheTranscoderStartedBesideIt()
+    {
+        using StandIns standIns = new();
+        string pids = standIns.Named("pids");
+        TranscodeBudget counted = new(new TranscodeBudgetSettings { AtOnce = 1 });
+        LiveTranscodeSettings running = new()
+        {
+            Programme = standIns.Script($"echo $$ > {pids}; exec cat > /dev/null"),
+            StopGrace = StopGrace,
+        };
+        await using LiveSessionManager real = new(
+            Settings,
+            new LiveFanoutSettings(),
+            running,
+            supply,
+            new LiveTranscoderFactory(
+                running,
+                counted,
+                new AlreadyChosen(),
+                new MachineSettings(),
+                TimeProvider.System),
+            TimeProvider.System,
+            events,
+            warnings);
+
+        supply.Refusing = LiveRefusal.NoTunerFree;
+        supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task<LiveJoin> joining = real.JoinAsync(EveryFrame, CancellationToken.None);
+
+        await StandIns.WroteDown(pids, 1);
+
+        supply.HeldUntil.SetResult();
+
+        Assert.Equal(LiveRefusal.NoTunerFree, (await joining).Refusal);
+        await Eventually.Happens(() => counted.Running is 0, "the seat of the transcoder nothing came of is given back");
+        Assert.True(await standIns.NothingIsLeftOf(StandIns.Pids(pids)));
     }
 
     [Fact]
@@ -1080,7 +1192,11 @@ public sealed class LiveSessionManagerTests
         await using ILiveViewing seated = await Joined(EveryFrame);
 
         Assert.Equal(2, supply.Asked);
-        Assert.Equal(1, transcoders.Started);
+        Assert.Equal(2, transcoders.Started);
+        await Eventually.Happens(
+            () => transcoders.Raised[0].Disposed && budget.Running is 1,
+            "the transcoder started beside the refused asking is stopped, and the one being watched is the only one left");
+        Assert.False(transcoders.Raised[1].Disposed);
     }
 
     [Fact]
@@ -1165,7 +1281,9 @@ public sealed class LiveSessionManagerTests
 
         supply.HeldUntil.SetResult();
 
-        Assert.Equal(0, transcoders.Started);
+        await Eventually.Happens(
+            () => budget.Running is 0 && transcoders.Raised.All(raised => raised.Disposed),
+            "the transcoder started beside the opening nobody waits for is stopped and its seat given back");
         Assert.Empty(supply.Opened);
     }
 
@@ -1329,7 +1447,7 @@ public sealed class LiveSessionManagerTests
         LiveStartup raised = viewing.Startup!.Current!;
 
         Assert.True(raised.Reached(LiveStartupSegment.TunerSecured));
-        Assert.True(raised.At(LiveStartupSegment.TunerSecured) <= raised.At(LiveStartupSegment.TranscoderStarted));
+        Assert.True(raised.At(LiveStartupSegment.TranscoderStarted) <= raised.At(LiveStartupSegment.TunerSecured));
         Assert.False(raised.Reached(LiveStartupSegment.ChannelLocked));
 
         await supply.Opened[0].WriteAsync(new byte[1_000]);
@@ -2512,6 +2630,15 @@ public sealed class LiveSessionManagerTests
                 failures.Add(exception);
             }
         }
+    }
+
+    private sealed class AlreadyChosen : ILiveEncoderSelector
+    {
+        public Task<LiveEncoderChoice> ChooseAsync(CancellationToken cancellationToken)
+            => Task.FromResult(LiveEncoderChoice.Asked(LiveEncoder.Software));
+
+        public Task<IReadOnlyList<VideoCodec>> FormatsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<VideoCodec>>([VideoCodec.H264]);
     }
 
     private sealed class HookedEvents : IAppEventPublisher

@@ -33,11 +33,11 @@ public sealed class LiveStartupTests
     }
 
     [Fact]
-    public void EachSegmentNamesWhatItWaitsForAndTheTwoInTheMiddleWaitForTheSameThing()
+    public void EachSegmentNamesWhatItWaitsForAndTheTranscoderWaitsForNothingBecauseItIsStartedBesideTheTuner()
     {
         Assert.Empty(LiveStartupSegments.Behind(LiveStartupSegment.TunerSecured));
         Assert.Equal([LiveStartupSegment.TunerSecured], LiveStartupSegments.Behind(LiveStartupSegment.ChannelLocked));
-        Assert.Equal([LiveStartupSegment.TunerSecured], LiveStartupSegments.Behind(LiveStartupSegment.TranscoderStarted));
+        Assert.Empty(LiveStartupSegments.Behind(LiveStartupSegment.TranscoderStarted));
         Assert.Equal(
             [LiveStartupSegment.ChannelLocked, LiveStartupSegment.TranscoderStarted],
             LiveStartupSegments.Behind(LiveStartupSegment.InitReached));
@@ -69,28 +69,39 @@ public sealed class LiveStartupTests
     }
 
     [Fact]
-    public void ASegmentIsMeasuredFromWhatItWaitedForSoTheTwoThatRanSideBySideBothReadFromTheTuner()
+    public void ASegmentIsMeasuredFromWhatItWaitedForSoTheTranscoderStartedBesideTheTunerIsMeasuredFromTheStart()
     {
         LiveStartup startup = LiveStartup.NotStarted
+            .Reaching(LiveStartupSegment.TranscoderStarted, TimeSpan.FromMilliseconds(12))
             .Reaching(LiveStartupSegment.TunerSecured, TimeSpan.FromMilliseconds(485))
-            .Reaching(LiveStartupSegment.TranscoderStarted, TimeSpan.FromMilliseconds(495))
             .Reaching(LiveStartupSegment.ChannelLocked, TimeSpan.FromMilliseconds(733))
             .Reaching(LiveStartupSegment.InitReached, TimeSpan.FromMilliseconds(4366))
             .Reaching(LiveStartupSegment.FirstPicture, TimeSpan.FromMilliseconds(4368));
 
         Assert.Equal(
-            [485, 248, 10, 3633, 2],
+            [485, 248, 12, 3633, 2],
             startup.Timeline.Select(mark => (int)mark.Took!.Value.TotalMilliseconds));
         Assert.Equal(
             [
                 null,
                 LiveStartupSegment.TunerSecured,
-                LiveStartupSegment.TunerSecured,
+                null,
                 LiveStartupSegment.ChannelLocked,
                 LiveStartupSegment.InitReached,
             ],
             startup.Timeline.Select(mark => mark.TookFrom));
         Assert.All(startup.Timeline, mark => Assert.True(mark.Took >= TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void ATranscoderStartedLongBeforeTheTunerAnsweredNeverReadsAsHavingTakenLessThanNoTime()
+    {
+        LiveStartup startup = LiveStartup.NotStarted
+            .Reaching(LiveStartupSegment.TranscoderStarted, TimeSpan.FromMilliseconds(12))
+            .Reaching(LiveStartupSegment.TunerSecured, TimeSpan.FromMilliseconds(3500));
+
+        Assert.Equal(TimeSpan.FromMilliseconds(12), startup.Took(LiveStartupSegment.TranscoderStarted));
+        Assert.Equal(TimeSpan.FromMilliseconds(3500), startup.Took(LiveStartupSegment.TunerSecured));
     }
 
     [Fact]

@@ -358,10 +358,26 @@ internal sealed class LiveSession
 
     private async Task<LiveJoin?> RaiseAsync(CancellationToken cancellationToken)
     {
-        LiveSupplyStart opened = await reception.OpenAsync(cancellationToken);
+        Task<LiveJoin?> starting = StartTranscodingAsync(
+            reception.CaptionsMissing ? CaptionOutlet.None : CaptionOutlet.Drawn,
+            cancellationToken);
+        LiveSupplyStart opened;
+
+        try
+        {
+            opened = await reception.OpenAsync(cancellationToken);
+        }
+        catch (Exception)
+        {
+            await SettledAsync(starting);
+
+            throw;
+        }
 
         if (opened.Stream is null)
         {
+            await SettledAsync(starting);
+
             return LiveJoin.Refused(opened.Refusal!.Value, opened.Note, opened.Detail);
         }
 
@@ -373,9 +389,32 @@ internal sealed class LiveSession
             dataBroadcast = shown;
         }
 
-        return await StartTranscodingAsync(
-            reception.CaptionsMissing ? CaptionOutlet.None : CaptionOutlet.Drawn,
-            cancellationToken);
+        return await starting;
+    }
+
+    private async Task SettledAsync(Task<LiveJoin?> starting)
+    {
+        try
+        {
+            await starting;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception failure)
+        {
+            logger.LogWarning(
+                failure,
+                "Starting the transcoder of a live session on {Key} failed, and so did asking for its tuner.",
+                Key.ToString());
+        }
+    }
+
+    private void Locked()
+    {
+        startup.Reach(LiveStartupSegment.TunerSecured);
+        startup.Reach(LiveStartupSegment.ChannelLocked);
     }
 
     private async Task<LiveJoin?> StartTranscodingAsync(CaptionOutlet asked, CancellationToken cancellationToken)
@@ -400,7 +439,7 @@ internal sealed class LiveSession
         {
             transcoder = running;
             captions = asked;
-            seat = reception.Take(running.Input, () => startup.Reach(LiveStartupSegment.ChannelLocked), ending.Note);
+            seat = reception.Take(running.Input, Locked, ending.Note);
         }
 
         WatchForTheProbe(running);

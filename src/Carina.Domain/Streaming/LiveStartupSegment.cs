@@ -25,7 +25,7 @@ public static class LiveStartupSegments
         {
             LiveStartupSegment.TunerSecured => [],
             LiveStartupSegment.ChannelLocked => [LiveStartupSegment.TunerSecured],
-            LiveStartupSegment.TranscoderStarted => [LiveStartupSegment.TunerSecured],
+            LiveStartupSegment.TranscoderStarted => [],
             LiveStartupSegment.InitReached => [LiveStartupSegment.ChannelLocked, LiveStartupSegment.TranscoderStarted],
             LiveStartupSegment.FirstPicture => [LiveStartupSegment.InitReached],
             _ => throw new ArgumentOutOfRangeException(

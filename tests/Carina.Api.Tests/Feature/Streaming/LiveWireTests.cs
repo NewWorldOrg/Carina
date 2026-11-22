@@ -802,7 +802,9 @@ public sealed class LiveWireTests
 
         Assert.Equal(closed, ending.CloseStatus);
         Assert.Equal(LiveRefusalClosures.Because(why), ending.CloseStatusDescription);
-        Assert.Equal(0, transcoders.Started);
+        await Eventually.Happens(
+            () => budget.Running is 0 && transcoders.Raised.All(raised => raised.Disposed),
+            "the transcoder started beside the refused asking is stopped and its seat given back");
     }
 
     [Fact]

@@ -141,7 +141,7 @@ public sealed class ListLiveSessionsActionTests
     }
 
     [Fact]
-    public async Task AStartupWhoseChannelLockedAfterTheTranscoderStartedReportsNoNegativeIntervalAndSaysWhatEachWaitedFor()
+    public async Task AStartupWhoseTranscoderStartedBeforeTheTunerAnsweredReportsNoNegativeIntervalAndSaysWhatEachWaitedFor()
     {
         await using LiveFeature feature = new();
 
@@ -150,8 +150,8 @@ public sealed class ListLiveSessionsActionTests
             LiveProfile.Hd30,
             1,
             LiveStartup.NotStarted
+                .Reaching(LiveStartupSegment.TranscoderStarted, TimeSpan.FromMilliseconds(12))
                 .Reaching(LiveStartupSegment.TunerSecured, TimeSpan.FromMilliseconds(485))
-                .Reaching(LiveStartupSegment.TranscoderStarted, TimeSpan.FromMilliseconds(495))
                 .Reaching(LiveStartupSegment.ChannelLocked, TimeSpan.FromMilliseconds(733))
                 .Reaching(LiveStartupSegment.InitReached, TimeSpan.FromMilliseconds(4366))
                 .Reaching(LiveStartupSegment.FirstPicture, TimeSpan.FromMilliseconds(4368)));
@@ -164,11 +164,11 @@ public sealed class ListLiveSessionsActionTests
         JsonElement[] marks = [.. startup.GetProperty("marks").EnumerateArray()];
 
         Assert.False(startup.GetProperty("inProgress").GetBoolean());
-        Assert.Equal([485L, 248L, 10L, 3633L, 2L], marks.Select(mark => mark.GetProperty("tookMs").GetInt64()));
+        Assert.Equal([485L, 248L, 12L, 3633L, 2L], marks.Select(mark => mark.GetProperty("tookMs").GetInt64()));
         Assert.All(marks, mark => Assert.True(mark.GetProperty("tookMs").GetInt64() >= 0));
         Assert.Equal(JsonValueKind.Null, marks[0].GetProperty("tookFrom").ValueKind);
         Assert.Equal("tunerSecured", marks[1].GetProperty("tookFrom").GetString());
-        Assert.Equal("tunerSecured", marks[2].GetProperty("tookFrom").GetString());
+        Assert.Equal(JsonValueKind.Null, marks[2].GetProperty("tookFrom").ValueKind);
         Assert.Equal("channelLocked", marks[3].GetProperty("tookFrom").GetString());
         Assert.Equal("initReached", marks[4].GetProperty("tookFrom").GetString());
     }
