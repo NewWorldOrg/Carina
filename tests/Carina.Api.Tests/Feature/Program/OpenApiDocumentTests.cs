@@ -79,6 +79,31 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task StartingALiveSessionAheadIsDocumentedWithWhatItIsAskedWithAndTheThreeWaysItSaysTheSessionStands()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode operation = document["paths"]!["/api/live/sessions"]!["post"]!;
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal("startLiveSession", operation["operationId"]!.GetValue<string>());
+        Assert.Equal(
+            "#/components/schemas/LiveSessionRequest",
+            operation["requestBody"]!["content"]!["application/json"]!["schema"]!["$ref"]!.GetValue<string>());
+        Assert.Equal(
+            ["202", "400", "401", "404", "500"],
+            operation["responses"]!.AsObject().Select(response => response.Key).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["format", "networkId", "profile", "serviceId", "sound"],
+            schemas["LiveSessionRequest"]!["properties"]!.AsObject().Select(property => property.Key).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["format", "networkId", "profile", "serviceId", "sound", "state", "waitsForAViewerSeconds"],
+            schemas["LiveSessionAheadResponder"]!["properties"]!.AsObject().Select(property => property.Key).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["started", "alreadyRunning", "alreadyWatched"],
+            schemas["LiveAhead"]!["enum"]!.AsArray().Select(named => named!.GetValue<string>()));
+    }
+
+    [Fact]
     public async Task EveryOperationCarriesTheNameItsClientWillBeGeneratedFrom()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
