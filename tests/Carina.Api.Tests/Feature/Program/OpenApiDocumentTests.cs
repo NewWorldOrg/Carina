@@ -225,6 +225,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "reviseReservation",
                 "runRecordingIntegrityCheck",
                 "searchProgrammes",
+                "startLiveSession",
                 "startScan",
                 "stopRecording",
                 "switchRule",

@@ -91,6 +91,7 @@ public static class TestLayoutRules
         new("Streaming", "src/Carina.Api/Live/LiveHlsDelivery.cs"),
         new("Streaming", "src/Carina.Api/Live/LiveHlsPlaylists.cs"),
         new("Streaming", "src/Carina.Api/Live/LiveRefusalClosures.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveSessionAsking.cs"),
         new("Streaming", "src/Carina.Api/Live/LiveStreamDelivery.cs"),
         new("Streaming", "src/Carina.Api/Live/LiveWire.cs"),
         new("Streaming", "src/Carina.Api/Live/LiveWireRequest.cs"),

@@ -1,4 +1,6 @@
 using Carina.Api.Common;
+using Carina.Api.Live;
+using Carina.Api.Playback;
 using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
@@ -13,6 +15,15 @@ public enum LiveTicketRefusal
     TooManyOutstanding = 2,
 }
 
+public enum LiveAheadRefusal
+{
+    NoSuchChannel = 1,
+
+    NotTranscodedHere = 2,
+}
+
+public sealed record LiveSessionAhead(LiveSessionKey Key, LiveAhead State, TimeSpan WaitsForAViewer);
+
 public sealed record LiveChannelListing(
     BroadcastService Service,
     CandidateChannel Selected,
@@ -26,7 +37,10 @@ public sealed class LiveService(
     ILiveSessionLedger sessions,
     ILiveDepartureLedger departures,
     IPlaybackTicketStore tickets,
-    ILiveEncoderSelector encoders)
+    ILiveEncoderSelector encoders,
+    ILiveSessionManager seating,
+    ISoundOnAir onAir,
+    LiveSessionSettings settings)
 {
     public static PlaybackTarget TargetOf(NetworkId network, ServiceId service)
     {
@@ -97,6 +111,40 @@ public sealed class LiveService(
             : ServiceResult<IssuedPlaybackTicket, LiveTicketRefusal>.Failure(
                 "Too many playback tickets are outstanding to issue another one now.",
                 LiveTicketRefusal.TooManyOutstanding);
+    }
+
+    public async Task<ServiceResult<LiveSessionAhead, LiveAheadRefusal>> StartAheadAsync(
+        LiveSessionAsking asked,
+        Subject viewer,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(asked);
+        ArgumentNullException.ThrowIfNull(viewer);
+
+        if (await channels.FindAsync(asked.Network, asked.Service, cancellationToken) is null)
+        {
+            return ServiceResult<LiveSessionAhead, LiveAheadRefusal>.Failure(
+                $"No channel {asked.Network.Value}-{asked.Service.Value} can be watched live here.",
+                LiveAheadRefusal.NoSuchChannel);
+        }
+
+        if (!(await encoders.FormatsAsync(cancellationToken)).Contains(asked.Format))
+        {
+            return ServiceResult<LiveSessionAhead, LiveAheadRefusal>.Failure(
+                AskedFormat.NotTranscodedHere(asked.Format),
+                LiveAheadRefusal.NotTranscodedHere);
+        }
+
+        LiveProfile encoded = asked.Profile ?? LiveProfile.Unasked((await encoders.ChooseAsync(cancellationToken)).Encoder);
+        (LiveSessionKey key, LiveAhead state) = await LiveSeating.StartAheadAsync(
+            seating,
+            onAir,
+            new LiveSessionKey(asked.Network, asked.Service, encoded, asked.Sound, asked.Format),
+            viewer,
+            cancellationToken);
+
+        return ServiceResult<LiveSessionAhead, LiveAheadRefusal>.Success(
+            new LiveSessionAhead(key, state, settings.LongestWaitForAViewer));
     }
 
     private static IReadOnlyList<LiveChannelListing> Ordered(IReadOnlyList<LiveChannelListing> listed, LiveChannelQuery query)

@@ -54,7 +54,10 @@ internal sealed class LiveFeature : IAsyncDisposable
 
     private readonly TestingWebApplicationFactory factory = new();
 
-    public LiveFeature(LiveEncoder encoder = LiveEncoder.Software, IReadOnlyList<VideoCodec>? formats = null)
+    public LiveFeature(
+        LiveEncoder encoder = LiveEncoder.Software,
+        IReadOnlyList<VideoCodec>? formats = null,
+        Action<IServiceCollection>? alsoWired = null)
     {
         WebApplicationFactory<Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -65,6 +68,7 @@ internal sealed class LiveFeature : IAsyncDisposable
                 services.AddSingleton<IPlaybackTicketStore>(Tickets);
                 services.AddSingleton<ILiveEncoderSelector>(new AlreadyChosen(encoder, formats));
                 services.AddSingleton<ILiveDepartureLedger>(Departures);
+                alsoWired?.Invoke(services);
             }));
 
         Client = configured.CreateAuthenticatedClient();
@@ -162,6 +166,13 @@ internal sealed class LiveFeature : IAsyncDisposable
         using StringContent content = new(JsonSerializer.Serialize(body), Encoding.UTF8, mediaType);
 
         return await Client.PostAsync(new Uri("/api/live/ticket", UriKind.Relative), content);
+    }
+
+    public async Task<HttpResponseMessage> StartASessionAsync(object body, string mediaType = "application/json")
+    {
+        using StringContent content = new(JsonSerializer.Serialize(body), Encoding.UTF8, mediaType);
+
+        return await Client.PostAsync(new Uri("/api/live/sessions", UriKind.Relative), content);
     }
 
     public async ValueTask DisposeAsync()

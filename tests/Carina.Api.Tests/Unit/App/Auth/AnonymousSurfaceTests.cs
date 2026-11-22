@@ -125,6 +125,7 @@ public sealed class AnonymousSurfaceTests
             "/api/videos/1/thumbnail",
             "/api/videos/1/scrub",
             "/api/live/ticket",
+            "/api/live/sessions",
             "/api/live/ws",
         ];
 

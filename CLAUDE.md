@@ -204,10 +204,23 @@ walks past it.
   verb, reaches the store or the change tracker, writes SQL, changes a file on
   disk, or names the writers of the ledger, the tuners or the guide. Reading them
   is allowed. Under `/api/live` and `/api/videos` nothing deletes or declares
-  itself destructive; the only state changes there are issuing a ticket and
-  keeping a played position. **Trip wire:** a seat asked for as a literal, a write
+  itself destructive; the only state changes there are issuing a ticket,
+  keeping a played position and starting a live session ahead of its viewer.
+  **Trip wire:** a seat asked for as a literal, a write
   behind a verb the rule does not know or a delegate handed in from the
   composition root, and a count done inside ffmpeg walk past.
+- **A live session started ahead of its viewer has the lowest claim of any live
+  use.** `POST /api/live/sessions` begins what opening the wire would begin, for
+  a viewer who has not connected yet, and the wire opened a moment later joins
+  it. It is nobody's seat: it counts as no viewer and is noted in no departure,
+  and once `LiveSessionSettings.LongestWaitForAViewer` passes with nobody
+  joining it is stopped the way a session is when its last viewer has left.
+  Starting it gives up nothing of another session, and a viewer who finds no
+  tuner or no transcoder seat free takes those of a session started ahead. When
+  its viewer opens another service or format instead, it is stopped once the
+  new session has its tuner and not before. The transcoder of every live
+  session is started beside the tuner request rather than after its answer, and
+  a tuner that is refused stops it.
 - **"Nothing counted this" and "this was counted and was clean" are different
   answers,** and so are "nowhere" and "somewhere, with nothing in it". A driver
   that cannot count says so in its greeting rather than answering zero, and a

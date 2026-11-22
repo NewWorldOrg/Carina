@@ -30,6 +30,8 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
 
     private const string MigrationRoot = "/api/migration";
 
+    private const string LiveSessionsStartedAhead = "POST /api/live/sessions";
+
     public static readonly IReadOnlyList<string> StreamingRoots = ["/api/live", "/api/videos"];
 
     private static readonly string[] SurfacesTheFeatureHadWhenTheseRulesWereWritten =
@@ -39,6 +41,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         "GET /api/live/sessions",
         "GET /api/live/ws",
         "POST /api/live/ticket",
+        "POST /api/live/sessions",
         "GET /api/videos/{id}",
         "HEAD /api/videos/{id}",
         "GET /api/videos/{id}/play",
@@ -623,7 +626,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public void TheOnlyThingsThatChangeStateUnderTheStreamingSurfaceAreATicketAndAPositionBeingKept()
+    public void TheOnlyThingsThatChangeStateUnderTheStreamingSurfaceAreATicketAPositionBeingKeptAndALiveSessionStartedAhead()
     {
         RoutedSurface[] changing =
         [
@@ -631,8 +634,9 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         ];
 
         Assert.NotEmpty(changing);
+        Assert.Single(changing, surface => surface.ToString() == LiveSessionsStartedAhead);
         Assert.All(
-            changing,
+            changing.Where(surface => surface.ToString() != LiveSessionsStartedAhead),
             surface =>
             {
                 if (surface.Pattern.EndsWith("/position", StringComparison.Ordinal))
@@ -673,6 +677,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     [InlineData("GET", "/api/live/sessions")]
     [InlineData("GET", "/api/live/departures")]
     [InlineData("POST", "/api/live/ticket")]
+    [InlineData("POST", "/api/live/sessions")]
     public async Task EveryLiveSurfaceRefusesACallerCarryingNoCredentialsWithoutABodyAndWithoutRedirecting(string method, string path)
     {
         await using LiveFeature feature = new();
