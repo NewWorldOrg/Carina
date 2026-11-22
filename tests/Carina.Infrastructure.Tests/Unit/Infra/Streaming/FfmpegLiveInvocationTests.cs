@@ -51,6 +51,18 @@ public sealed class FfmpegLiveInvocationTests
 
     public static TheoryData<LiveProfile> EveryProfile => [.. LiveProfile.All];
 
+    public static TheoryData<LiveEncoder, VideoCodec, string[]> WhatEachEncoderIsToldAboutHowSoonAPictureLeavesIt
+        => new()
+        {
+            { LiveEncoder.Software, VideoCodec.H264, ["-tune", "zerolatency"] },
+            { LiveEncoder.Vaapi, VideoCodec.H264, [] },
+            { LiveEncoder.Vaapi, VideoCodec.H265, [] },
+            { LiveEncoder.Vaapi, VideoCodec.Av1, [] },
+            { LiveEncoder.Nvenc, VideoCodec.H264, ["-delay", "0"] },
+            { LiveEncoder.Nvenc, VideoCodec.H265, ["-delay", "0"] },
+            { LiveEncoder.Nvenc, VideoCodec.Av1, ["-delay", "0"] },
+        };
+
     public static TheoryData<LiveProfile, VideoCodec> EveryProfileInEveryFormatOnTheCard
     {
         get
@@ -208,12 +220,51 @@ public sealed class FfmpegLiveInvocationTests
                 "constqp",
                 "-qp",
                 "24",
+                "-delay",
+                "0",
                 "-c:a",
                 "aac",
                 "-b:a",
                 "192k",
             ],
             FfmpegLiveInvocation.Arguments(Service, LiveProfile.FullHd60, Interlaced, LiveEncoder.Nvenc, Machine, CaptionOutlet.None));
+    }
+
+    [Theory(DisplayName = "what each encoder is told so that a picture leaves it as soon as it is encoded, and nothing else about how soon")]
+    [MemberData(nameof(WhatEachEncoderIsToldAboutHowSoonAPictureLeavesIt))]
+    public void EachEncoderIsToldToHandAPictureOverAsSoonAsItIsEncoded(
+        LiveEncoder encoder,
+        VideoCodec format,
+        string[] told)
+    {
+        foreach (LiveProfile profile in LiveProfile.All)
+        {
+            string[] arguments =
+            [
+                .. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.Drawn, format: format),
+            ];
+
+            Assert.Equal(told, HowSoon(arguments));
+        }
+    }
+
+    [Theory(DisplayName = "nothing is said to the transcoder that was measured to hold the first fragment back, to lose a picture, or to move a fragment off the broadcast's clock")]
+    [InlineData("-fflags")]
+    [InlineData("nobuffer")]
+    [InlineData("low_delay")]
+    [InlineData("-max_interleave_delta")]
+    [InlineData("-flush_packets")]
+    [InlineData("-scan_all_pmts")]
+    [InlineData("-zerolatency")]
+    [InlineData("-f")]
+    public void NothingMeasuredToDelayTheFirstFragmentOrToLoseAPictureIsSaid(string measured)
+    {
+        foreach (LiveEncoder encoder in Enum.GetValues<LiveEncoder>())
+        {
+            Assert.DoesNotContain(
+                measured,
+                FfmpegLiveInvocation.Arguments(Service, LiveProfile.Unasked(encoder), Interlaced, encoder, Machine, CaptionOutlet.None));
+        }
     }
 
     [Theory(DisplayName = "an NVIDIA card encodes each format by its own encoder, at the same quantiser or index the VAAPI card is handed, H.265 tagged hvc1")]
@@ -225,7 +276,7 @@ public sealed class FfmpegLiveInvocationTests
         string[] tag = tagged ? ["-tag:v", "hvc1"] : [];
 
         Assert.Equal(
-            ["-c:v", encoder, "-g", "120", "-rc", "constqp", "-qp", quality, .. tag],
+            ["-c:v", encoder, "-g", "120", "-rc", "constqp", "-qp", quality, .. tag, "-delay", "0"],
             Encoder(FfmpegLiveInvocation.Arguments(
                 Service,
                 LiveProfile.FullHd60,
@@ -1205,6 +1256,19 @@ public sealed class FfmpegLiveInvocationTests
         int to = arguments.ToList().IndexOf("-c:a");
 
         return [.. arguments.Skip(from).Take(to - from)];
+    }
+
+    private static string[] HowSoon(IReadOnlyList<string> arguments)
+    {
+        string[] named = ["-tune", "-delay", "-async_depth", "-zerolatency", "-rc-lookahead", "-bf"];
+
+        return
+        [
+            .. arguments
+                .Select((argument, at) => (argument, at))
+                .Where(said => named.Contains(said.argument, StringComparer.Ordinal))
+                .SelectMany(said => new[] { said.argument, arguments[said.at + 1] }),
+        ];
     }
 
     private static string[] AllButTheEncoder(IReadOnlyList<string> arguments)

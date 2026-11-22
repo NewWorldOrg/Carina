@@ -34,6 +34,8 @@ public static class FfmpegLiveInvocation
 
     private const string ProbedBytes = "500000";
 
+    private const string NoPicturesHeldBack = "0";
+
     private static readonly SoundPlacement TheWholeFirstSound = SoundPlacement.WholeStream(0);
 
     public static IReadOnlyList<string> Arguments(
@@ -259,6 +261,8 @@ public static class FfmpegLiveInvocation
                 "-rc",
                 "constqp",
                 .. NvencQuality(profile.VaapiRateControl, asked),
+                "-delay",
+                NoPicturesHeldBack,
             ],
             _ =>
             [
