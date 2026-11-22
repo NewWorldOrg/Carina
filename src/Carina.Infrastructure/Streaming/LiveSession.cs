@@ -454,6 +454,7 @@ internal sealed class LiveSession
         if (opened.Stream is null)
         {
             await SettledAsync(starting);
+            await StopTranscodingNothingCameOfAsync();
 
             return LiveJoin.Refused(opened.Refusal!.Value, opened.Note, opened.Detail);
         }
@@ -485,6 +486,21 @@ internal sealed class LiveSession
             logger.LogWarning(
                 failure,
                 "Starting the transcoder of a live session on {Key} failed, and so did asking for its tuner.",
+                Key.ToString());
+        }
+    }
+
+    private async Task StopTranscodingNothingCameOfAsync()
+    {
+        try
+        {
+            await LetGoOfTranscoderAsync();
+        }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                failure,
+                "Stopping the transcoder of a live session on {Key} whose tuner was refused failed.",
                 Key.ToString());
         }
     }

@@ -472,6 +472,62 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task AViewerRefusedForWantOfATunerIsToldOnlyOnceTheTranscoderStartedBesideTheAskingHasGivenItsSeatBack()
+    {
+        TranscodeBudget one = new(new TranscodeBudgetSettings { AtOnce = 1 });
+        HeldTranscoders scarce = new(one);
+        LiveSessionManager crowded = Managing(one, scarce);
+        TaskCompletionSource finishing = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        supply.Refusing = LiveRefusal.NoTunerFree;
+        supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task<LiveJoin> joining = crowded.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
+
+        await Eventually.Happens(() => scarce.Started is 1, "the transcoder is started beside the asking");
+
+        scarce.Raised[0].FinishesWhen = finishing;
+        supply.HeldUntil.SetResult();
+
+        await Eventually.Happens(() => scarce.Raised[0].Disposed, "the transcoder nothing came of is being stopped");
+        await Stays(() => !joining.IsCompleted);
+
+        finishing.SetResult();
+
+        LiveJoin refused = await joining;
+        int runningWhenTold = one.Running;
+
+        supply.Refusing = null;
+        supply.HeldUntil = null;
+
+        await using ILiveViewing seated = Seated(await crowded.JoinAsync(EveryFrame, Viewer, CancellationToken.None));
+
+        Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
+        Assert.Equal(0, runningWhenTold);
+        Assert.Equal(1, one.Running);
+    }
+
+    [Fact]
+    public async Task ATranscoderThatWillNotStopCleanlyAfterItsTunerWasRefusedStillLeavesTheViewerToldOfTheTuner()
+    {
+        supply.Refusing = LiveRefusal.WouldNotTune;
+        supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, Viewer, CancellationToken.None);
+
+        await Eventually.Happens(() => transcoders.Started is 1, "the transcoder is started beside the asking");
+
+        transcoders.Raised[0].FailingToStop = new InvalidOperationException("the transcoder would not stop.");
+        supply.HeldUntil.SetResult();
+
+        LiveJoin refused = await joining;
+
+        Assert.Equal(LiveRefusal.WouldNotTune, refused.Refusal);
+        await Eventually.Happens(() => manager.Keys.Count is 0, "the session nothing came of is forgotten");
+        Assert.Contains(warnings.Failures, failure => failure.Message == "the transcoder would not stop.");
+    }
+
+    [Fact]
     [SupportedOSPlatform("linux")]
     public async Task ATunerThatIsRefusedLeavesNoProcessOfTheTranscoderStartedBesideIt()
     {
