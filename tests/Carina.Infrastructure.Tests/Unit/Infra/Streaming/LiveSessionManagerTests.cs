@@ -932,6 +932,36 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task AViewerRefusedForTheCeilingWaitsForTheTunerOfTheSessionStartedAheadToBeGivenBackBeforeAskingAgain()
+    {
+        TranscodeBudget one = new(new TranscodeBudgetSettings { AtOnce = 1 });
+        HeldTranscoders scarce = new(one);
+        LiveSessionManager crowded = Managing(one, scarce);
+        TaskCompletionSource givingBack = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        supply.AsIfThereWereOneTuner = true;
+        crowded.StartAhead(EveryFrame, Viewer);
+
+        await Eventually.Happens(
+            () => supply.Opened.Count is 1 && scarce.Started is 1,
+            "the session started ahead takes the one tuner and the one seat");
+
+        supply.Opened[0].HeldFromBeingLetGo = givingBack;
+
+        Task<LiveJoin> joining = crowded.JoinAsync(EveryField, SomebodyElse, CancellationToken.None);
+
+        await Eventually.Happens(() => scarce.Raised[0].Disposed, "the session started ahead is stopped for the viewer");
+        await Stays(() => !joining.IsCompleted);
+
+        givingBack.SetResult();
+
+        await using ILiveViewing viewing = Seated(await joining);
+
+        Assert.Equal([EveryField], crowded.Keys);
+        Assert.Equal(1, one.Running);
+    }
+
+    [Fact]
     public async Task AViewerRefusedForTheCeilingByThoseWhoAreWatchingStaysRefusedAndNothingIsStopped()
     {
         TranscodeBudget one = new(new TranscodeBudgetSettings { AtOnce = 1 });

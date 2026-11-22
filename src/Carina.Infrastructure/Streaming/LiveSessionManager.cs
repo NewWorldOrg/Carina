@@ -98,12 +98,14 @@ public sealed class LiveSessionManager(
 
         LiveJoin join = await SeatedAsync(key, viewer, cancellationToken);
 
-        return join.Refusal switch
+        if (join.Refusal is LiveRefusal.TooManyAlready)
         {
-            LiveRefusal.NoTunerFree => await SeatedAfterLettingGoAsync(key, viewer, join, cancellationToken),
-            LiveRefusal.TooManyAlready => await SeatedAfterStoppingWhatWasStartedAheadAsync(key, viewer, join, cancellationToken),
-            _ => join,
-        };
+            join = await SeatedAfterStoppingWhatWasStartedAheadAsync(key, viewer, join, cancellationToken);
+        }
+
+        return join.Refusal is LiveRefusal.NoTunerFree
+            ? await SeatedAfterLettingGoAsync(key, viewer, join, cancellationToken)
+            : join;
     }
 
     public LiveAhead StartAhead(LiveSessionKey key, Subject viewer)
@@ -257,9 +259,16 @@ public sealed class LiveSessionManager(
         using CancellationTokenSource leash =
             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
 
-        return await WithinAsync(EndedAsync(stopping), leash.Token, cancellationToken)
+        return await WithinAsync(ReleasedAndEndedAsync(stopping), leash.Token, cancellationToken)
             ? await SeatedAsync(key, viewer, cancellationToken)
             : refused;
+    }
+
+    private static async Task<bool> ReleasedAndEndedAsync(IReadOnlyList<LiveSession> stopping)
+    {
+        await ReleasedAsync(stopping);
+
+        return await EndedAsync(stopping);
     }
 
     private List<LiveSession> StopWhatWasStartedAhead(LiveSessionKey asked)
