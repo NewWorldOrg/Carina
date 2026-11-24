@@ -37,17 +37,17 @@ public sealed class BroadcasterRelayTests
         Assert.False(heard.Headers.ContainsKey("Content-Type"));
     }
 
-    [Fact(DisplayName = "BR-BD-011: a text is sent with POST as a form in EUC-JP, and the answer comes back from EUC-JP")]
-    public async Task ATextIsSentWithPostInEucJpAndTheAnswerComesBack()
+    [Fact(DisplayName = "BR-BD-011: a text is sent with POST as the form field Denbun, percent-encoded from its EUC-JP bytes, and the answer comes back from EUC-JP")]
+    public async Task ATextIsSentWithPostAsTheFormFieldDenbunFromEucJpAndTheAnswerComesBack()
     {
         await using RelayRig rig = new(_ => CannedAnswer.Of(200, EucJpText.Encode("受付\t完了"), "Content-Type: text/plain; charset=EUC-JP"));
 
-        RelayedText relayed = await rig.Relay.TransmitAsync(Channel, $"http://{Host}/entry", "応募\t1", "EUC-JP", CancellationToken.None);
+        RelayedText relayed = await rig.Relay.TransmitAsync(Channel, $"http://{Host}/entry", "a=1&b=あ 2", "EUC-JP", CancellationToken.None);
 
         HeardRequest heard = Assert.Single(rig.Server.Heard);
         Assert.Equal("POST", heard.Method);
-        Assert.Equal("application/x-www-form-urlencoded; charset=EUC-JP", heard.Headers["Content-Type"]);
-        Assert.Equal(EucJpText.Encode("応募\t1"), heard.Body);
+        Assert.Equal("application/x-www-form-urlencoded", heard.Headers["Content-Type"]);
+        Assert.Equal("Denbun=a%3D1%26b%3D%A4%A2+2", Encoding.ASCII.GetString(heard.Body));
         Assert.Equal(new RelayedText(RelayResult.Answered, 200, "受付\t完了"), relayed);
     }
 
@@ -290,7 +290,7 @@ public sealed class BroadcasterRelayTests
         Assert.DoesNotContain("carina.example", rig.Network.Resolved);
     }
 
-    [Fact(DisplayName = "BR-BD-011: a text of 16 KiB is sent, and one byte more is -1 and never leaves")]
+    [Fact(DisplayName = "BR-BD-011: a text of 16 KiB is sent behind Denbun=, and one byte more is -1 and never leaves")]
     public async Task ATextOverSixteenKibIsMinus1()
     {
         await using RelayRig rig = new(_ => CannedAnswer.Text(200, "1"));
@@ -301,7 +301,7 @@ public sealed class BroadcasterRelayTests
 
         Assert.Equal(RelayResult.Answered, within.Result);
         Assert.Equal(RelayedText.Failed(RelayResult.RefusedOrTooLarge), over);
-        Assert.Equal(16 * 1024, Assert.Single(rig.Server.Heard).Body.Length);
+        Assert.Equal("Denbun=".Length + (16 * 1024), Assert.Single(rig.Server.Heard).Body.Length);
     }
 
     [Theory(DisplayName = "BR-BD-011: an answer over 256 KiB is -1, whether its length is said or not")]
@@ -345,16 +345,16 @@ public sealed class BroadcasterRelayTests
         Assert.Empty(rig.Server.Heard);
     }
 
-    [Fact(DisplayName = "BR-BD-011: a text asked in UTF-8 is sent in UTF-8")]
-    public async Task ATextAskedInUtf8IsSentInUtf8()
+    [Fact(DisplayName = "BR-BD-011: a text asked in UTF-8 is sent percent-encoded from its UTF-8 bytes")]
+    public async Task ATextAskedInUtf8IsSentFromItsUtf8Bytes()
     {
         await using RelayRig rig = new(_ => CannedAnswer.Of(200, Encoding.UTF8.GetBytes("済"), "Content-Type: text/plain; charset=utf-8"));
 
         RelayedText relayed = await rig.Relay.TransmitAsync(Channel, $"http://{Host}/", "投票", "UTF-8", CancellationToken.None);
 
         HeardRequest heard = Assert.Single(rig.Server.Heard);
-        Assert.Equal(Encoding.UTF8.GetBytes("投票"), heard.Body);
-        Assert.Equal("application/x-www-form-urlencoded; charset=UTF-8", heard.Headers["Content-Type"]);
+        Assert.Equal("Denbun=%E6%8A%95%E7%A5%A8", Encoding.ASCII.GetString(heard.Body));
+        Assert.Equal("application/x-www-form-urlencoded", heard.Headers["Content-Type"]);
         Assert.Equal("済", relayed.Body);
     }
 
@@ -380,7 +380,7 @@ public sealed class BroadcasterRelayTests
 
         await rig.Relay.TransmitAsync(Channel, $"http://{Host}/moved", "x", "EUC-JP", CancellationToken.None);
 
-        Assert.Equal(["POST /moved x", "POST /landed x"], rig.Server.Heard.Select(heard => $"{heard.Method} {heard.Target} {Encoding.ASCII.GetString(heard.Body)}"));
+        Assert.Equal(["POST /moved Denbun=x", "POST /landed Denbun=x"], rig.Server.Heard.Select(heard => $"{heard.Method} {heard.Target} {Encoding.ASCII.GetString(heard.Body)}"));
     }
 
     [Theory(DisplayName = "BR-BD-011: a redirect to another host, or to an address inside, is not followed and is answered as it came")]
@@ -448,7 +448,7 @@ public sealed class BroadcasterRelayTests
         Assert.Equal("/v3/dtv/create", line.Values["Path"]);
         Assert.Equal(1, line.Values["Result"]);
         Assert.Equal(200, line.Values["Status"]);
-        Assert.Equal(17, line.Values["Sent"]);
+        Assert.Equal(26, line.Values["Sent"]);
         Assert.Equal(14, line.Values["Received"]);
         Assert.True(line.Values.ContainsKey("Elapsed"));
         Assert.DoesNotContain("0123456789ab", line.Said, StringComparison.Ordinal);
