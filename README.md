@@ -23,7 +23,7 @@ API ドキュメントは、`ASPNETCORE_ENVIRONMENT=Development` で起動した
 
 ## 動かす
 
-イメージは `ghcr.io/newworldorg/carina` にあり、`v2.1.0` のようなバージョンのタグと `latest` が使えます。\
+イメージは `ghcr.io/newworldorg/carina` にあり、`v2.1.1` のようなバージョンのタグと `latest` が使えます。\
 `master` にマージされるたびに `sha-<commit>` のタグでも公開します。\
 対応する CPU は amd64 です。
 
