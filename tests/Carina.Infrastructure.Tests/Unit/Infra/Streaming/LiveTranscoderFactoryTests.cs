@@ -312,7 +312,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         using var callingOff = new CancellationTokenSource();
 
         ILiveTranscoder transcoder = await Started(
-            standIns.Script($"printf '%s\\n' '[panic] An assertion failed' >&2; touch {running}; sleep 0.5; kill -ABRT $$"),
+            standIns.Script($"printf '%s\\n' '[panic] An assertion failed' >&2; touch {running}; sleep 0.5; exit 134"),
             LiveEncoder.Software,
             callingOff.Token);
 
