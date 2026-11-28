@@ -48,7 +48,11 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         string[] handed = File.ReadAllLines(said);
 
         Assert.Equal(
-            [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None), .. FfmpegLiveInvocation.Delivery()],
+            [
+                .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None),
+                .. FfmpegLiveInvocation.Delivery(),
+                .. FfmpegLiveInvocation.StillDelivery(Service, LiveProfile.Hd30, Interlaced, Assert.Single(PipesOfTheirOwn(handed))),
+            ],
             handed);
     }
 
@@ -129,6 +133,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
             [
                 .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None, SoundPlacement.WholeStream(0), format),
                 .. FfmpegLiveInvocation.Delivery(),
+                .. FfmpegLiveInvocation.StillDelivery(Service, LiveProfile.Hd30, Interlaced, Assert.Single(PipesOfTheirOwn(handed))),
             ],
             handed);
         Assert.Contains(encoder, handed);
@@ -434,17 +439,18 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         await running.Completion;
 
         string[] handed = File.ReadAllLines(said);
-        string pipe = handed.Single(argument => argument.StartsWith("pipe:", StringComparison.Ordinal) && argument != "pipe:0" && argument != "pipe:1");
-        string descriptor = pipe["pipe:".Length..];
+        int[] pipes = PipesOfTheirOwn(handed);
 
+        Assert.Equal(2, pipes.Length);
         Assert.Equal(
             [
                 .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.Drawn),
                 .. FfmpegLiveInvocation.Delivery(),
-                .. FfmpegLiveInvocation.CaptionDelivery(Service, int.Parse(descriptor, CultureInfo.InvariantCulture)),
+                .. FfmpegLiveInvocation.StillDelivery(Service, LiveProfile.Hd30, Interlaced, pipes[0]),
+                .. FfmpegLiveInvocation.CaptionDelivery(Service, pipes[1]),
             ],
             handed);
-        Assert.Contains(descriptor, File.ReadAllLines(fds));
+        Assert.Contains(pipes[1].ToString(CultureInfo.InvariantCulture), File.ReadAllLines(fds));
         Assert.True(running.Captions.Completion.IsCompleted);
     }
 
@@ -564,7 +570,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
     }
 
     [Fact]
-    public async Task WithoutCaptionsNoPipeIsOpenedAndTheCaptionsAreOverBeforeTheyBegin()
+    public async Task WithoutCaptionsNoPipeIsOpenedForThemAndTheCaptionsAreOverBeforeTheyBegin()
     {
         string said = standIns.Named("arguments");
 
@@ -573,9 +579,87 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         await running.Input.DisposeAsync();
         await running.Completion;
 
-        Assert.DoesNotContain(File.ReadAllLines(said), argument => argument.StartsWith("pipe:", StringComparison.Ordinal) && argument != "pipe:0" && argument != "pipe:1");
+        string[] handed = File.ReadAllLines(said);
+
+        Assert.DoesNotContain("-filter_complex", handed);
+        Assert.DoesNotContain("png", handed);
+        Assert.Single(PipesOfTheirOwn(handed));
         Assert.True(running.Captions.Completion.IsCompleted);
     }
+
+    [Fact]
+    public async Task TheCommandNamesAPipeOfItsOwnForTheStillAndTheProgrammeInheritsIt()
+    {
+        string said = standIns.Named("arguments");
+        string fds = standIns.Named("fds");
+
+        await using ILiveTranscoder running = await Started(
+            standIns.Script($"printf '%s\\n' \"$@\" > {said}; ls /proc/$$/fd > {fds}; cat > /dev/null"),
+            LiveEncoder.Software);
+
+        await running.Input.DisposeAsync();
+        await running.Completion;
+
+        int still = Assert.Single(PipesOfTheirOwn(File.ReadAllLines(said)));
+
+        Assert.True(still > 2);
+        Assert.Contains(still.ToString(CultureInfo.InvariantCulture), File.ReadAllLines(fds));
+    }
+
+    [Fact]
+    public async Task WhatTheProgrammeWritesToTheStillPipeComesOutAsTheStillStampedByItsFrameBeforeTheProgrammeEnds()
+    {
+        string nut = standIns.Named("still.nut");
+        byte[] jpeg = [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0xff, 0xd9];
+
+        File.WriteAllBytes(nut, NutFramesTests.Written.Of(90_000, [(270_000L, jpeg)]));
+
+        await using ILiveTranscoder running = await Started(
+            standIns.Script($"for a in \"$@\"; do case $a in pipe:[2-9]*|pipe:[1-9][0-9]*) fd=${{a#pipe:}};; esac; done; cat {nut} > /proc/self/fd/$fd; cat > /dev/null"),
+            LiveEncoder.Software);
+
+        LiveStill made = await running.Still.WaitAsync(Eventually.Patience);
+
+        Assert.False(running.Completion.IsCompleted);
+        Assert.NotNull(made.Frame);
+        Assert.Equal(LiveChannel.Still, made.Frame.Channel);
+        Assert.Equal(270_000UL, made.Frame.Pts.Value);
+        Assert.Equal(jpeg, made.Frame.Payload.ToArray());
+
+        await running.Input.DisposeAsync();
+        Assert.True((await running.Completion).RanToTheEnd);
+    }
+
+    [Fact]
+    public async Task AStillPipeNobodyWritesToEndsWithTheProgrammeAsNoStillAndTheProgrammeIsNeverRefusedForIt()
+    {
+        await using ILiveTranscoder running = await Started(standIns.Script("cat > /dev/null"), LiveEncoder.Software);
+
+        Assert.False(running.Still.IsCompleted);
+
+        await running.Input.DisposeAsync();
+
+        Assert.True((await running.Completion).RanToTheEnd);
+        Assert.Null((await running.Still.WaitAsync(Eventually.Patience)).Frame);
+    }
+
+    [Fact]
+    public async Task ATranscoderLetGoBeforeItWroteAStillSaysItWroteNone()
+    {
+        ILiveTranscoder running = await Started(standIns.Script("cat > /dev/null; sleep 60"), LiveEncoder.Software, grace: TimeSpan.FromMilliseconds(300));
+
+        await running.DisposeAsync().AsTask().WaitAsync(Eventually.Patience);
+
+        Assert.Null((await running.Still.WaitAsync(Eventually.Patience)).Frame);
+    }
+
+    private static int[] PipesOfTheirOwn(IEnumerable<string> handed)
+        =>
+        [
+            .. handed
+                .Where(argument => argument.StartsWith("pipe:", StringComparison.Ordinal) && argument != "pipe:0" && argument != "pipe:1")
+                .Select(argument => int.Parse(argument["pipe:".Length..], CultureInfo.InvariantCulture)),
+        ];
 
     private static async Task WaitFor(string pids, int howMany)
     {

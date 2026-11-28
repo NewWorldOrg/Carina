@@ -34,6 +34,10 @@ public static class FfmpegLiveInvocation
 
     private const string ProbedBytes = "500000";
 
+    private const string StillQuality = "5";
+
+    private const int StillLines = 360;
+
     private static readonly SoundPlacement TheWholeFirstSound = SoundPlacement.WholeStream(0);
 
     public static IReadOnlyList<string> Arguments(
@@ -108,6 +112,50 @@ public static class FfmpegLiveInvocation
         ArgumentOutOfRangeException.ThrowIfLessThan(descriptor, 3);
 
         return CaptionOutput(service, Pipe(descriptor));
+    }
+
+    public static IReadOnlyList<string> StillDelivery(ServiceId service, LiveProfile profile, StreamAttributes attributes, int descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(attributes);
+        ArgumentOutOfRangeException.ThrowIfLessThan(descriptor, 3);
+
+        int programNumber = service.Value;
+
+        return
+        [
+            "-map",
+            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:v:0"),
+            "-vf",
+            StillFilter(profile, attributes),
+            "-frames:v",
+            "1",
+            "-fps_mode",
+            "passthrough",
+            "-c:v",
+            "mjpeg",
+            "-q:v",
+            StillQuality,
+            "-color_range",
+            "pc",
+            "-threads",
+            "1",
+            "-flush_packets",
+            "1",
+            "-f",
+            "nut",
+            Pipe(descriptor),
+        ];
+    }
+
+    public static VideoSize StillSize(VideoSize picture)
+    {
+        ArgumentNullException.ThrowIfNull(picture);
+
+        int height = Math.Min(StillLines, picture.Height);
+
+        return new VideoSize(picture.Width * height / picture.Height / 2 * 2, height);
     }
 
     public static IReadOnlyList<string> DeliveryFromTheStart()
@@ -219,6 +267,22 @@ public static class FfmpegLiveInvocation
         return string.Join(',', steps);
     }
 
+    internal static string StillFilter(LiveProfile profile, StreamAttributes attributes)
+    {
+        List<string> steps = ["trim=end_frame=1"];
+
+        if (attributes.Scan is not ScanType.Progressive)
+        {
+            steps.Add("field=top");
+        }
+
+        steps.Add(FullRangeScaling(StillSize(profile.Size)));
+        steps.Add("setsar=1");
+        steps.Add("format=yuv420p");
+
+        return string.Join(',', steps);
+    }
+
     internal static string Pace(LiveProfile profile)
     {
         FrameRate rate = profile.Rate;
@@ -326,6 +390,9 @@ public static class FfmpegLiveInvocation
 
     private static string Scaling(VideoSize size)
         => string.Create(CultureInfo.InvariantCulture, $"scale={size.Width}:{size.Height}:flags=bicubic");
+
+    private static string FullRangeScaling(VideoSize size)
+        => string.Create(CultureInfo.InvariantCulture, $"scale={size.Width}:{size.Height}:flags=area:out_range=full");
 
     private static string Kilobits(int kilobitsPerSecond)
         => string.Create(CultureInfo.InvariantCulture, $"{kilobitsPerSecond}k");

@@ -1011,6 +1011,115 @@ public sealed class FfmpegLiveInvocationTests
     }
 
     [Fact]
+    public void TheStillOutletIsTheServicesFirstPictureTakenOnceAsAJpegStampedInANutStreamOnTheNamedPipe()
+    {
+        Assert.Equal(
+            [
+                "-map",
+                "p:1040:v:0",
+                "-vf",
+                "trim=end_frame=1,field=top,scale=640:360:flags=area:out_range=full,setsar=1,format=yuv420p",
+                "-frames:v",
+                "1",
+                "-fps_mode",
+                "passthrough",
+                "-c:v",
+                "mjpeg",
+                "-q:v",
+                "5",
+                "-color_range",
+                "pc",
+                "-threads",
+                "1",
+                "-flush_packets",
+                "1",
+                "-f",
+                "nut",
+                "pipe:36",
+            ],
+            FfmpegLiveInvocation.StillDelivery(Service, LiveProfile.FullHd60, Interlaced, 36));
+        Assert.NotEqual(
+            FfmpegLiveInvocation.StillDelivery(Service, LiveProfile.FullHd60, Interlaced, 36),
+            FfmpegLiveInvocation.StillDelivery(AnotherService, LiveProfile.FullHd60, Interlaced, 36));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfile))]
+    public void TheStillIsThreeHundredAndSixtyLinesTallInTheShapeOfTheProfile(LiveProfile profile)
+    {
+        IReadOnlyList<string> delivery = FfmpegLiveInvocation.StillDelivery(Service, profile, Interlaced, 3);
+
+        Assert.Contains("scale=640:360:", delivery[delivery.ToList().IndexOf("-vf") + 1], StringComparison.Ordinal);
+        Assert.Equal(profile.Size.Width * 360, profile.Size.Height * 640);
+    }
+
+    [Theory]
+    [InlineData(1920, 1080, 640, 360)]
+    [InlineData(1280, 720, 640, 360)]
+    [InlineData(1440, 1080, 480, 360)]
+    [InlineData(640, 360, 640, 360)]
+    [InlineData(480, 270, 480, 270)]
+    [InlineData(854, 480, 640, 360)]
+    public void AStillIsNoTallerThanThreeHundredAndSixtyLinesNorTheProfileItselfAndKeepsItsShapeOnAnEvenWidth(
+        int width,
+        int height,
+        int stillWidth,
+        int stillHeight)
+    {
+        Assert.Equal(new VideoSize(stillWidth, stillHeight), FfmpegLiveInvocation.StillSize(new VideoSize(width, height)));
+    }
+
+    [Fact]
+    public void OnlyTheFirstFrameReachesTheStillsFilterSoTheFramesBehindItCostNothing()
+    {
+        IReadOnlyList<string> delivery = FfmpegLiveInvocation.StillDelivery(Service, LiveProfile.FullHd60, Interlaced, 3);
+
+        Assert.StartsWith("trim=end_frame=1,", delivery[delivery.ToList().IndexOf("-vf") + 1], StringComparison.Ordinal);
+        Assert.Equal("1", delivery[delivery.ToList().IndexOf("-frames:v") + 1]);
+    }
+
+    [Fact]
+    public void AStillOfAStreamThatSaysItIsProgressiveIsTakenFromTheWholeFrame()
+    {
+        IReadOnlyList<string> delivery = FfmpegLiveInvocation.StillDelivery(Service, LiveProfile.Hd30, Progressive, 3);
+
+        Assert.Equal(
+            "trim=end_frame=1,scale=640:360:flags=area:out_range=full,setsar=1,format=yuv420p",
+            delivery[delivery.ToList().IndexOf("-vf") + 1]);
+    }
+
+    [Fact]
+    public void AStillOfAStreamThatSaysNothingAboutItsScanIsTakenFromOneFieldSoNothingWaitsForTheNextFrame()
+    {
+        IReadOnlyList<string> delivery = FfmpegLiveInvocation.StillDelivery(Service, LiveProfile.Hd30, StreamAttributes.SafeSide, 3);
+
+        Assert.StartsWith("trim=end_frame=1,field=top,", delivery[delivery.ToList().IndexOf("-vf") + 1], StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfile))]
+    public void TheStillIsTakenBeforeAnythingIsHandedToTheCardSoEveryEncoderGivesTheSameOne(LiveProfile profile)
+    {
+        IReadOnlyList<string> delivery = FfmpegLiveInvocation.StillDelivery(Service, profile, Interlaced, 3);
+
+        Assert.DoesNotContain(delivery, argument => argument.Contains("hwupload", StringComparison.Ordinal));
+        Assert.DoesNotContain("-vaapi_device", delivery);
+        Assert.DoesNotContain("-init_hw_device", delivery);
+        Assert.DoesNotContain("-filter_hw_device", delivery);
+        Assert.DoesNotContain(RenderNode, delivery);
+    }
+
+    [Fact]
+    public void TheStillOutletNeedsAPipeOfItsOwnBeyondTheThreeEveryProcessHas()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegLiveInvocation.StillDelivery(Service, LiveProfile.Hd30, Interlaced, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegLiveInvocation.StillDelivery(Service, LiveProfile.Hd30, Interlaced, 2));
+        Assert.Throws<ArgumentNullException>(() => FfmpegLiveInvocation.StillDelivery(null!, LiveProfile.Hd30, Interlaced, 3));
+        Assert.Throws<ArgumentNullException>(() => FfmpegLiveInvocation.StillDelivery(Service, null!, Interlaced, 3));
+        Assert.Throws<ArgumentNullException>(() => FfmpegLiveInvocation.StillDelivery(Service, LiveProfile.Hd30, null!, 3));
+    }
+
+    [Fact]
     public void AnOutletNobodyDefinedIsRefused()
     {
         Assert.Throws<ArgumentOutOfRangeException>(

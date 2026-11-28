@@ -105,6 +105,8 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     private readonly TaskCompletionSource probed = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    private readonly TaskCompletionSource<LiveStill> still = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     private readonly ITranscodeSeat seat;
 
     private bool completed;
@@ -181,6 +183,8 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     public Task Probed => probed.Task;
 
+    public Task<LiveStill> Still => still.Task;
+
     public Exception? FailingToStop { get; set; }
 
     public bool OutputOutlivesIt { get; set; }
@@ -206,6 +210,8 @@ public sealed class HeldTranscoder : ILiveTranscoder
     public void NoMoreCaptions() => captions.Writer.TryComplete();
 
     public void Probe() => probed.TrySetResult();
+
+    public void Show(LiveStill made) => still.TrySetResult(made);
 
     public void NoMore()
     {
@@ -256,6 +262,8 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     private void Complete()
     {
+        still.TrySetResult(LiveStill.Missing("the transcoder ended without writing a still."));
+
         if (completed || OutputOutlivesIt)
         {
             return;

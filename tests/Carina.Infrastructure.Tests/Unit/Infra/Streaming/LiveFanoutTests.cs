@@ -805,6 +805,114 @@ public sealed class LiveFanoutTests
     public void TheMeasuredPaceIsTheOneTheFanoutWasProvedAgainst()
         => Assert.Equal(TimeSpan.FromMilliseconds(400), SlowViewer.MeasuredPace);
 
+    [Fact]
+    public async Task AStillMadeBeforeThePictureMovesReachesTheViewersAlreadyWatching()
+    {
+        LiveFanout fanout = new(Room(10));
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        Assert.True(fanout.PublishStill(Still(3)));
+
+        fanout.Publish(PictureHeader);
+        fanout.Publish(Picture(3));
+
+        Assert.Equal(
+            [LiveChannel.Still, LiveChannel.PictureHeader, LiveChannel.Picture],
+            Taken(viewing).Select(frame => frame.Channel).ToArray());
+    }
+
+    [Fact]
+    public async Task AViewerThatJoinsBeforeThePictureMovesIsHandedTheStillAheadOfTheHeldHeaders()
+    {
+        LiveFanout fanout = new(Room(10));
+
+        fanout.Publish(PictureHeader);
+        fanout.PublishStill(Still(3));
+        fanout.Publish(SoundHeader);
+
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        Assert.Equal(
+            [LiveChannel.Still, LiveChannel.PictureHeader, LiveChannel.SoundHeader],
+            Taken(viewing).Select(frame => frame.Channel).ToArray());
+    }
+
+    [Fact]
+    public async Task AStillMadeAfterThePictureMovedIsNotSent()
+    {
+        LiveFanout fanout = new(Room(10));
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        fanout.Publish(PictureHeader);
+        fanout.Publish(Picture(3));
+
+        Assert.False(fanout.PublishStill(Still(3)));
+        Assert.Equal(
+            [LiveChannel.PictureHeader, LiveChannel.Picture],
+            Taken(viewing).Select(frame => frame.Channel).ToArray());
+    }
+
+    [Fact]
+    public async Task AViewerThatJoinsAfterThePictureMovedIsNeverHandedTheStill()
+    {
+        LiveFanout fanout = new(Room(10));
+
+        fanout.PublishStill(Still(3));
+        fanout.Publish(PictureHeader);
+        fanout.Publish(Picture(3));
+
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        Assert.Equal([LiveChannel.PictureHeader], Taken(viewing).Select(frame => frame.Channel).ToArray());
+        Assert.DoesNotContain(fanout.Kept, frame => frame.Channel is LiveChannel.Still);
+    }
+
+    [Fact]
+    public async Task AStillIsNeverCutFromABacklogThatIsFull()
+    {
+        LiveFanout fanout = new(Room(2));
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        for (ulong pts = 0; pts < 4; pts++)
+        {
+            fanout.Publish(Sound(pts));
+        }
+
+        Assert.True(fanout.PublishStill(Still(5)));
+        Assert.Equal(
+            [LiveChannel.Sound, LiveChannel.Sound, LiveChannel.Still],
+            Taken(viewing).Select(frame => frame.Channel).ToArray());
+    }
+
+    [Fact]
+    public async Task AStillPublishedLikeAnyOtherFrameIsTreatedAsAStill()
+    {
+        LiveFanout fanout = new(Room(10));
+
+        fanout.Publish(PictureHeader);
+        fanout.Publish(Picture(3));
+        fanout.Publish(Still(3));
+
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        Assert.Equal([LiveChannel.PictureHeader], Taken(viewing).Select(frame => frame.Channel).ToArray());
+    }
+
+    [Fact]
+    public void NothingButAStillIsPublishedAsOneAndNoStillIsSentOnceTheFanoutHasEnded()
+    {
+        LiveFanout fanout = new(Room(10));
+
+        Assert.Throws<ArgumentException>(() => fanout.PublishStill(PictureHeader));
+        Assert.Throws<ArgumentNullException>(() => fanout.PublishStill(null!));
+
+        fanout.End();
+
+        Assert.False(fanout.PublishStill(Still(3)));
+    }
+
+    private static LiveFrame Still(ulong pts) => LiveStill.Of(LivePts.Of(pts), new byte[] { 0xff, 0xd8, 0xff, 0xd9 }).Frame!;
+
     private static LiveFrame Caption(ulong pts)
         => LiveCaptions.Shown(LivePts.Of(pts), new CaptionPicture(10, 20, 30, 40, Png));
 

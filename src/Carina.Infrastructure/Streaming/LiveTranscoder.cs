@@ -14,6 +14,8 @@ public sealed class LiveTranscoder : ILiveTranscoder
 
     private readonly CaptionPipe? captions;
 
+    private readonly TranscoderPipe? still;
+
     private readonly TimeSpan stopGrace;
 
     private readonly TimeProvider clock;
@@ -30,9 +32,13 @@ public sealed class LiveTranscoder : ILiveTranscoder
 
     private readonly TaskCompletionSource probed = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    private readonly TaskCompletionSource<LiveStill> made = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     private readonly Lock saying = new();
 
     private readonly Task<CaptionFlowFault?> drawing;
+
+    private readonly Task stilling;
 
     private bool letGo;
 
@@ -40,12 +46,14 @@ public sealed class LiveTranscoder : ILiveTranscoder
         Process running,
         LiveEncoderChoice encoder,
         CaptionPipe? captions,
+        TranscoderPipe? still,
         TimeSpan stopGrace,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
         this.running = running;
         this.captions = captions;
+        this.still = still;
         this.stopGrace = stopGrace;
         this.clock = clock;
         Encoder = encoder;
@@ -57,6 +65,10 @@ public sealed class LiveTranscoder : ILiveTranscoder
         drawing = captions is null
             ? NothingDrawn()
             : DrawnAsync(captions);
+
+        stilling = still is null
+            ? NoStillAsked()
+            : StillAsync(still);
 
         Completion = WatchAsync();
     }
@@ -74,6 +86,8 @@ public sealed class LiveTranscoder : ILiveTranscoder
     public Task Probed => probed.Task;
 
     public Task<CaptionFlowFault?> Drawing => drawing;
+
+    public Task<LiveStill> Still => made.Task;
 
     public string Complaint
     {
@@ -101,6 +115,7 @@ public sealed class LiveTranscoder : ILiveTranscoder
         stopping.Dispose();
         leavingThePipe.Dispose();
         captions?.Dispose();
+        still?.Dispose();
         running.Dispose();
     }
 
@@ -136,6 +151,32 @@ public sealed class LiveTranscoder : ILiveTranscoder
         {
             ArrayPool<byte>.Shared.Return(dropped);
         }
+    }
+
+    private async Task StillAsync(TranscoderPipe pipe)
+    {
+        try
+        {
+            await StillFrames.CarryAsync(pipe.Pictures, Made, stopping.Token);
+        }
+        catch (OperationCanceledException) when (!leavingThePipe.IsCancellationRequested)
+        {
+            Made(LiveStill.Missing("the transcoder was let go before it wrote a still."));
+            await DroppedToTheEndAsync(pipe.Pictures, leavingThePipe.Token);
+        }
+        finally
+        {
+            Made(LiveStill.Missing("the transcoder was let go before it wrote a still."));
+        }
+    }
+
+    private void Made(LiveStill taken) => made.TrySetResult(taken);
+
+    private Task NoStillAsked()
+    {
+        Made(LiveStill.Missing("no still was asked of this transcoder."));
+
+        return Task.CompletedTask;
     }
 
     private Task<CaptionFlowFault?> NothingDrawn()
@@ -200,16 +241,17 @@ public sealed class LiveTranscoder : ILiveTranscoder
     private async Task DrawnToTheEndAsync()
     {
         using CancellationTokenSource deadline = new(stopGrace, clock);
+        Task pipes = Task.WhenAll(drawing, stilling);
 
         try
         {
-            await drawing.WaitAsync(deadline.Token);
+            await pipes.WaitAsync(deadline.Token);
         }
         catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
         {
             await leavingThePipe.CancelAsync();
             await stopping.CancelAsync();
-            await QuietlyAsync(drawing);
+            await QuietlyAsync(pipes);
         }
     }
 

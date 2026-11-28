@@ -56,6 +56,8 @@ internal sealed class LiveSession
 
     private TimeSpan? probed;
 
+    private TimeSpan? stillSent;
+
     private int expected;
 
     private bool closed;
@@ -250,21 +252,24 @@ internal sealed class LiveSession
     {
         LiveStartup? reached = startup.Current;
         TimeSpan? inputProbed;
+        TimeSpan? stillShown;
 
         lock (gate)
         {
             inputProbed = probed;
+            stillShown = stillSent;
         }
 
         logger.LogInformation(
             "A live session on {Key} showed its first picture. Milliseconds into the session: tuner secured {TunerSecuredMs}, "
             + "channel locked {ChannelLockedMs}, transcoder started {TranscoderStartedMs}, input probed {InputProbedMs}, "
-            + "first header {FirstHeaderMs}, first fragment {FirstFragmentMs}.",
+            + "still sent {StillSentMs}, first header {FirstHeaderMs}, first fragment {FirstFragmentMs}.",
             Key.ToString(),
             Milliseconds(reached?.At(LiveStartupSegment.TunerSecured)),
             Milliseconds(reached?.At(LiveStartupSegment.ChannelLocked)),
             Milliseconds(reached?.At(LiveStartupSegment.TranscoderStarted)),
             Milliseconds(inputProbed),
+            Milliseconds(stillShown),
             Milliseconds(reached?.At(LiveStartupSegment.InitReached)),
             Milliseconds(reached?.At(LiveStartupSegment.FirstPicture)));
     }
@@ -279,6 +284,46 @@ internal sealed class LiveSession
             CancellationToken.None,
             TaskContinuationOptions.OnlyOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
+
+    private void WatchForTheStill(ILiveTranscoder running)
+        => running.Still.ContinueWith(
+            made => Show(running, made.Result),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+    private void Show(ILiveTranscoder running, LiveStill made)
+    {
+        if (Shown(running, made) is { } missing)
+        {
+            logger.LogInformation("A live session on {Key} showed no still of its first picture: {StillMissing}", Key.ToString(), missing);
+        }
+    }
+
+    private string? Shown(ILiveTranscoder running, LiveStill made)
+    {
+        lock (gate)
+        {
+            if (!ReferenceEquals(transcoder, running))
+            {
+                return null;
+            }
+
+            if (made.Frame is not { } still)
+            {
+                return made.Note;
+            }
+
+            if (!fanout.PublishStill(still))
+            {
+                return "the picture was already moving when the still was made.";
+            }
+
+            stillSent = startup.Elapsed;
+
+            return null;
+        }
+    }
 
     private void Probed()
     {
@@ -404,6 +449,7 @@ internal sealed class LiveSession
         }
 
         WatchForTheProbe(running);
+        WatchForTheStill(running);
         startup.Reach(LiveStartupSegment.TranscoderStarted);
 
         return null;

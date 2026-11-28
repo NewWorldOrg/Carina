@@ -14,6 +14,8 @@ internal sealed class SeatedTranscoder(ILiveTranscoder transcoder, ITranscodeSea
 
     public ChannelReader<LiveFrame> Captions => transcoder.Captions;
 
+    public Task<LiveStill> Still => transcoder.Still;
+
     public Task<TranscoderExit> Completion => transcoder.Completion;
 
     public Task Probed => transcoder.Probed;

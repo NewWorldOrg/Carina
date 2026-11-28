@@ -371,6 +371,53 @@ public sealed class LiveWireTests
     }
 
     [Fact]
+    public async Task AViewerJoiningBeforeThePictureMovesIsHandedTheStillOfTheFirstPictureAheadOfTheHeader()
+    {
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        await using AuthProbe probe = Wiring(fanout);
+        string cookie = await probe.SignedInCookieAsync();
+        byte[] jpeg = [0xff, 0xd8, 0xff, 0xe0, 0xff, 0xd9];
+
+        fanout.Publish(new LiveFrame(LiveChannel.PictureHeader, LivePts.Start, Picture));
+        fanout.PublishStill(LiveStill.Of(LivePts.Of(90_000UL), jpeg).Frame!);
+
+        using WebSocket socket = await Carrying(probe, cookie)
+            .ConnectAsync(Handshake, Patiently());
+
+        fanout.Publish(new LiveFrame(LiveChannel.Picture, LivePts.Of(90_000UL), Picture));
+
+        LiveFrame first = await Take(socket);
+        LiveFrame second = await Take(socket);
+        LiveFrame third = await Take(socket);
+
+        Assert.Equal(LiveChannel.Still, first.Channel);
+        Assert.Equal(LivePts.Of(90_000UL), first.Pts);
+        Assert.Equal(jpeg, first.Payload.ToArray());
+        Assert.Equal(LiveChannel.PictureHeader, second.Channel);
+        Assert.Equal(LiveChannel.Picture, third.Channel);
+    }
+
+    [Fact]
+    public async Task AViewerJoiningAfterThePictureMovedIsNeverHandedTheStill()
+    {
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        await using AuthProbe probe = Wiring(fanout);
+        string cookie = await probe.SignedInCookieAsync();
+
+        fanout.PublishStill(LiveStill.Of(LivePts.Of(90_000UL), new byte[] { 0xff, 0xd8, 0xff, 0xd9 }).Frame!);
+        fanout.Publish(new LiveFrame(LiveChannel.PictureHeader, LivePts.Start, Picture));
+        fanout.Publish(new LiveFrame(LiveChannel.Picture, LivePts.Of(90_000UL), Picture));
+
+        using WebSocket socket = await Carrying(probe, cookie)
+            .ConnectAsync(Handshake, Patiently());
+
+        fanout.Publish(new LiveFrame(LiveChannel.Picture, LivePts.Of(180_000UL), Picture));
+
+        Assert.Equal(LiveChannel.PictureHeader, (await Take(socket)).Channel);
+        Assert.Equal(LiveChannel.Picture, (await Take(socket)).Channel);
+    }
+
+    [Fact]
     public async Task TwoWiresOnOneFanoutAreBothCarriedAndBothClosedWhenItEnds()
     {
         LiveFanout fanout = new(new LiveFanoutSettings());
