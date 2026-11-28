@@ -22,6 +22,10 @@ public sealed class LiveFanout(
 
     private readonly SortedDictionary<LiveChannel, IReadOnlyList<LiveFrame>> kept = [];
 
+    private LiveFrame? still;
+
+    private bool moving;
+
     private bool ended;
 
     private LiveFragmentFault? fault;
@@ -118,6 +122,11 @@ public sealed class LiveFanout(
 
             Viewing viewing = new(this, settings.LongestBacklog);
 
+            if (still is { } shown)
+            {
+                viewing.Offer(shown);
+            }
+
             foreach (LiveFrame held in kept.Values.SelectMany(frames => frames))
             {
                 viewing.Offer(held);
@@ -133,6 +142,13 @@ public sealed class LiveFanout(
     {
         ArgumentNullException.ThrowIfNull(frame);
 
+        if (frame.Channel is LiveChannel.Still)
+        {
+            PublishStill(frame);
+
+            return;
+        }
+
         lock (gate)
         {
             if (ended)
@@ -140,8 +156,37 @@ public sealed class LiveFanout(
                 return;
             }
 
+            if (frame.Channel is LiveChannel.Picture)
+            {
+                moving = true;
+                still = null;
+            }
+
             Keep(frame);
             Offer(frame);
+        }
+    }
+
+    public bool PublishStill(LiveFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+
+        if (frame.Channel is not LiveChannel.Still)
+        {
+            throw new ArgumentException("Only a still is published as one.", nameof(frame));
+        }
+
+        lock (gate)
+        {
+            if (ended || moving)
+            {
+                return false;
+            }
+
+            still = frame;
+            Offer(frame);
+
+            return true;
         }
     }
 
@@ -241,6 +286,7 @@ public sealed class LiveFanout(
 
             ended = true;
             fault = why;
+            still = null;
             kept.Clear();
 
             foreach (Viewing viewing in viewers)

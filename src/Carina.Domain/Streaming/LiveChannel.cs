@@ -6,6 +6,8 @@ public enum LiveChannel : byte
 
     Picture = 0x01,
 
+    Still = 0x02,
+
     SoundHeader = 0x10,
 
     Sound = 0x11,

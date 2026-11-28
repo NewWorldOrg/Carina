@@ -6,6 +6,7 @@ public static class LiveChannels
     [
         LiveChannel.PictureHeader,
         LiveChannel.Picture,
+        LiveChannel.Still,
         LiveChannel.SoundHeader,
         LiveChannel.Sound,
         LiveChannel.CaptionHeader,

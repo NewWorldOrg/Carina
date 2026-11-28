@@ -46,6 +46,8 @@ public sealed class LiveSessionManagerTests
 
     private static readonly byte[] Mouthful = new byte[64 * 1024];
 
+    private static readonly byte[] Jpeg = [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0xff, 0xd9];
+
     private static readonly LiveSessionKey EveryFrame = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30);
 
     private static readonly LiveSessionKey EveryField = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd60);
@@ -1303,6 +1305,121 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task TheStillOfTheFirstPictureReachesTheViewerAheadOfEveryHeaderWhenTheTranscoderMakesItFirst()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+        HeldTranscoder raised = transcoders.Raised[0];
+
+        raised.Show(LiveStill.Of(LivePts.Of(90_000UL), Jpeg));
+
+        LiveFrame still = await Next(viewing);
+
+        Assert.Equal(LiveChannel.Still, still.Channel);
+        Assert.Equal(90_000UL, still.Pts.Value);
+        Assert.Equal(Jpeg, still.Payload.ToArray());
+
+        await raised.WriteAsync(Fmp4.Header);
+        await raised.WriteAsync(Fmp4.Fragment(1_000));
+
+        Assert.Equal(
+            [LiveChannel.CaptionHeader, LiveChannel.PictureHeader, LiveChannel.Picture],
+            [(await Next(viewing)).Channel, (await Next(viewing)).Channel, (await Next(viewing)).Channel]);
+        Assert.Empty(warnings.StillsMissing);
+    }
+
+    [Fact]
+    public async Task AViewerWhoJoinsBeforeThePictureMovesIsHandedTheStillAndOneWhoJoinsAfterIsNot()
+    {
+        await using ILiveViewing first = await Joined(EveryFrame);
+        HeldTranscoder raised = transcoders.Raised[0];
+
+        raised.Show(LiveStill.Of(LivePts.Of(90_000UL), Jpeg));
+        await Next(first);
+
+        await using ILiveViewing early = await Joined(EveryFrame);
+
+        Assert.Equal(LiveChannel.Still, (await Next(early)).Channel);
+
+        await raised.WriteAsync(Fmp4.Header);
+        await raised.WriteAsync(Fmp4.Fragment(1_000));
+        await Next(first);
+        await Next(first);
+        await Next(first);
+
+        await using ILiveViewing late = await Joined(EveryFrame);
+
+        LiveChannel[] handedLate = [(await Next(late)).Channel, (await Next(late)).Channel];
+
+        Assert.DoesNotContain(LiveChannel.Still, handedLate);
+    }
+
+    [Fact]
+    public async Task AStillMadeOnlyAfterThePictureMovedIsNotSentAndThatIsSaidOnce()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+        HeldTranscoder raised = transcoders.Raised[0];
+
+        await raised.WriteAsync(Fmp4.Header);
+        await raised.WriteAsync(Fmp4.Fragment(1_000));
+        await Next(viewing);
+        await Next(viewing);
+        await Next(viewing);
+
+        raised.Show(LiveStill.Of(LivePts.Of(90_000UL), Jpeg));
+
+        await Eventually.Happens(() => warnings.StillsMissing.Count > 0, "a still that came too late is said to have been left out");
+        await raised.WriteAsync(Fmp4.Fragment(2_000));
+
+        Assert.Equal(LiveChannel.Picture, (await Next(viewing)).Channel);
+        Assert.Single(warnings.StillsMissing);
+        Assert.Empty(warnings.Failures);
+    }
+
+    [Fact]
+    public async Task ATranscoderThatWroteNoStillLeavesTheSessionAsItWasAndThatIsSaidOnce()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+        HeldTranscoder raised = transcoders.Raised[0];
+
+        raised.Show(LiveStill.Missing("the picture never came."));
+
+        await Eventually.Happens(() => warnings.StillsMissing.Count > 0, "a still that was never made is said to be missing");
+
+        await raised.WriteAsync(Fmp4.Header);
+        await raised.WriteAsync(Fmp4.Fragment(1_000));
+
+        Assert.Equal(
+            [LiveChannel.CaptionHeader, LiveChannel.PictureHeader, LiveChannel.Picture],
+            [(await Next(viewing)).Channel, (await Next(viewing)).Channel, (await Next(viewing)).Channel]);
+        Assert.Equal(["the picture never came."], warnings.StillsMissing);
+        Assert.Empty(warnings.Failures);
+    }
+
+    [Fact]
+    public async Task ASessionSaysWhenItSentTheStillAlongsideHowFarIntoItItsFirstPictureArrived()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+        HeldTranscoder raised = transcoders.Raised[0];
+
+        raised.Show(LiveStill.Of(LivePts.Of(90_000UL), Jpeg));
+        await Next(viewing);
+
+        await raised.WriteAsync(Fmp4.Header);
+        await raised.WriteAsync(Fmp4.Fragment(1_000));
+        await Next(viewing);
+        await Next(viewing);
+        await Next(viewing);
+        await Eventually.Happens(() => warnings.Startups.Count > 0, "the first picture is followed by the startup being told");
+
+        IReadOnlyDictionary<string, object?> told = Assert.Single(warnings.Startups);
+
+        Assert.InRange(
+            Assert.IsType<long>(told["StillSentMs"]),
+            Assert.IsType<long>(told["TranscoderStartedMs"]),
+            Assert.IsType<long>(told["FirstHeaderMs"]));
+    }
+
+    [Fact]
     public async Task ASessionWhoseTranscoderNeverSaidItHadReadItsInputStillSaysHowItsStartupWent()
     {
         await using ILiveViewing viewing = await Joined(EveryFrame);
@@ -1317,6 +1434,7 @@ public sealed class LiveSessionManagerTests
         IReadOnlyDictionary<string, object?> told = Assert.Single(warnings.Startups);
 
         Assert.Null(told["InputProbedMs"]);
+        Assert.Null(told["StillSentMs"]);
         Assert.Null(told["ChannelLockedMs"]);
         Assert.NotNull(told["FirstFragmentMs"]);
     }
@@ -2432,6 +2550,19 @@ public sealed class LiveSessionManagerTests
 
         private readonly List<IReadOnlyDictionary<string, object?>> endings = [];
 
+        private readonly List<string> stillsMissing = [];
+
+        public IReadOnlyList<string> StillsMissing
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return [.. stillsMissing];
+                }
+            }
+        }
+
         public IReadOnlyList<IReadOnlyDictionary<string, object?>> Endings
         {
             get
@@ -2485,6 +2616,18 @@ public sealed class LiveSessionManagerTests
                 lock (gate)
                 {
                     startups.Add(said.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
+                }
+
+                return;
+            }
+
+            if (logLevel is LogLevel.Information
+                && state is IReadOnlyList<KeyValuePair<string, object?>> missing
+                && missing.FirstOrDefault(pair => string.Equals(pair.Key, "StillMissing", StringComparison.Ordinal)) is { Value: string why })
+            {
+                lock (gate)
+                {
+                    stillsMissing.Add(why);
                 }
 
                 return;

@@ -12,6 +12,8 @@ public interface ILiveTranscoder : IAsyncDisposable
 
     ChannelReader<LiveFrame> Captions { get; }
 
+    Task<LiveStill> Still { get; }
+
     Task<TranscoderExit> Completion { get; }
 
     Task Probed { get; }

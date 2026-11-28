@@ -8,6 +8,7 @@ public sealed class LiveChannelTests
     [Theory]
     [InlineData(LiveChannel.PictureHeader, 0x00)]
     [InlineData(LiveChannel.Picture, 0x01)]
+    [InlineData(LiveChannel.Still, 0x02)]
     [InlineData(LiveChannel.SoundHeader, 0x10)]
     [InlineData(LiveChannel.Sound, 0x11)]
     [InlineData(LiveChannel.CaptionHeader, 0x20)]
@@ -20,10 +21,10 @@ public sealed class LiveChannelTests
     }
 
     [Fact]
-    public void TheNumbersAreTheEightThatWereSetAsideAndNoOthers()
+    public void TheNumbersAreTheNineThatWereSetAsideAndNoOthers()
     {
         Assert.Equal(
-            [0x00, 0x01, 0x10, 0x11, 0x20, 0x21, 0x30, 0x40],
+            [0x00, 0x01, 0x02, 0x10, 0x11, 0x20, 0x21, 0x30, 0x40],
             Enum.GetValues<LiveChannel>().Select(channel => (byte)channel).Order().ToArray());
     }
 
@@ -51,7 +52,7 @@ public sealed class LiveChannelTests
     }
 
     [Theory]
-    [InlineData(0x02)]
+    [InlineData(0x03)]
     [InlineData(0x0f)]
     [InlineData(0x12)]
     [InlineData(0x31)]
@@ -85,6 +86,7 @@ public sealed class LiveChannelTests
     [InlineData(LiveChannel.Control)]
     [InlineData(LiveChannel.Caption)]
     [InlineData(LiveChannel.DataBroadcast)]
+    [InlineData(LiveChannel.Still)]
     public void WhatIsNeitherAHeaderNorMediaIsNeverThrownAwayEither(LiveChannel channel)
     {
         Assert.DoesNotContain(channel, LiveChannels.Expendable);
@@ -107,6 +109,15 @@ public sealed class LiveChannelTests
         Assert.DoesNotContain(LiveChannel.Picture, LiveChannels.Kept);
         Assert.DoesNotContain(LiveChannel.Sound, LiveChannels.Kept);
         Assert.DoesNotContain(LiveChannel.Control, LiveChannels.Kept);
+        Assert.DoesNotContain(LiveChannel.Still, LiveChannels.Kept);
+    }
+
+    [Fact]
+    public void TheStillOfTheFirstPictureSitsBesideThePictureAndIsCutFromNobodysBacklog()
+    {
+        Assert.Equal(0x02, (byte)LiveChannel.Still);
+        Assert.Contains(LiveChannel.Still, LiveChannels.Carrying);
+        Assert.DoesNotContain(LiveChannel.Still, LiveChannels.CutWhenBehind);
     }
 
     [Fact]

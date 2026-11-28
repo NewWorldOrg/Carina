@@ -85,7 +85,7 @@ public sealed class LiveFrameTests
     public void AChannelNobodySetAsideIsNotAFrame()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new LiveFrame((LiveChannel)0x02, LivePts.Start, Payload));
+            new LiveFrame((LiveChannel)0x03, LivePts.Start, Payload));
     }
 
     [Theory]
@@ -133,7 +133,7 @@ public sealed class LiveFrameTests
     }
 
     [Theory]
-    [InlineData(0x02)]
+    [InlineData(0x03)]
     [InlineData(0x31)]
     [InlineData(0xff)]
     public void SomethingOnAChannelNobodySetAsideIsNotAFrame(byte channel)

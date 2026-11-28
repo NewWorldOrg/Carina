@@ -71,18 +71,21 @@ public sealed class LiveTranscoderFactory(
     {
         LiveEncoderChoice chosen = await selector.ChooseAsync(cancellationToken);
         CaptionPipe? drawn = captions is CaptionOutlet.Drawn ? new CaptionPipe(new CaptionCanvas(attributes.Size)) : null;
+        TranscoderPipe still = new();
 
         LiveTranscoderStart started = TranscoderProcess.Start(
             settings,
             [
                 .. FfmpegLiveInvocation.Arguments(service, profile, attributes, chosen.Encoder, machine, captions, sound, format),
                 .. FfmpegLiveInvocation.Delivery(),
+                .. FfmpegLiveInvocation.StillDelivery(service, profile, attributes, still.Descriptor),
                 .. drawn is null ? [] : FfmpegLiveInvocation.CaptionDelivery(service, drawn.Descriptor),
             ],
             chosen,
             clock,
             cancellationToken,
-            drawn);
+            drawn,
+            still);
 
         return started.Transcoder is { } transcoder
             ? LiveTranscoderStart.Started(new SeatedTranscoder(transcoder, seat))

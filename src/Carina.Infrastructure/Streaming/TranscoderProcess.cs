@@ -9,16 +9,9 @@ namespace Carina.Infrastructure.Streaming;
 
 internal sealed record ProcessLaunch(Process? Started, string Note);
 
-internal sealed class CaptionPipe : IDisposable
+internal class TranscoderPipe : IDisposable
 {
     private readonly AnonymousPipeServerStream pipe = new(PipeDirection.In, HandleInheritability.Inheritable);
-
-    public CaptionPipe(CaptionCanvas canvas)
-    {
-        Canvas = canvas;
-    }
-
-    public CaptionCanvas Canvas { get; }
 
     public Stream Pictures => pipe;
 
@@ -26,7 +19,24 @@ internal sealed class CaptionPipe : IDisposable
 
     public void HandedOver() => pipe.DisposeLocalCopyOfClientHandle();
 
-    public void Dispose() => pipe.Dispose();
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            pipe.Dispose();
+        }
+    }
+}
+
+internal sealed class CaptionPipe(CaptionCanvas canvas) : TranscoderPipe
+{
+    public CaptionCanvas Canvas { get; } = canvas;
 }
 
 internal static class TranscoderProcess
@@ -37,20 +47,24 @@ internal static class TranscoderProcess
         LiveEncoderChoice chosen,
         TimeProvider clock,
         CancellationToken cancellationToken,
-        CaptionPipe? captions = null)
+        CaptionPipe? captions = null,
+        TranscoderPipe? still = null)
     {
         ProcessLaunch launched = Launch(settings.Programme, arguments);
 
         if (launched.Started is not { } started)
         {
             captions?.Dispose();
+            still?.Dispose();
 
             return LiveTranscoderStart.Failed(TranscoderFault.ProgrammeMissing, launched.Note);
         }
 
         captions?.HandedOver();
+        still?.HandedOver();
 
-        return LiveTranscoderStart.Started(new LiveTranscoder(started, chosen, captions, settings.StopGrace, clock, cancellationToken));
+        return LiveTranscoderStart.Started(
+            new LiveTranscoder(started, chosen, captions, still, settings.StopGrace, clock, cancellationToken));
     }
 
     internal static ProcessLaunch Launch(string programme, IReadOnlyList<string> arguments)

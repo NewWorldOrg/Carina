@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 
@@ -16,6 +17,8 @@ public sealed class LiveTranscoderFactoryMaterialTests : IDisposable
     private const int PacketLength = 188;
 
     private const int PacketsAtATime = 40;
+
+    private const int LargestStill = 200 * 1024;
 
     private static readonly TimeSpan Length = TimeSpan.FromSeconds(8);
 
@@ -74,6 +77,47 @@ public sealed class LiveTranscoderFactoryMaterialTests : IDisposable
             pictured <= LongestToTheFirstPicture,
             $"the first picture was written {pictured.TotalSeconds:F2} s after the broadcast began to arrive");
         Assert.True(probed < pictured, "the first picture was written before the input was read");
+    }
+
+    [Theory]
+    [MemberData(nameof(Broadcasts))]
+    public async Task TheLiveTranscoderWritesAStillOfItsFirstPictureAsASmallJpegOnTheBroadcastsOwnClock(string broadcast)
+    {
+        SyntheticBroadcast written = Of(broadcast) with { Length = Length, WithSuperimpose = false };
+        byte[] bytes = await File.ReadAllBytesAsync(await written.WriteAsync(Path.Combine(room, "live.m2ts")));
+        double bytesPerSecond = bytes.Length / Length.TotalSeconds;
+        int joined = (int)(JoinedPartWay.TotalSeconds * bytesPerSecond) / PacketLength * PacketLength;
+
+        LiveTranscoderStart start = await Factory().StartAsync(
+            Service,
+            LiveProfile.Hd30,
+            VideoCodec.H264,
+            SoundPlacement.WholeStream(0),
+            StreamAttributes.SafeSide,
+            CaptionOutlet.Drawn,
+            CancellationToken.None);
+
+        Assert.True(start.Running, start.Note);
+
+        await using ILiveTranscoder running = start.Transcoder!;
+        using CancellationTokenSource stopping = new(TimeSpan.FromSeconds(30));
+        Stopwatch since = Stopwatch.StartNew();
+        Task feeding = FeedAsync(running.Input, bytes.AsMemory(joined), bytesPerSecond, since, stopping.Token);
+        Task<LivePts> firstPicture = FirstPictureStampAsync(running.Output, stopping.Token);
+
+        LiveStill made = await running.Still.WaitAsync(stopping.Token);
+        LivePts pictured = await firstPicture;
+
+        await stopping.CancelAsync();
+        await Quietly(feeding);
+
+        Assert.True(made.Frame is not null, made.Note);
+        Assert.True(made.Frame.Payload.Length <= LargestStill, $"the still is {made.Frame.Payload.Length} bytes");
+        Assert.Equal((640, 360), JpegSize(made.Frame.Payload.Span));
+        Assert.InRange(
+            (long)made.Frame.Pts.Value - (long)pictured.Value,
+            -(long)LivePts.Hertz / 5,
+            (long)LivePts.Hertz);
     }
 
     private static SyntheticBroadcast Of(string broadcast)
@@ -145,6 +189,47 @@ public sealed class LiveTranscoderFactoryMaterialTests : IDisposable
         }
 
         throw new InvalidOperationException("the transcoder ended without writing a picture");
+    }
+
+    private static async Task<LivePts> FirstPictureStampAsync(Stream from, CancellationToken cancellationToken)
+    {
+        LiveFragmenter fragmenter = new(LiveTrack.Picture);
+        LiveFrames frames = new();
+        byte[] mouthful = new byte[LiveFeed.Mouthful];
+        int read;
+
+        while ((read = await from.ReadAsync(mouthful, cancellationToken)) > 0)
+        {
+            LiveFragmenting made = fragmenter.Read(mouthful.AsSpan(0, read));
+
+            Assert.Null(made.Fault);
+
+            if (made.Fragments.Select(frames.Of).FirstOrDefault(frame => frame.Channel is LiveChannel.Picture) is { } picture)
+            {
+                return picture.Pts;
+            }
+        }
+
+        throw new InvalidOperationException("the transcoder ended without writing a picture");
+    }
+
+    private static (int Width, int Height) JpegSize(ReadOnlySpan<byte> jpeg)
+    {
+        int at = 2;
+
+        while (at + 9 < jpeg.Length && jpeg[at] is 0xff)
+        {
+            byte marker = jpeg[at + 1];
+
+            if (marker is 0xc0 or 0xc1 or 0xc2)
+            {
+                return (BinaryPrimitives.ReadUInt16BigEndian(jpeg[(at + 7)..]), BinaryPrimitives.ReadUInt16BigEndian(jpeg[(at + 5)..]));
+            }
+
+            at += 2 + BinaryPrimitives.ReadUInt16BigEndian(jpeg[(at + 2)..]);
+        }
+
+        throw new InvalidOperationException("the still names no size");
     }
 
     private static async Task Quietly(Task task)
